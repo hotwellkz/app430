@@ -249,6 +249,22 @@ export interface ExportPackageSnapshot {
     totalAreaM2: number;
     warningCount: number;
   }>;
+  slabSummaries?: Array<{
+    slabId: string;
+    floorId: string;
+    panelCount: number;
+    trimmedCount: number;
+    totalAreaM2: number;
+    warningCount: number;
+  }>;
+  roofSummaries?: Array<{
+    roofId: string;
+    floorId: string;
+    panelCount: number;
+    trimmedCount: number;
+    totalAreaM2: number;
+    warningCount: number;
+  }>;
   panelizationSummary: {
     eligibleWalls: number;
     panelizedWalls: number;
@@ -269,7 +285,14 @@ export interface ExportPackageSnapshot {
     totalTrimmedPanels: number;
     totalPanelAreaM2: number;
     wallCountIncluded: number;
+    slabCountIncluded?: number;
+    roofCountIncluded?: number;
     warningCount: number;
+    totalsBySourceType?: {
+      wall: { panels: number; trimmedPanels: number; areaM2: number };
+      slab: { panels: number; trimmedPanels: number; areaM2: number };
+      roof: { panels: number; trimmedPanels: number; areaM2: number };
+    };
   };
   aggregatedSpecItems: Array<{
     id: string;

@@ -32,6 +32,22 @@ export function buildExportPackage(
       totalAreaM2: w.totalAreaM2,
       warningCount: warningCountByWall.get(w.wallId) ?? 0,
     })),
+    slabSummaries: spec.slabSummaries.map((s) => ({
+      slabId: s.slabId,
+      floorId: s.floorId,
+      panelCount: s.panelCount,
+      trimmedCount: s.trimmedCount,
+      totalAreaM2: s.totalAreaM2,
+      warningCount: warningCountByWall.get(s.slabId) ?? 0,
+    })),
+    roofSummaries: spec.roofSummaries.map((r) => ({
+      roofId: r.roofId,
+      floorId: r.floorId,
+      panelCount: r.panelCount,
+      trimmedCount: r.trimmedCount,
+      totalAreaM2: r.totalAreaM2,
+      warningCount: warningCountByWall.get(r.roofId) ?? 0,
+    })),
     panelizationSummary: panelization.stats,
     specSummary: spec.summary,
     aggregatedSpecItems: spec.items.map((x) => ({
@@ -76,11 +92,27 @@ export function buildExportTables(snapshot: ExportPackageSnapshot): ExportTables
     totalAreaM2: w.totalAreaM2,
     warningCount: w.warningCount,
   }));
+  const slabRows = (snapshot.slabSummaries ?? []).map((s) => ({
+    slabId: s.slabId,
+    floorId: s.floorId,
+    panelCount: s.panelCount,
+    trimmedCount: s.trimmedCount,
+    totalAreaM2: s.totalAreaM2,
+    warningCount: s.warningCount,
+  }));
+  const roofRows = (snapshot.roofSummaries ?? []).map((r) => ({
+    roofId: r.roofId,
+    floorId: r.floorId,
+    panelCount: r.panelCount,
+    trimmedCount: r.trimmedCount,
+    totalAreaM2: r.totalAreaM2,
+    warningCount: r.warningCount,
+  }));
   const warningRows = snapshot.warnings.map((w) => ({
     severity: w.severity,
     code: w.code,
     message: w.message,
     relatedObjectIds: w.relatedObjectIds.join(';'),
   }));
-  return { summaryRows, bomRows, wallRows, warningRows };
+  return { summaryRows, bomRows, wallRows, slabRows, roofRows, warningRows };
 }

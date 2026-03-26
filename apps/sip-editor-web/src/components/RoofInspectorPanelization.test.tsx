@@ -41,5 +41,6 @@ describe('RoofInspector panelization', () => {
     useEditorStore.getState().selectObject('r1', 'roof');
     render(<RoofInspector />);
     expect(screen.getByText(/SIP panels \/ trimmed \/ area/i)).toBeTruthy();
+    expect(screen.getByText(/SPEC panels \/ trimmed \/ area/i)).toBeTruthy();
   });
 });

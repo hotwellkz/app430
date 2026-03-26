@@ -2,6 +2,7 @@ import { getRoofForTopFloor } from '@2wix/domain-model';
 import { useEditorStore } from '@2wix/editor-core';
 import type { Roof } from '@2wix/shared-types';
 import { usePanelizationSnapshot } from '../panelization/usePanelizationSnapshot';
+import { useSpecSnapshot } from '../spec/useSpecSnapshot';
 
 type RoofPatch = Partial<
   Pick<
@@ -20,7 +21,9 @@ export function RoofInspector() {
   const draft = useEditorStore((s) => s.document.draftModel);
   const selection = useEditorStore((s) => s.selection);
   const applyCommand = useEditorStore((s) => s.applyCommand);
+  const setActivePanel = useEditorStore((s) => s.setActivePanel);
   const panelization = usePanelizationSnapshot();
+  const spec = useSpecSnapshot();
   if (!draft) return null;
 
   const roof =
@@ -32,6 +35,7 @@ export function RoofInspector() {
   const patch = (p: RoofPatch) => applyCommand({ type: 'updateRoof', roofId: roof.id, patch: p });
   const roofSummary = panelization?.roofSummaries.find((r) => r.roofId === roof.id);
   const roofWarnings = panelization?.warnings.filter((w) => w.relatedObjectIds.includes(roof.id)) ?? [];
+  const roofSpec = spec?.roofSummaries.find((r) => r.roofId === roof.id);
 
   return (
     <div style={{ fontSize: 13 }}>
@@ -109,6 +113,15 @@ export function RoofInspector() {
         </dd>
         <dt className="twix-muted">SIP warnings</dt>
         <dd style={{ margin: 0 }}>{roofWarnings.length}</dd>
+        <dt className="twix-muted">SPEC panels / trimmed / area</dt>
+        <dd style={{ margin: 0 }}>
+          {roofSpec?.panelCount ?? 0} / {roofSpec?.trimmedCount ?? 0} / {roofSpec?.totalAreaM2 ?? 0} m2
+          <div style={{ marginTop: 4 }}>
+            <button type="button" style={{ fontSize: 11 }} onClick={() => setActivePanel('spec')}>
+              Показать в спецификации
+            </button>
+          </div>
+        </dd>
       </dl>
       <button type="button" style={{ marginTop: 8, fontSize: 12 }} onClick={() => applyCommand({ type: 'deleteRoof', roofId: roof.id })}>
         Удалить крышу

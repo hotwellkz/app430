@@ -187,6 +187,20 @@
   - CNC maps;
   - multi-body roof CAD и сложные пересечения.
 
+### Expanded BOM architecture (Sprint 14)
+
+- `spec-engine` расширен как эволюция существующего wall-only снапшота, без переписывания с нуля.
+- Ключевой принцип:
+  - `BuildingModel -> PanelizationSnapshot -> ExpandedSpecSnapshot`
+  - BOM остаётся derived state и не становится persisted source of truth.
+- Почему sourceType-aware модель:
+  - панели уже строятся для `wall/slab/roof` в panel-engine;
+  - бизнес-потребитель (спецификация/экспорт) должен видеть полный объектный контур.
+- Как сохранена обратная совместимость:
+  - текущий export workflow сохранён;
+  - добавлены расширения (`slab/roof` summaries, totalsBySourceType), а не ломающие замены;
+  - wall-сценарии и тесты не удалялись.
+
 ### Spec-engine boundary (Sprint 10)
 
 - BOM/spec aggregation вынесена в `@2wix/spec-engine`, а не в `panel-engine` и не в React-компоненты.

@@ -22,6 +22,8 @@ export interface ExportTables {
   summaryRows: ExportTableRow[];
   bomRows: ExportTableRow[];
   wallRows: ExportTableRow[];
+  slabRows: ExportTableRow[];
+  roofRows: ExportTableRow[];
   warningRows: ExportTableRow[];
 }
 

@@ -157,6 +157,20 @@
   - 2D overlay умеет показывать панели стен/перекрытий/крыши с фильтрами.
 - Подготовлена база для следующего расширения spec/BOM по sourceType.
 
+## Завершено: expanded BOM / source-type-aware spec (Sprint 14)
+
+- `spec-engine` расширен от wall-only к `wall + slab + roof` aggregation.
+- Добавлены:
+  - totals by sourceType;
+  - object-level breakdown для wall/slab/roof;
+  - warnings passthrough в spec context.
+- UI `SpecPanel` получил:
+  - summary с W/S/R breakdown;
+  - sourceType filter (`all/wall/slab/roof`);
+  - отдельные секции Walls/Slabs/Roof.
+- Инспекторы (wall/slab/roof) теперь показывают spec counters и быстрый переход в спецификацию.
+- `export-engine` подготовлен к расширенному spec snapshot без поломки текущего export workflow.
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).

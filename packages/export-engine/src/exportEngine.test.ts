@@ -44,6 +44,8 @@ describe('export-engine', () => {
     expect(Array.isArray(tables.summaryRows)).toBe(true);
     expect(Array.isArray(tables.bomRows)).toBe(true);
     expect(Array.isArray(tables.wallRows)).toBe(true);
+    expect(Array.isArray(tables.slabRows)).toBe(true);
+    expect(Array.isArray(tables.roofRows)).toBe(true);
     expect(Array.isArray(tables.warningRows)).toBe(true);
   });
 });

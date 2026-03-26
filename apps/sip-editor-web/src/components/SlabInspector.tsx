@@ -2,6 +2,7 @@ import { getSlabsByFloor } from '@2wix/domain-model';
 import { useEditorStore } from '@2wix/editor-core';
 import type { Slab } from '@2wix/shared-types';
 import { usePanelizationSnapshot } from '../panelization/usePanelizationSnapshot';
+import { useSpecSnapshot } from '../spec/useSpecSnapshot';
 
 type SlabPatch = Partial<
   Pick<Slab, 'slabType' | 'direction' | 'thicknessMm' | 'generationMode' | 'panelizationEnabled' | 'panelTypeId'>
@@ -12,7 +13,9 @@ export function SlabInspector() {
   const selection = useEditorStore((s) => s.selection);
   const view = useEditorStore((s) => s.view);
   const applyCommand = useEditorStore((s) => s.applyCommand);
+  const setActivePanel = useEditorStore((s) => s.setActivePanel);
   const panelization = usePanelizationSnapshot();
+  const spec = useSpecSnapshot();
 
   if (!draft) return null;
   const activeFloorId = view.activeFloorId;
@@ -29,6 +32,7 @@ export function SlabInspector() {
   const patch = (p: SlabPatch) => applyCommand({ type: 'updateSlab', slabId: slab.id, patch: p });
   const slabSummary = panelization?.slabSummaries.find((s) => s.slabId === slab.id);
   const slabWarnings = panelization?.warnings.filter((w) => w.relatedObjectIds.includes(slab.id)) ?? [];
+  const slabSpec = spec?.slabSummaries.find((s) => s.slabId === slab.id);
 
   return (
     <div style={{ fontSize: 13 }}>
@@ -95,6 +99,15 @@ export function SlabInspector() {
         </dd>
         <dt className="twix-muted">SIP warnings</dt>
         <dd style={{ margin: 0 }}>{slabWarnings.length}</dd>
+        <dt className="twix-muted">SPEC panels / trimmed / area</dt>
+        <dd style={{ margin: 0 }}>
+          {slabSpec?.panelCount ?? 0} / {slabSpec?.trimmedCount ?? 0} / {slabSpec?.totalAreaM2 ?? 0} m2
+          <div style={{ marginTop: 4 }}>
+            <button type="button" style={{ fontSize: 11 }} onClick={() => setActivePanel('spec')}>
+              Показать в спецификации
+            </button>
+          </div>
+        </dd>
         <dt className="twix-muted">Контур (стены)</dt>
         <dd style={{ margin: 0 }}>{slab.contourWallIds.length} шт.</dd>
       </dl>

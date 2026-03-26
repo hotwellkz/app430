@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createEmptyBuildingModel, createFloor, createWall } from '@2wix/domain-model';
+import { createEmptyBuildingModel, createFloor, createRoof, createSlab, createWall } from '@2wix/domain-model';
 import { useEditorStore } from '@2wix/editor-core';
 import { buildPanelizationSnapshot } from '@2wix/panel-engine';
 import { buildSpecSnapshot } from '@2wix/spec-engine';
@@ -38,6 +38,36 @@ describe('spec derived integration', () => {
         wallType: 'external',
         panelizationEnabled: true,
         panelDirection: 'vertical',
+      })
+    );
+    m.walls.push(
+      createWall({
+        id: 'w2',
+        floorId: 'f1',
+        start: { x: 3000, y: 0 },
+        end: { x: 3000, y: 2500 },
+        thicknessMm: 174,
+        wallType: 'external',
+        panelizationEnabled: true,
+        panelDirection: 'vertical',
+      })
+    );
+    m.slabs.push(
+      createSlab({
+        id: 's1',
+        floorId: 'f1',
+        contourWallIds: ['w1', 'w2'],
+        direction: 'x',
+      })
+    );
+    m.roofs.push(
+      createRoof({
+        id: 'r1',
+        floorId: 'f1',
+        roofType: 'single_slope',
+        slopeDegrees: 25,
+        overhangMm: 250,
+        baseElevationMm: 2800,
       })
     );
     useEditorStore.getState().loadDocumentFromServer({
@@ -117,5 +147,43 @@ describe('spec derived integration', () => {
       buildPanelizationSnapshot(useEditorStore.getState().document.draftModel!)
     );
     expect(changed.summary.totalPanels).toBeLessThan(reset.summary.totalPanels);
+  });
+
+  it('changing slab params recalculates spec', () => {
+    setup();
+    const a = buildSpecSnapshot(
+      useEditorStore.getState().document.draftModel!,
+      buildPanelizationSnapshot(useEditorStore.getState().document.draftModel!)
+    );
+    useEditorStore.getState().applyCommand({
+      type: 'updateSlab',
+      slabId: 's1',
+      patch: { direction: 'y' },
+    });
+    const b = buildSpecSnapshot(
+      useEditorStore.getState().document.draftModel!,
+      buildPanelizationSnapshot(useEditorStore.getState().document.draftModel!)
+    );
+    expect(a.summary.totalsBySourceType.slab.panels).toBeGreaterThan(0);
+    expect(b.summary.totalsBySourceType.slab.panels).toBeGreaterThan(0);
+  });
+
+  it('changing roof params recalculates spec', () => {
+    setup();
+    const a = buildSpecSnapshot(
+      useEditorStore.getState().document.draftModel!,
+      buildPanelizationSnapshot(useEditorStore.getState().document.draftModel!)
+    );
+    useEditorStore.getState().applyCommand({
+      type: 'updateRoof',
+      roofId: 'r1',
+      patch: { roofType: 'gable' },
+    });
+    const b = buildSpecSnapshot(
+      useEditorStore.getState().document.draftModel!,
+      buildPanelizationSnapshot(useEditorStore.getState().document.draftModel!)
+    );
+    expect(a.summary.totalsBySourceType.roof.panels).toBeGreaterThan(0);
+    expect(b.summary.totalsBySourceType.roof.panels).toBeGreaterThan(0);
   });
 });

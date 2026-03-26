@@ -18,6 +18,8 @@ function bufferFromPdf(snapshot: ExportPackageSnapshot): Promise<Buffer> {
     doc.moveDown();
     doc.text(`Floors: ${snapshot.projectSummary.floorsCount}`);
     doc.text(`Walls: ${snapshot.specSummary.wallCountIncluded}`);
+    doc.text(`Slabs: ${snapshot.specSummary.slabCountIncluded ?? 0}`);
+    doc.text(`Roof: ${snapshot.specSummary.roofCountIncluded ?? 0}`);
     doc.text(`Panels: ${snapshot.specSummary.totalPanels}`);
     doc.text(`Trimmed: ${snapshot.specSummary.totalTrimmedPanels}`);
     doc.text(`Area m2: ${snapshot.specSummary.totalPanelAreaM2}`);
@@ -54,6 +56,8 @@ export async function renderExportBinary(
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.summaryRows), 'Summary');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.bomRows), 'BOM');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.wallRows), 'Walls');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.slabRows), 'Slabs');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.roofRows), 'Roof');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.warningRows), 'Warnings');
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
     return {

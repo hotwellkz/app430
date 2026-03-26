@@ -36,5 +36,6 @@ describe('SlabInspector panelization', () => {
     useEditorStore.getState().selectObject('s1', 'slab');
     render(<SlabInspector />);
     expect(screen.getByText(/SIP panels \/ trimmed \/ area/i)).toBeTruthy();
+    expect(screen.getByText(/SPEC panels \/ trimmed \/ area/i)).toBeTruthy();
   });
 });

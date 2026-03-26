@@ -1,14 +1,14 @@
-# Specification / BOM v1 (Sprint 10)
+# Specification / BOM v2 (Sprint 14)
 
-## Scope v1
+## Scope v2
 
-- Source: wall panelization snapshot (`generatedPanels`) only.
+- Source: panelization snapshot (`wall + slab + roof`).
 - Includes:
   - aggregated BOM by panel type;
-  - summary totals;
-  - wall-level breakdown.
+  - summary totals by sourceType;
+  - object-level breakdown for wall/slab/roof;
+  - warnings passthrough into spec snapshot.
 - Excludes:
-  - roof/slab panelization;
   - advanced material estimation;
   - production nesting/CNC maps;
   - ERP integration.
@@ -23,19 +23,29 @@
 
 ### Global aggregation
 
-- Group by `panelTypeId` (with `code/name` from library).
+- Group by `panelTypeId` (with `code/name` from library), sourceType-aware.
 - For each group:
   - `pcs` item (`qty = panel count`);
   - `m2` item (`qty = sum(width*height)`).
+  - traceability via `sourceIds`, `sourceType`.
 
-### Wall breakdown
+### SourceType sections
 
-Per wall:
+Sections:
+
+- Walls
+- Slabs
+- Roof
+
+### Object-level breakdown
+
+Per object (`wallId` / `slabId` / `roofId`):
 
 - panel count
 - trimmed count
 - total area (m2)
 - panel-type breakdown
+- warnings count
 
 ## Summary fields
 
@@ -43,13 +53,20 @@ Per wall:
 - `totalTrimmedPanels`
 - `totalPanelAreaM2`
 - `wallCountIncluded`
+- `slabCountIncluded`
+- `roofCountIncluded`
 - `warningCount` (panelization warnings)
+- `totalsBySourceType.wall/slab/roof`:
+  - `panels`
+  - `trimmedPanels`
+  - `areaM2`
 
 ## Wall-level panel type override
 
 - Wall supports optional `panelTypeId`.
 - Effective panel type:
   - wall override if valid and active;
+  - slab/roof override if valid and active;
   - otherwise global `defaultPanelTypeId`.
 
 ## Export scope
@@ -57,11 +74,11 @@ Per wall:
 - CSV:
   - Summary
   - Aggregated BOM
-  - Wall breakdown
+  - Wall/Slab/Roof breakdown
 - XLSX:
   - `Summary` sheet
   - `BOM` sheet
-  - `Walls` sheet
+  - `Walls`/`Slabs`/`Roof` sheets
 
 ## Spec -> Export pipeline
 
@@ -76,4 +93,4 @@ Per wall:
 - No persisted BOM object in Firestore.
 - No pricing/profit fields.
 - No logistics/packaging rows.
-- No roof/slab items until corresponding panelization phases.
+- Нет коммерческой калькуляции и ERP-расширений на этом этапе.
