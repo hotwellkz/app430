@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { EmptyState, LoadingState } from '@2wix/ui-kit';
 import type { ImportApplyHistoryViewItem } from '../import-history/importApplyHistoryViewModel';
+import type { ImportHistoryFilter } from '../import-history/importHistoryFilters';
 
 function badgeStyle(kind: ImportApplyHistoryViewItem['badgeKind']): CSSProperties {
   if (kind === 'danger') {
@@ -66,8 +67,18 @@ function ImportApplyHistoryItemCard({ item }: ItemProps) {
         >
           <strong>Неполная legacy запись</strong>
           <div className="twix-muted" style={{ marginTop: 4 }}>
-            missing: {item.missingFields.join(', ')}
+            missing: {item.missingFieldsCompact}
           </div>
+          <details style={{ marginTop: 6 }}>
+            <summary style={{ cursor: 'pointer' }}>Показать все missing поля</summary>
+            <ul style={{ margin: '6px 0 0', paddingLeft: 16 }}>
+              {item.missingFieldUiItems.map((field) => (
+                <li key={field.key} title={field.hint}>
+                  {field.label}
+                </li>
+              ))}
+            </ul>
+          </details>
         </div>
       ) : null}
     </li>
@@ -79,16 +90,47 @@ export interface ImportApplyHistoryPanelViewProps {
   isError: boolean;
   errorMessage: string | null;
   items: ImportApplyHistoryViewItem[];
+  totalCount: number;
+  activeFilter: ImportHistoryFilter;
+  onFilterChange: (next: ImportHistoryFilter) => void;
   onRetry: () => void;
 }
 
 export function ImportApplyHistoryPanelView(props: ImportApplyHistoryPanelViewProps) {
-  const { isLoading, isError, errorMessage, items, onRetry } = props;
+  const {
+    isLoading,
+    isError,
+    errorMessage,
+    items,
+    totalCount,
+    activeFilter,
+    onFilterChange,
+    onRetry,
+  } = props;
   return (
     <div style={{ marginBottom: 12, padding: 10, border: '1px solid var(--twix-border)', borderRadius: 8 }}>
-      <p className="twix-panelTitle" style={{ marginBottom: 8 }}>
-        AI-import history
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <p className="twix-panelTitle" style={{ marginBottom: 8 }}>
+          AI-import history
+        </p>
+        <span className="twix-muted" style={{ fontSize: 11 }}>
+          записей: {totalCount}
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+        <button type="button" style={{ fontSize: 11 }} onClick={() => onFilterChange('all')} disabled={activeFilter === 'all'}>
+          all
+        </button>
+        <button type="button" style={{ fontSize: 11 }} onClick={() => onFilterChange('normal')} disabled={activeFilter === 'normal'}>
+          normal
+        </button>
+        <button type="button" style={{ fontSize: 11 }} onClick={() => onFilterChange('legacy')} disabled={activeFilter === 'legacy'}>
+          legacy
+        </button>
+        <button type="button" style={{ fontSize: 11 }} onClick={() => onFilterChange('incomplete')} disabled={activeFilter === 'incomplete'}>
+          incomplete
+        </button>
+      </div>
       {isLoading ? <LoadingState message="Загрузка истории AI-import…" /> : null}
       {!isLoading && isError ? (
         <div style={{ fontSize: 12 }}>
@@ -102,7 +144,10 @@ export function ImportApplyHistoryPanelView(props: ImportApplyHistoryPanelViewPr
         </div>
       ) : null}
       {!isLoading && !isError && items.length === 0 ? (
-        <EmptyState title="История AI-import пока пуста" description="Записи появятся после apply-candidate." />
+        <EmptyState
+          title={activeFilter === 'all' ? 'История AI-import пока пуста' : 'Для выбранного фильтра записей нет'}
+          description="Записи появятся после apply-candidate."
+        />
       ) : null}
       {!isLoading && !isError && items.length > 0 ? (
         <ul style={{ margin: 0, padding: 0, display: 'grid', gap: 8 }}>

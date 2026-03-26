@@ -52,6 +52,8 @@ describe('importApplyHistoryViewModel', () => {
     expect(vm.badgeKind).toBe('danger');
     expect(vm.badgeLabel).toBe('Incomplete legacy');
     expect(vm.missingFields.length).toBe(6);
+    expect(vm.missingFieldUiItems[0]?.label).toBe('Версия mapper');
+    expect(vm.missingFieldsCompact).toContain('+4 еще');
     expect(vm.subtitle).toContain('Неполная legacy запись');
   });
 
@@ -64,5 +66,20 @@ describe('importApplyHistoryViewModel', () => {
       })
     );
     expect(vm.missingFields).toEqual(['appliedAt', 'reviewedSnapshotVersion']);
+    expect(vm.missingFieldUiItems.map((x) => x.label)).toEqual([
+      'Время применения',
+      'Версия reviewed snapshot',
+    ]);
+  });
+
+  it('unknown missing field uses fallback label', () => {
+    const vm = mapImportApplyHistoryItemToView(
+      baseItem({
+        isLegacy: true,
+        isIncomplete: true,
+        missingFields: ['mystery_field'],
+      })
+    );
+    expect(vm.missingFieldUiItems[0]?.label).toBe('Неизвестное поле (mystery_field)');
   });
 });

@@ -34,6 +34,25 @@ Backend item маппится в `ImportApplyHistoryViewItem`:
 - `Legacy` (`warning`) — legacy complete-ish item.
 - `Incomplete legacy` (`danger`) — legacy item с неполными полями.
 
+## Missing fields mapping
+
+- `missingFields` из backend всегда проходят через UI mapping helper (`importHistoryMissingFields.ts`).
+- Известные ключи показываются человеко-понятными labels (например: `appliedAt` -> `Время применения`).
+- Неизвестный ключ не ломает UI: fallback `Неизвестное поле (<key>)`.
+- В карточке incomplete item:
+  - коротко показываются первые 1-2 labels;
+  - если полей больше, добавляется `+N еще`;
+  - полный список доступен через компактный expandable блок.
+
+## Frontend filters
+
+- `all` (по умолчанию)
+- `normal`
+- `legacy`
+- `incomplete`
+
+Фильтрация выполняется только на клиенте по уже загруженному списку.
+
 ## Subtitle policy
 
 - normal: `by <appliedBy> · mapper <mapperVersion> · warnings <count>`.
@@ -44,4 +63,5 @@ Backend item маппится в `ImportApplyHistoryViewItem`:
 
 - `missingFields` нормализуется и ограничивается компактным списком.
 - Если в ответе mixed список normal + legacy, фронт просто рендерит все элементы в `newest-first` порядке backend.
-- Если истории нет, показывается явный empty state.
+- Если истории нет, показывается empty state.
+- Если выбран фильтр и записей для него нет, показывается отдельный empty state для фильтра.

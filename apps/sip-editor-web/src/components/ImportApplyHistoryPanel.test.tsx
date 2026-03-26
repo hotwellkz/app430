@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ImportApplyHistoryViewItem } from '@/import-history/importApplyHistoryViewModel';
 import { ImportApplyHistoryPanelView } from './ImportApplyHistoryPanelView';
+import type { MissingFieldUiItem } from '@/import-history/importHistoryMissingFields';
 
 function item(overrides?: Partial<ImportApplyHistoryViewItem>): ImportApplyHistoryViewItem {
+  const missingFieldUiItems: MissingFieldUiItem[] = [];
   return {
     id: 'v1',
     appliedAt: '2026-03-26T12:00:00.000Z',
@@ -16,6 +18,8 @@ function item(overrides?: Partial<ImportApplyHistoryViewItem>): ImportApplyHisto
     isLegacy: false,
     isIncomplete: false,
     missingFields: [],
+    missingFieldUiItems,
+    missingFieldsCompact: '',
     badgeKind: 'neutral',
     badgeLabel: 'AI import',
     subtitle: 'by u1 · mapper import-candidate-v1 · warnings 1',
@@ -32,6 +36,9 @@ describe('ImportApplyHistoryPanelView', () => {
         isError={false}
         errorMessage={null}
         items={[]}
+        totalCount={0}
+        activeFilter="all"
+        onFilterChange={() => {}}
         onRetry={() => {}}
       />
     );
@@ -45,6 +52,9 @@ describe('ImportApplyHistoryPanelView', () => {
         isError={false}
         errorMessage={null}
         items={[]}
+        totalCount={0}
+        activeFilter="all"
+        onFilterChange={() => {}}
         onRetry={() => {}}
       />
     );
@@ -58,6 +68,9 @@ describe('ImportApplyHistoryPanelView', () => {
         isError={false}
         errorMessage={null}
         items={[item()]}
+        totalCount={1}
+        activeFilter="all"
+        onFilterChange={() => {}}
         onRetry={() => {}}
       />
     );
@@ -77,16 +90,26 @@ describe('ImportApplyHistoryPanelView', () => {
             isIncomplete: true,
             badgeKind: 'danger',
             badgeLabel: 'Incomplete legacy',
-            missingFields: ['appliedAt', 'reviewedSnapshotVersion'],
-            subtitle: 'Неполная legacy запись: appliedAt, reviewedSnapshotVersion',
+            missingFields: ['appliedAt', 'reviewedSnapshotVersion', 'importJobId'],
+            missingFieldsCompact: 'Время применения, Версия reviewed snapshot +1 еще',
+            missingFieldUiItems: [
+              { key: 'appliedAt', label: 'Время применения' },
+              { key: 'reviewedSnapshotVersion', label: 'Версия reviewed snapshot' },
+              { key: 'importJobId', label: 'ID import-job' },
+            ],
+            subtitle: 'Неполная legacy запись: Время применения, Версия reviewed snapshot',
           }),
         ]}
+        totalCount={1}
+        activeFilter="all"
+        onFilterChange={() => {}}
         onRetry={() => {}}
       />
     );
     expect(screen.getByText(/Incomplete legacy/i)).toBeTruthy();
     expect(screen.getAllByText(/Неполная legacy запись/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/appliedAt, reviewedSnapshotVersion/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Время применения, Версия reviewed snapshot \+1 еще/i)).toBeTruthy();
+    expect(screen.queryByText('appliedAt')).toBeNull();
   });
 
   it('renders error state with retry button', () => {
@@ -97,11 +120,33 @@ describe('ImportApplyHistoryPanelView', () => {
         isError
         errorMessage="network"
         items={[]}
+        totalCount={0}
+        activeFilter="all"
+        onFilterChange={() => {}}
         onRetry={onRetry}
       />
     );
     expect(screen.getByText(/Не удалось загрузить историю AI-import/i)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Повторить/i }));
     expect(onRetry).toHaveBeenCalled();
+  });
+
+  it('filters items by selected mode and shows filter-empty message', () => {
+    const onFilterChange = vi.fn();
+    const view = render(
+      <ImportApplyHistoryPanelView
+        isLoading={false}
+        isError={false}
+        errorMessage={null}
+        items={[]}
+        totalCount={2}
+        activeFilter="incomplete"
+        onFilterChange={onFilterChange}
+        onRetry={() => {}}
+      />
+    );
+    expect(screen.getByText(/Для выбранного фильтра записей нет/i)).toBeTruthy();
+    fireEvent.click(within(view.container).getByRole('button', { name: 'legacy' }));
+    expect(onFilterChange).toHaveBeenCalledWith('legacy');
   });
 });

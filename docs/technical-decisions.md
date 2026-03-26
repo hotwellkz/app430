@@ -320,6 +320,8 @@
   - `import_history_legacy_item_detected`.
 - Frontend history read-model вынесен в отдельный adapter/view-model слой, чтобы backend response shape не использовался напрямую в компонентах.
 - Для первого UI среза зафиксирован mini-contract badge/subtitle для `normal`, `legacy`, `incomplete legacy`.
+- Missing fields отображаются через отдельный frontend mapping helper (human labels + fallback), чтобы исключить raw technical keys в UI.
+- Фильтры истории (`all/normal/legacy/incomplete`) реализованы строго на клиенте по уже загруженным данным.
 
 ### Spec-engine boundary (Sprint 10)
 

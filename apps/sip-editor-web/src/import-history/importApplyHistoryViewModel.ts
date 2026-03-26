@@ -1,4 +1,9 @@
 import type { ImportApplyHistoryItem } from '@2wix/shared-types';
+import {
+  buildMissingFieldsCompactSummary,
+  mapMissingFieldsToUiItems,
+  type MissingFieldUiItem,
+} from './importHistoryMissingFields';
 
 export type ImportHistoryBadgeKind = 'neutral' | 'warning' | 'danger';
 
@@ -14,6 +19,8 @@ export interface ImportApplyHistoryViewItem {
   isLegacy: boolean;
   isIncomplete: boolean;
   missingFields: string[];
+  missingFieldUiItems: MissingFieldUiItem[];
+  missingFieldsCompact: string;
   badgeKind: ImportHistoryBadgeKind;
   badgeLabel: string;
   subtitle: string;
@@ -55,6 +62,7 @@ export function mapImportApplyHistoryItemToView(
   item: ImportApplyHistoryItem
 ): ImportApplyHistoryViewItem {
   const missingFields = normalizeMissingFields(item.missingFields);
+  const missingFieldUiItems = mapMissingFieldsToUiItems(missingFields);
   const badge = badgeFor(item);
   return {
     id: item.versionId,
@@ -68,6 +76,8 @@ export function mapImportApplyHistoryItemToView(
     isLegacy: Boolean(item.isLegacy),
     isIncomplete: Boolean(item.isIncomplete),
     missingFields,
+    missingFieldUiItems,
+    missingFieldsCompact: buildMissingFieldsCompactSummary(missingFieldUiItems),
     badgeKind: badge.kind,
     badgeLabel: badge.label,
     subtitle: buildSubtitle(item, missingFields),

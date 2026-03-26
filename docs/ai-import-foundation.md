@@ -59,6 +59,7 @@
   - Legacy/incomplete provenance обрабатывается мягко (`isLegacy`, `isIncomplete`, `missingFields`).
   - Legacy classification выполняется pure helper-слоем (deterministic mapping, unit-testable).
   - Первый frontend slice использует отдельный UI adapter/view-model (см. `docs/ui-ai-import-history.md`).
+  - Frontend polishing: human-readable `missingFields`, компактное отображение incomplete item, frontend-only фильтры.
 
 ## Mock import snapshot
 
