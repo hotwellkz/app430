@@ -1,20 +1,22 @@
-# AI Import Foundation (Sprint 16, Phase 1)
+# AI Import Foundation (Sprint 16, Phase 2)
 
 ## Что сделано
 
-- Добавлен backend/domain foundation для `import-job` без OCR/vision/LLM extraction.
-- Введена canonical intermediate schema: `ArchitecturalImportSnapshot`.
-- Реализованы API endpoints создания и чтения import-job.
-- Добавлен честный mock snapshot factory без фальшивой геометрии.
-- Добавлена персистенция import jobs в отдельную Firestore коллекцию.
+- Добавлен lifecycle pipeline для `import-job`: `queued -> running -> needs_review | failed`.
+- Добавлен orchestration service с централизованными status transitions.
+- Введена extractor adapter abstraction (`mock` implementation + resolver).
+- Сохранена canonical intermediate schema `ArchitecturalImportSnapshot`.
+- Персистенция import jobs остаётся в отдельной Firestore коллекции.
 
 ## Endpoints
 
 - `POST /api/projects/:projectId/import-jobs`
   - Создаёт import-job.
   - Сохраняет refs исходных изображений.
-  - Генерирует mock snapshot.
-  - Ставит статус `needs_review`.
+  - Синхронно запускает backend pipeline:
+    - `queued`
+    - `running`
+    - `needs_review` с snapshot (или `failed` с errorMessage).
 - `GET /api/projects/:projectId/import-jobs`
   - Возвращает jobs проекта (новые сверху).
 - `GET /api/projects/:projectId/import-jobs/:jobId`
@@ -23,13 +25,20 @@
 
 ## Mock import snapshot
 
-На foundation этапе snapshot валиден структурно, но не делает вид, что extractor уже умеет распознавание:
+На текущем этапе используется mock extractor adapter. Snapshot валиден структурно, но не делает вид, что extractor уже умеет распознавание:
 
 - `floors`: один минимальный floor (`floor-1`);
 - `outerContour`: `null`;
 - `walls/openings/stairs`: пустые;
 - `unresolved`: blocking issue `EXTRACTOR_NOT_CONNECTED`;
 - `notes`: явная пометка про mock без AI extractor.
+
+## Lifecycle статусов
+
+- `queued` — job создана и ожидает обработки.
+- `running` — backend pipeline выполняет extraction.
+- `needs_review` — extraction завершён, snapshot сохранён, требуется human review.
+- `failed` — pipeline завершился ошибкой, сохранён `errorMessage`.
 
 ## Что пока не сделано
 
@@ -41,6 +50,6 @@
 
 ## Следующий шаг
 
-1. Wizard/review/apply поверх import-job lifecycle.
-2. Интеграция реального extractor в pipeline `queued/running/needs_review/failed`.
-3. Подключение construction profile и правил валидации перед apply.
+1. Review/apply backend contracts и wizard skeleton.
+2. Интеграция реального extractor adapter вместо mock (через mode/feature flag).
+3. Подключение construction profile и валидаций перед apply.

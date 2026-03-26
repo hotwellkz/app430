@@ -196,6 +196,14 @@
 - Добавлен честный mock snapshot factory (без выдуманной геометрии, с явными unresolved/notes).
 - Подготовлена база для следующего этапа: wizard/review/apply и подключение extractor.
 
+## Завершено: AI import lifecycle orchestration foundation (Sprint 16, этап 2)
+
+- `import-job` переведён на pipeline lifecycle:
+  - `queued -> running -> needs_review | failed`.
+- `POST /api/projects/:projectId/import-jobs` теперь запускает backend orchestration и возвращает итоговое состояние job.
+- Добавлен extractor adapter слой (mock implementation + resolver) для будущей интеграции real extractor без ломки API.
+- Централизованы status transitions и инварианты хранения snapshot/errorMessage.
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).

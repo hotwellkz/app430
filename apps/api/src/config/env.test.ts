@@ -8,6 +8,7 @@ describe('loadApiEnv', () => {
     expect(env.nodeEnv).toBe('development');
     expect(env.corsOrigins.length).toBeGreaterThan(0);
     expect(env.storageBucket).toBeNull();
+    expect(env.importExtractorMode).toBe('mock');
   });
 
   it('валидирует порт', () => {

@@ -1,8 +1,10 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import type {
   ArchitecturalImportSnapshot,
+  CreateImportJobRequest,
   CreateImportJobResponse,
   ImportJob,
+  ImportJobStatus,
   ListImportJobsResponse,
 } from '@2wix/shared-types';
 import { COLLECTIONS } from '../config/collections.js';
@@ -15,51 +17,129 @@ import {
   zCreateImportJobBody,
 } from '../validation/schemas.js';
 import { getProject } from './sipProjectService.js';
+import type { ArchitecturalExtractorAdapter } from './import/extractorAdapter.js';
+import { resolveExtractorAdapter } from './import/resolveExtractorAdapter.js';
 
 export const IMPORT_SCHEMA_VERSION = 1;
 
-export function createMockArchitecturalImportSnapshot(input?: {
-  projectName?: string;
-}): ArchitecturalImportSnapshot {
-  return {
-    projectMeta: {
-      ...(input?.projectName ? { name: input.projectName } : {}),
-      detectedScaleHints: [],
-      notes: ['mock import snapshot generated without AI extractor'],
-    },
-    floors: [
-      {
-        id: 'floor-1',
-        label: 'Floor 1 (mock)',
-        elevationHintMm: null,
-        confidence: {
-          score: 0.2,
-          level: 'low',
-        },
-      },
-    ],
-    outerContour: null,
-    walls: [],
-    openings: [],
-    stairs: [],
-    roofHints: {
-      likelyType: 'unknown',
-      confidence: { score: 0.1, level: 'low' },
-      notes: ['Extractor is not connected yet'],
-    },
-    dimensions: [],
-    unresolved: [
-      {
-        id: 'mock-extractor-not-connected',
-        code: 'EXTRACTOR_NOT_CONNECTED',
-        severity: 'blocking',
-        message: 'AI extractor not connected yet. Review/confirmation required.',
-        requiredAction: 'Подключить extractor и выполнить импорт повторно',
-        relatedIds: [],
-      },
-    ],
-    notes: ['mock import snapshot generated without AI extractor'],
-  };
+interface ImportPipelineDeps {
+  resolveAdapter?: () => ArchitecturalExtractorAdapter;
+}
+
+function assertStatusTransitionAllowed(
+  current: ImportJobStatus,
+  next: ImportJobStatus
+): void {
+  if (current === next) return;
+  if (current === 'queued' && (next === 'running' || next === 'failed')) return;
+  if (current === 'running' && (next === 'needs_review' || next === 'failed')) return;
+  throw new ValidationAppError(`Некорректный переход статуса import-job: ${current} -> ${next}`);
+}
+
+export async function createImportJobRecord(
+  projectId: string,
+  createdBy: string,
+  input: CreateImportJobRequest
+): Promise<ImportJob> {
+  const db = getDb();
+  const now = FieldValue.serverTimestamp();
+  const ref = db.collection(COLLECTIONS.IMPORT_JOBS).doc();
+  await ref.set({
+    projectId,
+    status: 'queued',
+    createdBy,
+    createdAt: now,
+    updatedAt: now,
+    importSchemaVersion: IMPORT_SCHEMA_VERSION,
+    sourceImages: input.sourceImages,
+    snapshot: null,
+    errorMessage: null,
+  });
+  const created = await ref.get();
+  return mapImportJobDoc(ref.id, created.data() ?? {});
+}
+
+export async function getImportJobById(jobId: string): Promise<ImportJob> {
+  const db = getDb();
+  const snap = await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).get();
+  if (!snap.exists) {
+    throw new NotFoundError(`Import job не найден: ${jobId}`);
+  }
+  return mapImportJobDoc(snap.id, snap.data() ?? {});
+}
+
+export async function updateImportJobStatus(
+  jobId: string,
+  nextStatus: Extract<ImportJobStatus, 'queued' | 'running'>
+): Promise<ImportJob> {
+  const current = await getImportJobById(jobId);
+  assertStatusTransitionAllowed(current.status, nextStatus);
+  const db = getDb();
+  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).update({
+    status: nextStatus,
+    // queued/running states should not carry a completed snapshot.
+    snapshot: null,
+    errorMessage: null,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return getImportJobById(jobId);
+}
+
+export async function completeImportJobWithSnapshot(
+  jobId: string,
+  snapshot: ArchitecturalImportSnapshot
+): Promise<ImportJob> {
+  const snapshotValid = zArchitecturalImportSnapshot.safeParse(snapshot);
+  if (!snapshotValid.success) {
+    throw new ValidationAppError(
+      'Некорректный snapshot от extractor adapter',
+      formatZodError(snapshotValid.error)
+    );
+  }
+  const current = await getImportJobById(jobId);
+  assertStatusTransitionAllowed(current.status, 'needs_review');
+  const db = getDb();
+  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).update({
+    status: 'needs_review',
+    snapshot: snapshotValid.data,
+    errorMessage: null,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return getImportJobById(jobId);
+}
+
+export async function failImportJob(jobId: string, errorMessage: string): Promise<ImportJob> {
+  const current = await getImportJobById(jobId);
+  assertStatusTransitionAllowed(current.status, 'failed');
+  const db = getDb();
+  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).update({
+    status: 'failed',
+    snapshot: null,
+    errorMessage: errorMessage.trim() || 'Import pipeline failed',
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return getImportJobById(jobId);
+}
+
+export async function runImportJobPipeline(
+  job: ImportJob,
+  input: CreateImportJobRequest,
+  deps?: ImportPipelineDeps
+): Promise<ImportJob> {
+  await updateImportJobStatus(job.id, 'running');
+  try {
+    const adapter = deps?.resolveAdapter?.() ?? resolveExtractorAdapter();
+    const snapshot = await adapter.extractArchitecturalSnapshot({
+      projectId: job.projectId,
+      jobId: job.id,
+      sourceImages: input.sourceImages,
+      projectName: input.projectName,
+    });
+    return await completeImportJobWithSnapshot(job.id, snapshot);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Import pipeline failed';
+    return await failImportJob(job.id, message);
+  }
 }
 
 export async function createImportJob(
@@ -72,32 +152,9 @@ export async function createImportJob(
     throw new ValidationAppError('Невалидное тело запроса', formatZodError(parsed.error));
   }
   await getProject(projectId, actorId);
-  const snapshot = createMockArchitecturalImportSnapshot({
-    projectName: parsed.data.projectName,
-  });
-  const snapshotValid = zArchitecturalImportSnapshot.safeParse(snapshot);
-  if (!snapshotValid.success) {
-    throw new ValidationAppError(
-      'Не удалось создать mock snapshot',
-      formatZodError(snapshotValid.error)
-    );
-  }
-  const db = getDb();
-  const now = FieldValue.serverTimestamp();
-  const ref = db.collection(COLLECTIONS.IMPORT_JOBS).doc();
-  await ref.set({
-    projectId,
-    status: 'needs_review',
-    createdBy: actorId,
-    createdAt: now,
-    updatedAt: now,
-    importSchemaVersion: IMPORT_SCHEMA_VERSION,
-    sourceImages: parsed.data.sourceImages,
-    snapshot: snapshotValid.data,
-    errorMessage: null,
-  });
-  const created = await ref.get();
-  return { job: mapImportJobDoc(ref.id, created.data() ?? {}) };
+  const queuedJob = await createImportJobRecord(projectId, actorId, parsed.data);
+  const finalJob = await runImportJobPipeline(queuedJob, parsed.data);
+  return { job: finalJob };
 }
 
 export async function getImportJob(
@@ -106,12 +163,7 @@ export async function getImportJob(
   actorId: string
 ): Promise<{ job: ImportJob }> {
   await getProject(projectId, actorId);
-  const db = getDb();
-  const snap = await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).get();
-  if (!snap.exists) {
-    throw new NotFoundError(`Import job не найден: ${jobId}`);
-  }
-  const job = mapImportJobDoc(snap.id, snap.data() ?? {});
+  const job = await getImportJobById(jobId);
   if (job.projectId !== projectId) {
     throw new NotFoundError(`Import job не найден в проекте: ${jobId}`);
   }

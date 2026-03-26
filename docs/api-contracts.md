@@ -146,7 +146,15 @@ Optimistic concurrency. Тело:
 
 Ответ `201`: `{ "job": ImportJob }`.
 
-На foundation-этапе сервер создаёт mock snapshot и ставит статус `needs_review`.
+На текущем foundation-этапе используется **synchronous orchestration**:
+
+1. создаётся `queued` job;
+2. backend переводит её в `running`;
+3. extractor adapter (сейчас `mock`) возвращает snapshot;
+4. job получает `needs_review` + snapshot;
+5. при ошибке — `failed` + `errorMessage`.
+
+То есть `POST` возвращает итоговое состояние pipeline (`needs_review` или `failed`).
 
 ### `GET /api/projects/:projectId/import-jobs`
 

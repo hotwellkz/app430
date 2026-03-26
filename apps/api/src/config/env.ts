@@ -6,6 +6,7 @@ interface ApiEnv {
   firebaseProjectId: string | null;
   googleApplicationCredentials: string | null;
   storageBucket: string | null;
+  importExtractorMode: 'mock';
 }
 
 function parsePort(raw: string | undefined): number {
@@ -30,6 +31,11 @@ function parseNodeEnv(raw: string | undefined): ApiEnv['nodeEnv'] {
   if (!raw || !raw.trim()) return 'development';
   if (raw === 'development' || raw === 'test' || raw === 'production') return raw;
   throw new Error(`NODE_ENV должен быть development|test|production, получено: ${raw}`);
+}
+
+function parseImportExtractorMode(raw: string | undefined): ApiEnv['importExtractorMode'] {
+  if (!raw || !raw.trim()) return 'mock';
+  return 'mock';
 }
 
 function assertProdCorsSafety(nodeEnv: ApiEnv['nodeEnv'], corsOrigins: string[]): void {
@@ -57,6 +63,7 @@ export function loadApiEnv(src: NodeJS.ProcessEnv = process.env): ApiEnv {
     firebaseProjectId: src.FIREBASE_PROJECT_ID?.trim() || null,
     googleApplicationCredentials: src.GOOGLE_APPLICATION_CREDENTIALS?.trim() || null,
     storageBucket: src.FIREBASE_STORAGE_BUCKET?.trim() || null,
+    importExtractorMode: parseImportExtractorMode(src.IMPORT_EXTRACTOR_MODE),
   };
 }
 

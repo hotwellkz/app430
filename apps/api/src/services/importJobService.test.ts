@@ -6,7 +6,7 @@ function resetStore() {
   store.clear();
   store.set('sipEditor_importJobs/ij-older', {
     projectId: 'p1',
-    status: 'needs_review',
+    status: 'queued',
     createdBy: 'u1',
     createdAt: '2026-03-25T10:00:00.000Z',
     updatedAt: '2026-03-25T10:00:00.000Z',
@@ -17,7 +17,7 @@ function resetStore() {
   });
   store.set('sipEditor_importJobs/ij-newer', {
     projectId: 'p1',
-    status: 'needs_review',
+    status: 'running',
     createdBy: 'u1',
     createdAt: '2026-03-26T10:00:00.000Z',
     updatedAt: '2026-03-26T10:00:00.000Z',
@@ -52,6 +52,15 @@ vi.mock('../firestore/admin.js', () => ({
               data: () => data ?? {},
             };
           },
+          async update(payload: Record<string, unknown>) {
+            const prev = store.get(key) ?? {};
+            const nowIso = new Date('2026-03-26T12:00:00.000Z').toISOString();
+            store.set(key, {
+              ...prev,
+              ...payload,
+              updatedAt: nowIso,
+            });
+          },
         };
       },
       where: (_field: string, _op: string, value: string) => ({
@@ -78,17 +87,23 @@ vi.mock('./sipProjectService.js', () => ({
 }));
 
 import {
+  completeImportJobWithSnapshot,
   createImportJob,
-  createMockArchitecturalImportSnapshot,
+  createImportJobRecord,
+  failImportJob,
+  getImportJobById,
   listImportJobs,
+  runImportJobPipeline,
+  updateImportJobStatus,
 } from './importJobService.js';
+import { createMockArchitecturalImportSnapshot } from './import/mockExtractorAdapter.js';
 
 describe('importJobService', () => {
   beforeEach(() => {
     resetStore();
   });
 
-  it('create сохраняет snapshot/status/sourceImages', async () => {
+  it('pipeline: queued -> running -> needs_review', async () => {
     const res = await createImportJob(
       'p1',
       {
@@ -101,6 +116,30 @@ describe('importJobService', () => {
     expect(res.job.sourceImages).toHaveLength(1);
     expect(res.job.snapshot?.floors[0]?.id).toBe('floor-1');
     expect(res.job.snapshot?.projectMeta.name).toBe('My Project');
+    expect(res.job.errorMessage).toBeNull();
+  });
+
+  it('pipeline error: queued/running -> failed', async () => {
+    const queued = await createImportJobRecord(
+      'p1',
+      'u1',
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] }
+    );
+    const failed = await runImportJobPipeline(
+      queued,
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      {
+        resolveAdapter: () => ({
+          mode: 'mock',
+          async extractArchitecturalSnapshot() {
+            throw new Error('Extractor crash');
+          },
+        }),
+      }
+    );
+    expect(failed.status).toBe('failed');
+    expect(failed.snapshot).toBeNull();
+    expect(failed.errorMessage).toContain('Extractor crash');
   });
 
   it('list сортируется по createdAt (newest first)', async () => {
@@ -116,5 +155,34 @@ describe('importJobService', () => {
     expect(s.walls).toHaveLength(0);
     expect(s.unresolved[0]?.severity).toBe('blocking');
     expect(s.notes[0]).toContain('mock import snapshot generated without AI extractor');
+  });
+
+  it('update status работает корректно', async () => {
+    const next = await updateImportJobStatus('ij-older', 'running');
+    expect(next.status).toBe('running');
+    expect(next.snapshot).toBeNull();
+  });
+
+  it('completeImportJobWithSnapshot обновляет status/snapshot', async () => {
+    await updateImportJobStatus('ij-older', 'running');
+    const done = await completeImportJobWithSnapshot(
+      'ij-older',
+      createMockArchitecturalImportSnapshot()
+    );
+    expect(done.status).toBe('needs_review');
+    expect(done.snapshot?.floors[0]?.id).toBe('floor-1');
+    expect(done.errorMessage).toBeNull();
+  });
+
+  it('failImportJob обновляет status/errorMessage', async () => {
+    const failed = await failImportJob('ij-newer', 'Oops');
+    expect(failed.status).toBe('failed');
+    expect(failed.errorMessage).toBe('Oops');
+    expect(failed.snapshot).toBeNull();
+  });
+
+  it('getImportJobById returns existing job', async () => {
+    const job = await getImportJobById('ij-newer');
+    expect(job.id).toBe('ij-newer');
   });
 });

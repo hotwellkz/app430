@@ -230,6 +230,20 @@
   - чтобы не нарушать optimistic concurrency и versioning semantics текущего редактора;
   - чтобы сначала стабилизировать contracts, persistence и review lifecycle.
 
+### AI import lifecycle orchestration (Sprint 16, этап 2)
+
+- `POST /import-jobs` больше не пишет сразу `needs_review`.
+- Введён синхронный pipeline на backend:
+  - `queued -> running -> needs_review | failed`.
+- Переходы статусов централизованы в import-job service (не в route handler), чтобы сохранить инварианты:
+  - `needs_review` только со snapshot;
+  - `failed` с `errorMessage`;
+  - `queued/running` без финального snapshot.
+- Добавлен extractor adapter abstraction:
+  - adapter не знает про Firestore;
+  - adapter возвращает только `ArchitecturalImportSnapshot`;
+  - orchestration слой управляет статусами/персистенцией.
+
 ### Spec-engine boundary (Sprint 10)
 
 - BOM/spec aggregation вынесена в `@2wix/spec-engine`, а не в `panel-engine` и не в React-компоненты.
