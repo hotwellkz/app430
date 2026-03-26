@@ -69,6 +69,34 @@ export const zImportUnresolvedIssue = z.object({
   relatedIds: z.array(z.string().min(1)).optional(),
 });
 
+export const zImportIssueResolution = z.object({
+  issueId: z.string().min(1),
+  action: z.enum(['confirm', 'exclude', 'override', 'manual']),
+  note: z.string().max(1000).optional(),
+});
+
+export const zImportUserDecisionSet = z
+  .object({
+    floorHeightsMmByFloorId: z.record(z.string(), z.number().finite().positive()).optional(),
+    roofTypeConfirmed: z.enum(['gabled', 'single-slope', 'unknown']).optional(),
+    internalBearingWalls: z
+      .object({
+        confirmed: z.boolean(),
+        wallIds: z.array(z.string().min(1)),
+      })
+      .strict()
+      .optional(),
+    scale: z
+      .object({
+        mode: z.enum(['confirmed', 'override']),
+        mmPerPixel: z.number().finite().positive().nullable().optional(),
+      })
+      .strict()
+      .optional(),
+    issueResolutions: z.array(zImportIssueResolution).optional(),
+  })
+  .strict();
+
 export const zImportAssetRef = z.object({
   id: z.string().min(1),
   kind: z.enum(['plan', 'facade', 'other']),
@@ -174,6 +202,53 @@ export const zCreateImportJobBody = z.object({
   projectName: z.string().min(1).max(300).optional(),
 });
 
+export const zImportRequiredDecision = z.object({
+  code: z.enum([
+    'FLOOR_HEIGHTS_REQUIRED',
+    'ROOF_TYPE_CONFIRMATION_REQUIRED',
+    'INTERNAL_BEARING_WALLS_CONFIRMATION_REQUIRED',
+    'SCALE_DECISION_REQUIRED',
+    'SCALE_OVERRIDE_VALUE_REQUIRED',
+    'BLOCKING_ISSUES_RESOLUTION_REQUIRED',
+  ]),
+  message: z.string().min(1),
+  satisfied: z.boolean(),
+});
+
+export const zReviewedArchitecturalSnapshot = z.object({
+  baseSnapshot: zArchitecturalImportSnapshot,
+  transformedSnapshot: zArchitecturalImportSnapshot,
+  appliedDecisions: zImportUserDecisionSet,
+  resolvedIssueIds: z.array(z.string().min(1)),
+  notes: z.array(z.string()),
+  generatedAt: z.string().min(1),
+});
+
+export const zImportReviewState = z.object({
+  status: z.enum(['draft', 'complete', 'applied']),
+  applyStatus: z.enum(['not_ready', 'ready', 'applied']),
+  decisions: zImportUserDecisionSet,
+  missingRequiredDecisions: z.array(zImportRequiredDecision),
+  remainingBlockingIssueIds: z.array(z.string().min(1)),
+  isReadyToApply: z.boolean(),
+  reviewedSnapshot: zReviewedArchitecturalSnapshot.nullable().optional(),
+  reviewedAt: z.string().nullable().optional(),
+  reviewedBy: z.string().nullable().optional(),
+  appliedAt: z.string().nullable().optional(),
+  appliedBy: z.string().nullable().optional(),
+  lastUpdatedAt: z.string().nullable().optional(),
+  lastUpdatedBy: z.string().nullable().optional(),
+});
+
+export const zSaveImportReviewBody = z.object({
+  updatedBy: z.string().min(1).max(128),
+  decisions: zImportUserDecisionSet.partial(),
+});
+
+export const zApplyImportReviewBody = z.object({
+  appliedBy: z.string().min(1).max(128),
+});
+
 export const zImportJob = z.object({
   id: z.string().min(1),
   projectId: z.string().min(1),
@@ -184,6 +259,7 @@ export const zImportJob = z.object({
   importSchemaVersion: z.number().int().positive(),
   sourceImages: z.array(zImportAssetRef),
   snapshot: zArchitecturalImportSnapshot.nullable(),
+  review: zImportReviewState.optional(),
   errorMessage: z.string().nullable().optional(),
 });
 
@@ -197,6 +273,15 @@ export const zGetImportJobResponse = z.object({
 
 export const zListImportJobsResponse = z.object({
   items: z.array(zImportJob),
+});
+
+export const zSaveImportReviewResponse = z.object({
+  job: zImportJob,
+});
+
+export const zApplyImportReviewResponse = z.object({
+  job: zImportJob,
+  reviewedSnapshot: zReviewedArchitecturalSnapshot,
 });
 
 export function formatZodError(err: z.ZodError): unknown {

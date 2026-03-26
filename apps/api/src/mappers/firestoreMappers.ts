@@ -4,6 +4,7 @@ import type {
   BuildingModel,
   ImportJob,
   ImportJobStatus,
+  ImportReviewState,
   ExportArtifactMeta,
   ExportFormat,
   ExportPresentationMode,
@@ -13,7 +14,10 @@ import type {
   ProjectVersion,
 } from '@2wix/shared-types';
 import { BUILDING_MODEL_SCHEMA_VERSION } from '@2wix/shared-types';
-import { zArchitecturalImportSnapshot } from '../validation/schemas.js';
+import {
+  zArchitecturalImportSnapshot,
+  zImportReviewState,
+} from '../validation/schemas.js';
 
 function tsToIso(v: Timestamp | { toDate?: () => Date } | Date | string | undefined): string {
   if (v === undefined || v === null) {
@@ -131,6 +135,10 @@ export function mapImportJobDoc(id: string, data: DocumentData): ImportJob {
   const snapshot: ArchitecturalImportSnapshot | null = snapshotParsed.success
     ? snapshotParsed.data
     : null;
+  const reviewParsed = zImportReviewState.safeParse(data.review);
+  const review: ImportReviewState | undefined = reviewParsed.success
+    ? reviewParsed.data
+    : undefined;
   return {
     id,
     projectId: typeof data.projectId === 'string' ? data.projectId : '',
@@ -152,6 +160,7 @@ export function mapImportJobDoc(id: string, data: DocumentData): ImportJob {
         })
       : [],
     snapshot,
+    review,
     errorMessage: typeof data.errorMessage === 'string' ? data.errorMessage : null,
   };
 }

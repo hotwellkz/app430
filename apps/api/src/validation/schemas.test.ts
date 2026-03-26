@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   zArchitecturalImportSnapshot,
+  zApplyImportReviewBody,
   zCreateExportBody,
   zCreateImportJobBody,
   zCreateProjectBody,
   zPatchCurrentBody,
   zImportAssetRef,
+  zSaveImportReviewBody,
   zCreateVersionBody,
 } from './schemas.js';
 
@@ -136,6 +138,45 @@ describe('import schemas', () => {
     expect(
       zCreateImportJobBody.safeParse({
         sourceImages: [{ id: 'img-1', kind: 'facade', fileName: 'f.png' }],
+      }).success
+    ).toBe(true);
+  });
+
+  it('accepts valid review payload and partial payload', () => {
+    expect(
+      zSaveImportReviewBody.safeParse({
+        updatedBy: 'u1',
+        decisions: {
+          floorHeightsMmByFloorId: { 'floor-1': 2800 },
+          issueResolutions: [{ issueId: 'i1', action: 'confirm' }],
+        },
+      }).success
+    ).toBe(true);
+    expect(
+      zSaveImportReviewBody.safeParse({
+        updatedBy: 'u1',
+        decisions: {
+          roofTypeConfirmed: 'gabled',
+        },
+      }).success
+    ).toBe(true);
+  });
+
+  it('rejects invalid review payload', () => {
+    expect(
+      zSaveImportReviewBody.safeParse({
+        updatedBy: 'u1',
+        decisions: {
+          scale: { mode: 'override', mmPerPixel: -1 },
+        },
+      }).success
+    ).toBe(false);
+  });
+
+  it('accepts valid apply request', () => {
+    expect(
+      zApplyImportReviewBody.safeParse({
+        appliedBy: 'u1',
       }).success
     ).toBe(true);
   });

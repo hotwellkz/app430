@@ -255,6 +255,21 @@
   - сохраняет тот же lifecycle и invariants;
   - подготавливает replace `async-inline` на worker/queue без ломки route/service контрактов.
 
+### AI import review/apply contracts (Sprint 16, этап 4)
+
+- Review/apply lifecycle отделён от extraction lifecycle:
+  - extraction lifecycle: `ImportJob.status` (`queued/running/needs_review/failed`);
+  - review/apply lifecycle: `ImportJob.review.status` (`draft/complete/applied`).
+- `snapshot` (original extraction) и `review.reviewedSnapshot` (apply result) хранятся отдельно.
+- Почему separation важен:
+  - исключает "тихую" мутацию extraction результата;
+  - упрощает аудит и повторное применение decisions;
+  - сохраняет чистую границу перед будущим mapping в `BuildingModel`.
+- В MVP apply-review:
+  - применяет только явные user decisions;
+  - не делает editor/apply integration;
+  - не выполняет structural generation/profile rules.
+
 ### Spec-engine boundary (Sprint 10)
 
 - BOM/spec aggregation вынесена в `@2wix/spec-engine`, а не в `panel-engine` и не в React-компоненты.

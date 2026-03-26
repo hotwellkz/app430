@@ -174,6 +174,49 @@ Optimistic concurrency. Тело:
 
 Если `jobId` не найден или не принадлежит проекту — `404 NOT_FOUND`.
 
+### `POST /api/projects/:projectId/import-jobs/:jobId/review`
+
+Тело (partial-save):
+
+```json
+{
+  "updatedBy": "== x-sip-user-id",
+  "decisions": {
+    "floorHeightsMmByFloorId": { "floor-1": 2800 },
+    "roofTypeConfirmed": "gabled",
+    "internalBearingWalls": { "confirmed": true, "wallIds": ["w-1"] },
+    "scale": { "mode": "override", "mmPerPixel": 2.5 },
+    "issueResolutions": [{ "issueId": "issue-1", "action": "confirm" }]
+  }
+}
+```
+
+Ответ `200`: `{ "job": ImportJob }` с обновлённым `review` блоком.
+
+### `POST /api/projects/:projectId/import-jobs/:jobId/apply-review`
+
+Тело:
+
+```json
+{
+  "appliedBy": "== x-sip-user-id"
+}
+```
+
+Поведение:
+
+- если review неполный -> `409 CONFLICT` с деталями missing decisions / blocking issues;
+- если review complete -> сохраняется `review.reviewedSnapshot`.
+
+Ответ `200`:
+
+```json
+{
+  "job": { "...": "ImportJob" },
+  "reviewedSnapshot": { "...": "ReviewedArchitecturalSnapshot" }
+}
+```
+
 ## Доступ
 
 - Пустой `allowedEditorIds` в проекте: редактировать может только `createdBy`.

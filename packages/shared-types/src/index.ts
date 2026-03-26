@@ -382,6 +382,68 @@ export interface ImportUnresolvedIssue {
   relatedIds?: string[];
 }
 
+export type ImportIssueResolutionAction = 'confirm' | 'exclude' | 'override' | 'manual';
+
+export interface ImportIssueResolution {
+  issueId: string;
+  action: ImportIssueResolutionAction;
+  note?: string;
+}
+
+export interface ImportRequiredDecision {
+  code:
+    | 'FLOOR_HEIGHTS_REQUIRED'
+    | 'ROOF_TYPE_CONFIRMATION_REQUIRED'
+    | 'INTERNAL_BEARING_WALLS_CONFIRMATION_REQUIRED'
+    | 'SCALE_DECISION_REQUIRED'
+    | 'SCALE_OVERRIDE_VALUE_REQUIRED'
+    | 'BLOCKING_ISSUES_RESOLUTION_REQUIRED';
+  message: string;
+  satisfied: boolean;
+}
+
+export interface ImportUserDecisionSet {
+  floorHeightsMmByFloorId?: Record<string, number>;
+  roofTypeConfirmed?: 'gabled' | 'single-slope' | 'unknown';
+  internalBearingWalls?: {
+    confirmed: boolean;
+    wallIds: string[];
+  };
+  scale?: {
+    mode: 'confirmed' | 'override';
+    mmPerPixel?: number | null;
+  };
+  issueResolutions?: ImportIssueResolution[];
+}
+
+export interface ReviewedArchitecturalSnapshot {
+  baseSnapshot: ArchitecturalImportSnapshot;
+  transformedSnapshot: ArchitecturalImportSnapshot;
+  appliedDecisions: ImportUserDecisionSet;
+  resolvedIssueIds: string[];
+  notes: string[];
+  generatedAt: string;
+}
+
+export type ImportReviewStatus = 'draft' | 'complete' | 'applied';
+export type ImportApplyStatus = 'not_ready' | 'ready' | 'applied';
+
+export interface ImportReviewState {
+  status: ImportReviewStatus;
+  applyStatus: ImportApplyStatus;
+  decisions: ImportUserDecisionSet;
+  missingRequiredDecisions: ImportRequiredDecision[];
+  remainingBlockingIssueIds: string[];
+  isReadyToApply: boolean;
+  reviewedSnapshot?: ReviewedArchitecturalSnapshot | null;
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
+  appliedAt?: string | null;
+  appliedBy?: string | null;
+  lastUpdatedAt?: string | null;
+  lastUpdatedBy?: string | null;
+}
+
 export interface ArchitecturalImportSnapshot {
   projectMeta: {
     name?: string;
@@ -451,6 +513,7 @@ export interface ImportJob {
   importSchemaVersion: number;
   sourceImages: ImportAssetRef[];
   snapshot: ArchitecturalImportSnapshot | null;
+  review?: ImportReviewState;
   errorMessage?: string | null;
 }
 
@@ -469,6 +532,24 @@ export interface GetImportJobResponse {
 
 export interface ListImportJobsResponse {
   items: ImportJob[];
+}
+
+export interface SaveImportReviewRequest {
+  updatedBy: string;
+  decisions: Partial<ImportUserDecisionSet>;
+}
+
+export interface SaveImportReviewResponse {
+  job: ImportJob;
+}
+
+export interface ApplyImportReviewRequest {
+  appliedBy: string;
+}
+
+export interface ApplyImportReviewResponse {
+  job: ImportJob;
+  reviewedSnapshot: ReviewedArchitecturalSnapshot;
 }
 
 /** Единый формат ошибок API. */

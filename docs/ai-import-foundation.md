@@ -10,6 +10,9 @@
   - `async-inline`
 - Сохранена canonical intermediate schema `ArchitecturalImportSnapshot`.
 - Персистенция import jobs остаётся в отдельной Firestore коллекции.
+- Добавлен review/apply backend слой:
+  - decisions сохраняются отдельно от extractor snapshot;
+  - apply-review создаёт отдельный `ReviewedArchitecturalSnapshot` (без BuildingModel mapping).
 
 ## Endpoints
 
@@ -22,6 +25,12 @@
 - `GET /api/projects/:projectId/import-jobs/:jobId`
   - Возвращает одну job.
   - Возвращает 404, если job не найдена или не принадлежит проекту.
+- `POST /api/projects/:projectId/import-jobs/:jobId/review`
+  - Сохраняет partial decisions.
+  - Пересчитывает readiness и remaining blocking issues.
+- `POST /api/projects/:projectId/import-jobs/:jobId/apply-review`
+  - Проверяет completeness review.
+  - Создаёт и сохраняет `ReviewedArchitecturalSnapshot`.
 
 ## Mock import snapshot
 
@@ -49,11 +58,18 @@
   - ответ возвращается ранним (`queued`), а финальный статус читается через `GET` endpoints;
   - это переходный режим перед будущим worker/queue execution.
 
+## Review/apply model
+
+- `snapshot` — исходный extraction result (source-of-truth для extraction).
+- `review.decisions` — явные пользовательские решения (partial-save поддерживается).
+- `review.isReadyToApply` + `review.missingRequiredDecisions` + `review.remainingBlockingIssueIds` — централизованная оценка готовности.
+- `review.reviewedSnapshot` — отдельный результат apply-review; исходный `snapshot` при этом не мутируется.
+
 ## Что пока не сделано
 
 - Реальный extractor (OCR/vision/LLM).
 - Wizard/review/apply flow.
-- Преобразование snapshot в `BuildingModel`.
+- Преобразование reviewed snapshot в `BuildingModel`.
 - Construction profile engine.
 - Upload pipeline бинарников изображений (храним только refs/metadata).
 

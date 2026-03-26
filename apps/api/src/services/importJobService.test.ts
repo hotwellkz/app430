@@ -87,6 +87,7 @@ vi.mock('./sipProjectService.js', () => ({
 }));
 
 import {
+  applyImportJobReview,
   completeImportJobWithSnapshot,
   createImportJob,
   createImportJobRecord,
@@ -94,6 +95,7 @@ import {
   getImportJobById,
   listImportJobs,
   runImportJobPipeline,
+  saveImportJobReview,
   updateImportJobStatus,
 } from './importJobService.js';
 import { createMockArchitecturalImportSnapshot } from './import/mockExtractorAdapter.js';
@@ -212,5 +214,122 @@ describe('importJobService', () => {
   it('getImportJobById returns existing job', async () => {
     const job = await getImportJobById('ij-newer');
     expect(job.id).toBe('ij-newer');
+  });
+
+  it('partial review save updates decisions and recalculates remaining blocking', async () => {
+    const created = await createImportJob(
+      'p1',
+      {
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+        projectName: 'Review Test',
+      },
+      'u1'
+    );
+    const review1 = await saveImportJobReview(
+      'p1',
+      created.job.id,
+      {
+        updatedBy: 'u1',
+        decisions: {
+          floorHeightsMmByFloorId: { 'floor-1': 2800 },
+          roofTypeConfirmed: 'gabled',
+        },
+      },
+      'u1'
+    );
+    expect(review1.job.review?.isReadyToApply).toBe(false);
+    expect((review1.job.review?.missingRequiredDecisions.length ?? 0) > 0).toBe(true);
+
+    const review2 = await saveImportJobReview(
+      'p1',
+      created.job.id,
+      {
+        updatedBy: 'u1',
+        decisions: {
+          internalBearingWalls: { confirmed: true, wallIds: [] },
+          scale: { mode: 'confirmed' },
+          issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
+        },
+      },
+      'u1'
+    );
+    expect(review2.job.review?.isReadyToApply).toBe(true);
+    expect(review2.job.review?.remainingBlockingIssueIds).toHaveLength(0);
+  });
+
+  it('apply-review builds reviewed snapshot and keeps original snapshot', async () => {
+    const created = await createImportJob(
+      'p1',
+      {
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+      },
+      'u1'
+    );
+    const originalSnapshot = structuredClone(created.job.snapshot);
+    await saveImportJobReview(
+      'p1',
+      created.job.id,
+      {
+        updatedBy: 'u1',
+        decisions: {
+          floorHeightsMmByFloorId: { 'floor-1': 3000 },
+          roofTypeConfirmed: 'single-slope',
+          internalBearingWalls: { confirmed: true, wallIds: [] },
+          scale: { mode: 'override', mmPerPixel: 2.5 },
+          issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'override' }],
+        },
+      },
+      'u1'
+    );
+    const applied = await applyImportJobReview(
+      'p1',
+      created.job.id,
+      { appliedBy: 'u1' },
+      'u1'
+    );
+    expect(applied.job.review?.status).toBe('applied');
+    expect(applied.reviewedSnapshot.transformedSnapshot.floors[0]?.elevationHintMm).toBe(3000);
+    expect(created.job.snapshot).toEqual(originalSnapshot);
+  });
+
+  it('apply-review blocked when required decisions missing', async () => {
+    const created = await createImportJob(
+      'p1',
+      {
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+      },
+      'u1'
+    );
+    await expect(
+      applyImportJobReview('p1', created.job.id, { appliedBy: 'u1' }, 'u1')
+    ).rejects.toThrow(/Review неполный/);
+  });
+
+  it('repeated apply-review returns existing reviewed snapshot', async () => {
+    const created = await createImportJob(
+      'p1',
+      {
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+      },
+      'u1'
+    );
+    await saveImportJobReview(
+      'p1',
+      created.job.id,
+      {
+        updatedBy: 'u1',
+        decisions: {
+          floorHeightsMmByFloorId: { 'floor-1': 2800 },
+          roofTypeConfirmed: 'gabled',
+          internalBearingWalls: { confirmed: true, wallIds: [] },
+          scale: { mode: 'confirmed' },
+          issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
+        },
+      },
+      'u1'
+    );
+    const first = await applyImportJobReview('p1', created.job.id, { appliedBy: 'u1' }, 'u1');
+    const second = await applyImportJobReview('p1', created.job.id, { appliedBy: 'u1' }, 'u1');
+    expect(second.reviewedSnapshot.generatedAt).toBe(first.reviewedSnapshot.generatedAt);
   });
 });

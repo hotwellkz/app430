@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import { registerRequestContext } from '../plugins/requestContext.js';
 import { registerProjectRoutes } from './projectsRoutes.js';
-import { NotFoundError, ValidationAppError } from '../errors/httpErrors.js';
+import { AppHttpError, NotFoundError, ValidationAppError } from '../errors/httpErrors.js';
 
 vi.mock('../services/importJobService.js', () => ({
   createImportJob: vi.fn(async (projectId: string, body: { sourceImages?: unknown[] }) => {
@@ -82,10 +82,105 @@ vi.mock('../services/importJobService.js', () => ({
       },
     ],
   })),
+  saveImportJobReview: vi.fn(async (projectId: string, jobId: string, body: { updatedBy?: string }) => {
+    if (projectId === 'p2') {
+      throw new NotFoundError(`Import job не найден в проекте: ${jobId}`);
+    }
+    if (!body?.updatedBy) {
+      throw new ValidationAppError('Невалидное тело review запроса');
+    }
+    return {
+      job: {
+        id: jobId,
+        projectId,
+        status: 'needs_review',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: 'u1',
+        importSchemaVersion: 1,
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+        snapshot: {
+          projectMeta: {},
+          floors: [{ id: 'floor-1' }],
+          walls: [],
+          openings: [],
+          stairs: [],
+          unresolved: [],
+          notes: [],
+        },
+        review: {
+          status: 'draft',
+          applyStatus: 'not_ready',
+          decisions: body,
+          missingRequiredDecisions: [],
+          remainingBlockingIssueIds: [],
+          isReadyToApply: false,
+        },
+        errorMessage: null,
+      },
+    };
+  }),
+  applyImportJobReview: vi.fn(async (projectId: string, jobId: string, body: { appliedBy?: string }) => {
+    if (projectId === 'p2') {
+      throw new NotFoundError(`Import job не найден в проекте: ${jobId}`);
+    }
+    if (!body?.appliedBy) {
+      throw new ValidationAppError('Невалидное тело apply-review запроса');
+    }
+    if (jobId === 'ij-incomplete') {
+      throw new AppHttpError(409, 'CONFLICT', 'Review неполный');
+    }
+    return {
+      job: {
+        id: jobId,
+        projectId,
+        status: 'needs_review',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: 'u1',
+        importSchemaVersion: 1,
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+        snapshot: null,
+        review: {
+          status: 'applied',
+          applyStatus: 'applied',
+          decisions: {},
+          missingRequiredDecisions: [],
+          remainingBlockingIssueIds: [],
+          isReadyToApply: true,
+        },
+        errorMessage: null,
+      },
+      reviewedSnapshot: {
+        baseSnapshot: {
+          projectMeta: {},
+          floors: [{ id: 'floor-1' }],
+          walls: [],
+          openings: [],
+          stairs: [],
+          unresolved: [],
+          notes: [],
+        },
+        transformedSnapshot: {
+          projectMeta: {},
+          floors: [{ id: 'floor-1' }],
+          walls: [],
+          openings: [],
+          stairs: [],
+          unresolved: [],
+          notes: ['x'],
+        },
+        appliedDecisions: {},
+        resolvedIssueIds: [],
+        notes: [],
+        generatedAt: new Date().toISOString(),
+      },
+    };
+  }),
 }));
 
 describe('import jobs routes', () => {
-  it('create/get/list and validation scenarios', async () => {
+  it('create/get/list/review/apply and validation scenarios', async () => {
     const app = Fastify();
     registerRequestContext(app);
     await registerProjectRoutes(app);
@@ -146,6 +241,30 @@ describe('import jobs routes', () => {
       payload: { sourceImages: [] },
     });
     expect(invalidBodyRes.statusCode).toBe(400);
+
+    const reviewRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/import-jobs/ij-1/review',
+      headers,
+      payload: { updatedBy: 'u1', decisions: { roofTypeConfirmed: 'gabled' } },
+    });
+    expect(reviewRes.statusCode).toBe(200);
+
+    const applyIncompleteRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/import-jobs/ij-incomplete/apply-review',
+      headers,
+      payload: { appliedBy: 'u1' },
+    });
+    expect(applyIncompleteRes.statusCode).toBe(409);
+
+    const applyRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/import-jobs/ij-1/apply-review',
+      headers,
+      payload: { appliedBy: 'u1' },
+    });
+    expect(applyRes.statusCode).toBe(200);
 
     await app.close();
     process.env.IMPORT_JOB_EXECUTION_MODE = undefined;

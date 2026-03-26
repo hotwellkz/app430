@@ -1,20 +1,29 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import type {
   ArchitecturalImportSnapshot,
+  ApplyImportReviewResponse,
   CreateImportJobRequest,
   CreateImportJobResponse,
   ImportJob,
+  ImportRequiredDecision,
+  ImportReviewState,
   ImportJobStatus,
+  ImportUserDecisionSet,
   ListImportJobsResponse,
+  ReviewedArchitecturalSnapshot,
+  SaveImportReviewResponse,
 } from '@2wix/shared-types';
 import { COLLECTIONS } from '../config/collections.js';
-import { NotFoundError, ValidationAppError } from '../errors/httpErrors.js';
+import { AppHttpError, NotFoundError, ValidationAppError } from '../errors/httpErrors.js';
 import { getDb } from '../firestore/admin.js';
 import { mapImportJobDoc } from '../mappers/firestoreMappers.js';
 import {
   formatZodError,
+  zApplyImportReviewBody,
   zArchitecturalImportSnapshot,
   zCreateImportJobBody,
+  zReviewedArchitecturalSnapshot,
+  zSaveImportReviewBody,
 } from '../validation/schemas.js';
 import { getProject } from './sipProjectService.js';
 import type { ArchitecturalExtractorAdapter } from './import/extractorAdapter.js';
@@ -27,6 +36,182 @@ export const IMPORT_SCHEMA_VERSION = 1;
 interface ImportPipelineDeps {
   resolveAdapter?: () => ArchitecturalExtractorAdapter;
   resolveRunner?: () => ImportJobRunner;
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function cloneSnapshot(snapshot: ArchitecturalImportSnapshot): ArchitecturalImportSnapshot {
+  return structuredClone(snapshot);
+}
+
+function mergeDecisions(
+  prev: ImportUserDecisionSet,
+  patch: Partial<ImportUserDecisionSet>
+): ImportUserDecisionSet {
+  return {
+    ...prev,
+    ...patch,
+    floorHeightsMmByFloorId: {
+      ...(prev.floorHeightsMmByFloorId ?? {}),
+      ...(patch.floorHeightsMmByFloorId ?? {}),
+    },
+    internalBearingWalls: patch.internalBearingWalls ?? prev.internalBearingWalls,
+    scale: patch.scale ?? prev.scale,
+    issueResolutions: patch.issueResolutions ?? prev.issueResolutions,
+  };
+}
+
+function computeReviewReadiness(
+  snapshot: ArchitecturalImportSnapshot,
+  decisions: ImportUserDecisionSet
+): {
+  missingRequiredDecisions: ImportRequiredDecision[];
+  remainingBlockingIssueIds: string[];
+  isReadyToApply: boolean;
+} {
+  const missing: ImportRequiredDecision[] = [];
+  const floorIds = snapshot.floors.map((f) => f.id);
+  const heightsMap = decisions.floorHeightsMmByFloorId ?? {};
+  const heightsComplete = floorIds.every((id) => typeof heightsMap[id] === 'number');
+  if (!heightsComplete) {
+    missing.push({
+      code: 'FLOOR_HEIGHTS_REQUIRED',
+      message: 'Нужно заполнить heights для всех этажей',
+      satisfied: false,
+    });
+  }
+
+  if (snapshot.roofHints && !decisions.roofTypeConfirmed) {
+    missing.push({
+      code: 'ROOF_TYPE_CONFIRMATION_REQUIRED',
+      message: 'Нужно подтвердить тип крыши',
+      satisfied: false,
+    });
+  }
+
+  if (decisions.internalBearingWalls?.confirmed === undefined) {
+    missing.push({
+      code: 'INTERNAL_BEARING_WALLS_CONFIRMATION_REQUIRED',
+      message: 'Нужно подтвердить внутренние несущие стены',
+      satisfied: false,
+    });
+  }
+
+  if (!decisions.scale?.mode) {
+    missing.push({
+      code: 'SCALE_DECISION_REQUIRED',
+      message: 'Нужно подтвердить или переопределить масштаб',
+      satisfied: false,
+    });
+  }
+  if (
+    decisions.scale?.mode === 'override' &&
+    !(typeof decisions.scale.mmPerPixel === 'number' && decisions.scale.mmPerPixel > 0)
+  ) {
+    missing.push({
+      code: 'SCALE_OVERRIDE_VALUE_REQUIRED',
+      message: 'Для scale override нужно указать mmPerPixel',
+      satisfied: false,
+    });
+  }
+
+  const blockingIssueIds = snapshot.unresolved
+    .filter((u) => u.severity === 'blocking')
+    .map((u) => u.id);
+  const resolvedIssueIds = new Set(
+    (decisions.issueResolutions ?? []).map((x) => x.issueId)
+  );
+  const remainingBlocking = blockingIssueIds.filter((id) => !resolvedIssueIds.has(id));
+  if (remainingBlocking.length > 0) {
+    missing.push({
+      code: 'BLOCKING_ISSUES_RESOLUTION_REQUIRED',
+      message: 'Нужно явно разрешить все blocking issues',
+      satisfied: false,
+    });
+  }
+
+  return {
+    missingRequiredDecisions: missing,
+    remainingBlockingIssueIds: remainingBlocking,
+    isReadyToApply: missing.length === 0,
+  };
+}
+
+function buildReviewState(
+  snapshot: ArchitecturalImportSnapshot,
+  decisions: ImportUserDecisionSet,
+  actorId: string,
+  prev?: ImportReviewState
+): ImportReviewState {
+  const readiness = computeReviewReadiness(snapshot, decisions);
+  const status: ImportReviewState['status'] = prev?.status === 'applied'
+    ? 'applied'
+    : readiness.isReadyToApply
+      ? 'complete'
+      : 'draft';
+  return {
+    status,
+    applyStatus: prev?.status === 'applied'
+      ? 'applied'
+      : readiness.isReadyToApply
+        ? 'ready'
+        : 'not_ready',
+    decisions,
+    missingRequiredDecisions: readiness.missingRequiredDecisions,
+    remainingBlockingIssueIds: readiness.remainingBlockingIssueIds,
+    isReadyToApply: readiness.isReadyToApply,
+    reviewedSnapshot: prev?.reviewedSnapshot ?? null,
+    reviewedAt: prev?.reviewedAt ?? null,
+    reviewedBy: prev?.reviewedBy ?? null,
+    appliedAt: prev?.appliedAt ?? null,
+    appliedBy: prev?.appliedBy ?? null,
+    lastUpdatedAt: nowIso(),
+    lastUpdatedBy: actorId,
+  };
+}
+
+function applyReviewDecisions(
+  snapshot: ArchitecturalImportSnapshot,
+  decisions: ImportUserDecisionSet
+): ReviewedArchitecturalSnapshot {
+  const transformed = cloneSnapshot(snapshot);
+  const heightsMap = decisions.floorHeightsMmByFloorId ?? {};
+  transformed.floors = transformed.floors.map((floor) => ({
+    ...floor,
+    elevationHintMm:
+      typeof heightsMap[floor.id] === 'number' ? heightsMap[floor.id] : floor.elevationHintMm ?? null,
+  }));
+  if (decisions.roofTypeConfirmed) {
+    transformed.roofHints = {
+      ...(transformed.roofHints ?? {}),
+      likelyType: decisions.roofTypeConfirmed,
+    };
+  }
+  const resolvedIssueIds = (decisions.issueResolutions ?? []).map((x) => x.issueId);
+  const resolvedSet = new Set(resolvedIssueIds);
+  transformed.unresolved = transformed.unresolved.filter((u) => !resolvedSet.has(u.id));
+  transformed.notes = [
+    ...transformed.notes,
+    'reviewed snapshot generated from explicit user decisions',
+  ];
+  const reviewed: ReviewedArchitecturalSnapshot = {
+    baseSnapshot: cloneSnapshot(snapshot),
+    transformedSnapshot: transformed,
+    appliedDecisions: decisions,
+    resolvedIssueIds,
+    notes: ['review/apply completed on backend'],
+    generatedAt: nowIso(),
+  };
+  const parsed = zReviewedArchitecturalSnapshot.safeParse(reviewed);
+  if (!parsed.success) {
+    throw new ValidationAppError(
+      'Не удалось построить reviewed snapshot',
+      formatZodError(parsed.error)
+    );
+  }
+  return parsed.data;
 }
 
 function assertStatusTransitionAllowed(
@@ -105,6 +290,7 @@ export async function completeImportJobWithSnapshot(
   await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).update({
     status: 'needs_review',
     snapshot: snapshotValid.data,
+    review: buildReviewState(snapshotValid.data, {}, current.createdBy, current.review),
     errorMessage: null,
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -180,6 +366,98 @@ export async function getImportJob(
     throw new NotFoundError(`Import job не найден в проекте: ${jobId}`);
   }
   return { job };
+}
+
+export async function saveImportJobReview(
+  projectId: string,
+  jobId: string,
+  body: unknown,
+  actorId: string
+): Promise<SaveImportReviewResponse> {
+  const parsed = zSaveImportReviewBody.safeParse(body);
+  if (!parsed.success) {
+    throw new ValidationAppError('Невалидное тело review запроса', formatZodError(parsed.error));
+  }
+  if (parsed.data.updatedBy !== actorId) {
+    throw new ValidationAppError('updatedBy должен совпадать с x-sip-user-id');
+  }
+  await getProject(projectId, actorId);
+  const job = await getImportJobById(jobId);
+  if (job.projectId !== projectId) {
+    throw new NotFoundError(`Import job не найден в проекте: ${jobId}`);
+  }
+  if (job.status !== 'needs_review' || !job.snapshot) {
+    throw new ValidationAppError('Review можно сохранить только для job в needs_review со snapshot');
+  }
+  if (job.review?.status === 'applied') {
+    throw new ValidationAppError('Review уже applied и не может быть изменен');
+  }
+  const nextDecisions = mergeDecisions(job.review?.decisions ?? {}, parsed.data.decisions);
+  const nextReview = buildReviewState(job.snapshot, nextDecisions, actorId, job.review);
+  const db = getDb();
+  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).update({
+    review: nextReview,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return { job: await getImportJobById(jobId) };
+}
+
+export async function applyImportJobReview(
+  projectId: string,
+  jobId: string,
+  body: unknown,
+  actorId: string
+): Promise<ApplyImportReviewResponse> {
+  const parsed = zApplyImportReviewBody.safeParse(body);
+  if (!parsed.success) {
+    throw new ValidationAppError('Невалидное тело apply-review запроса', formatZodError(parsed.error));
+  }
+  if (parsed.data.appliedBy !== actorId) {
+    throw new ValidationAppError('appliedBy должен совпадать с x-sip-user-id');
+  }
+  await getProject(projectId, actorId);
+  const job = await getImportJobById(jobId);
+  if (job.projectId !== projectId) {
+    throw new NotFoundError(`Import job не найден в проекте: ${jobId}`);
+  }
+  if (job.status !== 'needs_review' || !job.snapshot) {
+    throw new ValidationAppError('apply-review доступен только для needs_review job');
+  }
+  const review = job.review ?? buildReviewState(job.snapshot, {}, actorId);
+  if (review.status === 'applied' && review.reviewedSnapshot) {
+    return { job, reviewedSnapshot: review.reviewedSnapshot };
+  }
+  if (!review.isReadyToApply) {
+    throw new AppHttpError(
+      409,
+      'CONFLICT',
+      'Review неполный: заполните обязательные decisions',
+      {
+        missingRequiredDecisions: review.missingRequiredDecisions,
+        remainingBlockingIssueIds: review.remainingBlockingIssueIds,
+      }
+    );
+  }
+  const reviewedSnapshot = applyReviewDecisions(job.snapshot, review.decisions);
+  const appliedReview: ImportReviewState = {
+    ...review,
+    status: 'applied',
+    applyStatus: 'applied',
+    reviewedSnapshot,
+    reviewedAt: nowIso(),
+    reviewedBy: actorId,
+    appliedAt: nowIso(),
+    appliedBy: actorId,
+    lastUpdatedAt: nowIso(),
+    lastUpdatedBy: actorId,
+  };
+  const db = getDb();
+  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).update({
+    review: appliedReview,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  const nextJob = await getImportJobById(jobId);
+  return { job: nextJob, reviewedSnapshot };
 }
 
 export async function listImportJobs(

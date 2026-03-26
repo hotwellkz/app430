@@ -213,6 +213,18 @@
 - Режим выбирается централизованно через `IMPORT_JOB_EXECUTION_MODE`.
 - Архитектура подготовлена к замене `async-inline` на реальный worker mode в следующих этапах.
 
+## Завершено: AI import review/apply backend contracts (Sprint 16, этап 4)
+
+- Добавлены backend endpoints review/apply без UI:
+  - `POST /api/projects/:projectId/import-jobs/:jobId/review`
+  - `POST /api/projects/:projectId/import-jobs/:jobId/apply-review`
+- Введён отдельный review-state в import job:
+  - decisions (partial-save),
+  - readiness/missing decisions/remaining blocking,
+  - reviewed snapshot после apply.
+- Apply-review теперь строит `ReviewedArchitecturalSnapshot` как отдельный intermediate результат.
+- Интеграция в editor `BuildingModel` намеренно отложена в следующий этап.
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).
