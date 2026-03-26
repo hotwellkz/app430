@@ -33,3 +33,5 @@
 
 Используйте для быстрой диагностики до проверки UI.
 
+Подробный incident runbook (prod, 5-10 минут): `docs/sip-api-ops-runbook.md`.
+
