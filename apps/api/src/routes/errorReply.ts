@@ -11,6 +11,7 @@ export function sendRouteError(
     const body: ApiErrorBody = {
       code: err.code,
       message: err.message,
+      status: err.statusCode,
       requestId: request.sipRequestId,
     };
     if (err.details !== undefined) {
@@ -22,6 +23,7 @@ export function sendRouteError(
   const body: ApiErrorBody = {
     code: 'INTERNAL_ERROR',
     message: 'Внутренняя ошибка',
+    status: 500,
     requestId: request.sipRequestId,
   };
   return reply.code(500).send(body);

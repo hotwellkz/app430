@@ -71,6 +71,7 @@ export async function registerProjectRoutes(app: FastifyInstance): Promise<void>
           return reply.code(404).send({
             code: 'NOT_FOUND',
             message: 'Текущая версия не назначена',
+            status: 404,
             requestId: request.sipRequestId,
           });
         }

@@ -4,14 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { getDealById, updateDeal } from '../lib/firebase/deals';
 import type { Deal } from '../types/deals';
 import { buildSipEditorUrl } from '../lib/sip/sipEditorUrl';
-
-function sipApiBase(): string {
-  const env = import.meta.env.VITE_SIP_API_BASE_URL;
-  if (typeof env === 'string' && env.trim()) {
-    return env.replace(/\/$/, '');
-  }
-  return '/sip-editor-api';
-}
+import { getSipApiBase } from '../lib/sip/sipEnv';
 
 interface ApiErr {
   code?: string;
@@ -108,7 +101,7 @@ export const SipEditorLaunch: React.FC = () => {
     setBusy(true);
     setMessage(null);
     try {
-      const base = sipApiBase();
+      const base = getSipApiBase();
       const res = await fetch(`${base}/api/projects`, {
         method: 'POST',
         headers: sipHeaders(),

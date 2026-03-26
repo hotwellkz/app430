@@ -23,13 +23,21 @@
 
 ### Legacy: `/integrations/sip-editor`
 
-Страница сохранена для отладки и сценария `?dealId=<id>`. Основной UX — **`/sip-projects`**.
+Страница сохранена для отладки и сценария `?dealId=<id>`, но основной UX — **`/sip-projects`**.
 
 URL редактора после открытия:
 
 `{VITE_SIP_EDITOR_ORIGIN}/sip-editor/<projectId>?sipUserId=<uid>`
 
 Переменные окружения CRM: **`VITE_SIP_EDITOR_ORIGIN`**, **`VITE_SIP_API_BASE_URL`**, опционально **`VITE_CRM_ORIGIN`** (для ссылок из приложения редактора, если origin другой) — см. `.env.example`.
+
+## Быстрый runtime-checklist
+
+1. В URL редактора есть path `/sip-editor/<projectId>`.
+2. В query есть `sipUserId`, либо UID уже сохранён в session/local storage.
+3. CRM env: `VITE_SIP_API_BASE_URL=/sip-editor-api`.
+4. Netlify redirects содержат правило `/sip-editor-api/*` (выше catch-all `/* /index.html 200`).
+5. `GET /health` и `GET /health/details` на API отвечают предсказуемо.
 
 ## Dev-launch (без CRM)
 

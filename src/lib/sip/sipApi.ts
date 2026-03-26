@@ -1,25 +1,36 @@
 import { auth } from '../firebase/auth';
 import type { SipProjectRow } from './sipTypes';
+import { getSipApiBase } from './sipEnv';
 
 const SIP_API_TIMEOUT_MS = 15000;
-
-function sipApiBase(): string {
-  const env = import.meta.env.VITE_SIP_API_BASE_URL as string | undefined;
-  if (typeof env === 'string' && env.trim()) {
-    return env.replace(/\/$/, '');
-  }
-  return '/sip-editor-api';
-}
 
 export class SipApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
-    public readonly code?: string
+    public readonly code?: string,
+    public readonly requestId?: string
   ) {
     super(message);
     this.name = 'SipApiError';
   }
+}
+
+interface SipApiErrorPayload {
+  message?: string;
+  code?: string;
+  requestId?: string;
+}
+
+function makeRequestId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `crm-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function formatErrorMessage(message: string, requestId?: string): string {
+  return requestId ? `${message} (requestId: ${requestId})` : message;
 }
 
 async function parseJsonBody<T>(res: Response): Promise<T | null> {
@@ -48,8 +59,9 @@ async function sipFetch(path: string, init: RequestInit = {}): Promise<Response>
   if (init.body != null && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
+  headers.set('x-request-id', makeRequestId());
   headers.set('x-sip-user-id', user.uid);
-  const url = `${sipApiBase()}${path.startsWith('/') ? path : `/${path}`}`;
+  const url = `${getSipApiBase()}${path.startsWith('/') ? path : `/${path}`}`;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), SIP_API_TIMEOUT_MS);
   try {
@@ -62,7 +74,14 @@ async function sipFetch(path: string, init: RequestInit = {}): Promise<Response>
         'GATEWAY_TIMEOUT'
       );
     }
-    throw error;
+    if (error instanceof TypeError) {
+      throw new SipApiError(
+        'Нет соединения с SIP API (network/CORS/SSL). Проверьте доступность api.2wix.ru и proxy /sip-editor-api.',
+        503,
+        'NETWORK_UNREACHABLE'
+      );
+    }
+    throw new SipApiError('Неизвестная ошибка сети при обращении к SIP API.', 503, 'NETWORK_ERROR');
   } finally {
     window.clearTimeout(timeout);
   }
@@ -70,13 +89,10 @@ async function sipFetch(path: string, init: RequestInit = {}): Promise<Response>
 
 export async function sipListProjects(limit = 60): Promise<SipProjectRow[]> {
   const res = await sipFetch(`/api/projects?limit=${limit}`);
-  const data = await parseJsonBody<{ projects?: SipProjectRow[]; message?: string; code?: string }>(res);
+  const data = await parseJsonBody<{ projects?: SipProjectRow[] } & SipApiErrorPayload>(res);
   if (!res.ok) {
-    let msg = `Ошибка ${res.status}`;
-    let code: string | undefined;
-    if (data?.message) msg = data.message;
-    code = data?.code;
-    throw new SipApiError(msg, res.status, code);
+    const msg = data?.message ?? `Ошибка ${res.status}`;
+    throw new SipApiError(formatErrorMessage(msg, data?.requestId), res.status, data?.code, data?.requestId);
   }
   return Array.isArray(data.projects) ? data.projects : [];
 }
@@ -85,9 +101,10 @@ export async function sipGetProject(projectId: string): Promise<SipProjectRow> {
   const id = projectId.trim();
   const res = await sipFetch(`/api/projects/${encodeURIComponent(id)}`);
   const data =
-    (await parseJsonBody<{ project?: SipProjectRow; message?: string; code?: string }>(res)) ?? {};
+    (await parseJsonBody<{ project?: SipProjectRow } & SipApiErrorPayload>(res)) ?? {};
   if (!res.ok) {
-    throw new SipApiError(data.message ?? `Ошибка ${res.status}`, res.status, data.code);
+    const msg = data.message ?? `Ошибка ${res.status}`;
+    throw new SipApiError(formatErrorMessage(msg, data.requestId), res.status, data.code, data.requestId);
   }
   if (!data.project?.id) {
     throw new SipApiError('Некорректный ответ API', res.status);
@@ -105,16 +122,50 @@ export async function sipCreateProject(input: {
     body: JSON.stringify(input),
   });
   const data =
-    (await parseJsonBody<{ project?: SipProjectRow; message?: string; code?: string }>(res)) ?? {};
+    (await parseJsonBody<{ project?: SipProjectRow } & SipApiErrorPayload>(res)) ?? {};
   if (!res.ok) {
-    if (res.status === 504) {
+    if (res.status === 401) {
       throw new SipApiError(
-        'SIP API временно недоступен (504). Проект не создан, попробуйте позже.',
-        504,
-        data.code ?? 'GATEWAY_TIMEOUT'
+        formatErrorMessage('Нет авторизации для SIP API (401).', data.requestId),
+        401,
+        data.code ?? 'UNAUTHORIZED',
+        data.requestId
       );
     }
-    throw new SipApiError(data.message ?? `Ошибка ${res.status}`, res.status, data.code);
+    if (res.status === 403) {
+      throw new SipApiError(
+        formatErrorMessage('Доступ к SIP API запрещён (403).', data.requestId),
+        403,
+        data.code ?? 'FORBIDDEN',
+        data.requestId
+      );
+    }
+    if (res.status === 404) {
+      throw new SipApiError(
+        formatErrorMessage('Route SIP API не найден (404). Проверьте proxy/rewrite /sip-editor-api/*.', data.requestId),
+        404,
+        data.code ?? 'NOT_FOUND',
+        data.requestId
+      );
+    }
+    if (res.status === 504) {
+      throw new SipApiError(
+        formatErrorMessage('SIP API временно недоступен (504). Проект не создан, попробуйте позже.', data.requestId),
+        504,
+        data.code ?? 'GATEWAY_TIMEOUT',
+        data.requestId
+      );
+    }
+    if (res.status >= 500) {
+      throw new SipApiError(
+        formatErrorMessage(`SIP API вернул ${res.status}. Ошибка backend/runtime.`, data.requestId),
+        res.status,
+        data.code ?? 'INTERNAL_ERROR',
+        data.requestId
+      );
+    }
+    const msg = data.message ?? `Ошибка ${res.status}`;
+    throw new SipApiError(formatErrorMessage(msg, data.requestId), res.status, data.code, data.requestId);
   }
   if (!data.project?.id) {
     throw new SipApiError('Некорректный ответ API', res.status);

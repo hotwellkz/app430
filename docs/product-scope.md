@@ -76,6 +76,16 @@
 - Тесты: adapter + sync с draft/discard/floor filter + UI smoke для 3D-панели.
 - Документация: `docs/3d-preview.md`, обновлены `product-scope.md`, `editor-core.md`, `technical-decisions.md`.
 
+## Завершено: stabilization sprint (API/runtime/entry hardening)
+
+- Укреплён entry-flow CRM -> SIP Editor: единые env/helpers для URL и API-базы.
+- Добавлены fail-fast проверки env в CRM и в `sip-editor-web`.
+- API health усилен: `/health` и `/health/details` с проверкой Firestore/collections и requestId.
+- Расширены runtime guards и user-facing состояния загрузки проекта/версии (включая 503/504).
+- Добавлены error boundaries в editor shell и отдельный fail-safe для 3D preview.
+- Улучшена устойчивость user context в editor (query/session/localStorage fallback).
+- Добавлены тесты на env/context hardening.
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).

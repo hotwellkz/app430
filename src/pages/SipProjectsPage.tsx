@@ -60,6 +60,8 @@ export const SipProjectsPage: React.FC = () => {
         e instanceof SipApiError
           ? e.status === 403
             ? 'Нет доступа к SIP-проектам'
+            : e.status === 503 || e.status === 504
+              ? 'SIP API недоступен. Проверьте backend/proxy и повторите.'
             : e.message
           : e instanceof Error
             ? e.message
@@ -102,7 +104,11 @@ export const SipProjectsPage: React.FC = () => {
       await load();
       openEditorTab(project.id, sipUserId);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Ошибка создания');
+      if (e instanceof SipApiError && (e.status === 503 || e.status === 504)) {
+        toast.error('SIP API недоступен. Проект не создан.');
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Ошибка создания');
+      }
     } finally {
       setCreating(false);
     }
@@ -124,7 +130,11 @@ export const SipProjectsPage: React.FC = () => {
       await load();
       openEditorTab(project.id, sipUserId);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Ошибка создания');
+      if (e instanceof SipApiError && (e.status === 503 || e.status === 504)) {
+        toast.error('SIP API недоступен. Тестовый проект не создан.');
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Ошибка создания');
+      }
     } finally {
       setCreatingTest(false);
     }

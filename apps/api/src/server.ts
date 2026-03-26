@@ -1,12 +1,14 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import { loadApiEnv } from './config/env.js';
 import { registerRequestContext } from './plugins/requestContext.js';
 import { registerProjectRoutes } from './routes/projectsRoutes.js';
+import { buildHealthDetails } from './services/healthService.js';
 
-const PORT = Number(process.env.PORT) || 3001;
-const rawOrigins = process.env.CORS_ORIGINS ?? 'http://localhost:5174,http://localhost:5173';
-const allowedOrigins = rawOrigins.split(',').map((s) => s.trim()).filter(Boolean);
+const env = loadApiEnv();
+const PORT = env.port;
+const allowedOrigins = env.corsOrigins;
 
 async function main() {
   const app = Fastify({ logger: true });
@@ -29,7 +31,40 @@ async function main() {
     allowedHeaders: ['Content-Type', 'x-sip-user-id', 'x-request-id'],
   });
 
-  app.get('/health', async () => ({ ok: true, service: 'sip-editor-api' }));
+  app.get('/health', async (request, reply) => {
+    const details = await buildHealthDetails(request, {
+      nodeEnv: env.nodeEnv,
+      hasFirebaseJson: env.hasFirebaseJson,
+      firebaseProjectId: env.firebaseProjectId,
+    });
+    const status = details.ok ? 200 : 503;
+    return reply.code(status).send({
+      ok: details.ok,
+      service: details.service,
+      timestamp: details.timestamp,
+      requestId: details.requestId,
+      checks: details.checks,
+    });
+  });
+
+  app.get('/health/details', async (request, reply) => {
+    const details = await buildHealthDetails(request, {
+      nodeEnv: env.nodeEnv,
+      hasFirebaseJson: env.hasFirebaseJson,
+      firebaseProjectId: env.firebaseProjectId,
+    });
+    const status = details.ok ? 200 : 503;
+    if (env.nodeEnv === 'production') {
+      return reply.code(status).send({
+        ok: details.ok,
+        service: details.service,
+        timestamp: details.timestamp,
+        requestId: details.requestId,
+        checks: details.checks,
+      });
+    }
+    return reply.code(status).send(details);
+  });
 
   await registerProjectRoutes(app);
 

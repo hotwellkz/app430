@@ -16,6 +16,7 @@
 {
   "code": "VALIDATION_ERROR | NOT_FOUND | CONFLICT | FORBIDDEN | UNAUTHORIZED | INTERNAL_ERROR",
   "message": "Человекочитаемое описание",
+  "status": 400,
   "details": {},
   "requestId": "uuid"
 }
@@ -37,7 +38,26 @@
 
 ### `GET /health`
 
-Без заголовков. Ответ: `{ ok: true, service: "sip-editor-api" }`.
+Без заголовков. Ответ:
+
+```json
+{
+  "ok": true,
+  "service": "sip-editor-api",
+  "timestamp": "ISO",
+  "requestId": "uuid",
+  "checks": {
+    "firebaseAdmin": "ok",
+    "firestorePing": "ok",
+    "collections": "ok"
+  }
+}
+```
+
+### `GET /health/details`
+
+- `development`: расширенные diagnostics (latency/errors/environment без секретов).
+- `production`: summary в формате `/health`.
 
 ### `POST /api/projects`
 

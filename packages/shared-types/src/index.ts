@@ -201,6 +201,7 @@ export type ApiErrorCode =
 export interface ApiErrorBody {
   code: ApiErrorCode;
   message: string;
+  status?: number;
   details?: unknown;
   requestId?: string;
 }

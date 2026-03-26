@@ -17,6 +17,25 @@
 - **`/integrations/sip-editor`** не является главной точкой входа: это **внутренний модуль**, не внешняя интеграция; страница на интеграциях оставлена как legacy/отладка (`?dealId=`).
 - В dev CRM проксирует **`/sip-editor-api`** на Fastify `:3001` (`vite.config.ts`).
 
+### Runtime hardening (stabilization sprint)
+
+- Введены централизованные env helpers:
+  - CRM: `src/lib/sip/sipEnv.ts`
+  - sip-editor-web: `apps/sip-editor-web/src/config/env.ts`
+  - API: `apps/api/src/config/env.ts`
+- Принцип: fail-fast на некорректных env (не молчаливые падения в runtime).
+- Entry/context устойчивость:
+  - `sipUserId` берётся из query и сохраняется в session;
+  - добавлен fallback из localStorage для повторных открытий/перезагрузок;
+  - диагностика источника context (`query/session/localStorage`).
+- Error boundaries:
+  - shell-boundary для критических ошибок редактора;
+  - отдельный boundary для 3D preview, чтобы падение preview не ломало 2D/shell.
+- API observability:
+  - `/health` и `/health/details`;
+  - health делает реальные проверки Firestore и collections с timeout;
+  - в прод `/health/details` скрывает лишние dev diagnostics.
+
 ## Временный auth bridge (`x-sip-user-id`)
 
 **Текущее решение (dev / MVP):** все защищённые маршруты API требуют заголовок `x-sip-user-id` с Firebase UID пользователя CRM. CRM передаёт его на `fetch`; редактор читает `?sipUserId=` при открытии и кладёт в `sessionStorage`, затем добавляет заголовок ко всем запросам.

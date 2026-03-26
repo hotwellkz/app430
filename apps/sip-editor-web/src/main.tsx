@@ -3,7 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import { bootstrapSipUserFromUrl } from '@/identity/sipUser';
+import { validateEditorEnv } from '@/config/env';
 
+validateEditorEnv();
 bootstrapSipUserFromUrl();
 
 const queryClient = new QueryClient({

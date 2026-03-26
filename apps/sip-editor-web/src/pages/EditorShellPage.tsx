@@ -23,7 +23,8 @@ import { RoofInspector } from '@/components/RoofInspector';
 import { SlabInspector } from '@/components/SlabInspector';
 import { WallInspector } from '@/components/WallInspector';
 import { Preview3DPanel } from '@/components/Preview3DPanel';
-import { getSipUserId } from '@/identity/sipUser';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { getSipUserId, resolveSipUserContext } from '@/identity/sipUser';
 import {
   useSipCurrentVersion,
   useSipProject,
@@ -107,10 +108,39 @@ function GuardCrmLinks() {
   );
 }
 
+function describeLoadError(error: unknown, fallbackTitle: string): { title: string; message: string } {
+  if (!(error instanceof SipApiError)) {
+    return { title: fallbackTitle, message: String(error) };
+  }
+  if (error.status === 404) {
+    if (error.message.toLowerCase().includes('текущая версия')) {
+      return { title: 'У проекта не назначена текущая версия', message: error.message };
+    }
+    return { title: 'Проект или версия не найдены', message: error.message };
+  }
+  if (error.status === 403) {
+    return { title: 'Недостаточно прав доступа', message: error.message };
+  }
+  if (error.status === 401) {
+    return { title: 'Нет пользовательского контекста', message: error.message };
+  }
+  if (error.status === 503 || error.status === 504) {
+    return {
+      title: 'SIP API временно недоступен',
+      message: `${error.message}${error.apiBody.requestId ? ` (requestId: ${error.apiBody.requestId})` : ''}`,
+    };
+  }
+  return {
+    title: fallbackTitle,
+    message: `${error.message}${error.apiBody.requestId ? ` (requestId: ${error.apiBody.requestId})` : ''}`,
+  };
+}
+
 export function EditorShellPage() {
   const { projectId = '' } = useParams<{ projectId: string }>();
   const queryClient = useQueryClient();
   const sipUserId = getSipUserId();
+  const sipUserCtx = resolveSipUserContext();
   const fitViewRef = useRef<(() => void) | null>(null);
 
   const projectQuery = useSipProject(projectId);
@@ -289,6 +319,10 @@ export function EditorShellPage() {
           description={
             <>
               Для работы редактора нужен параметр <code>sipUserId</code> или вход через CRM.
+              <br />
+              <span className="twix-muted" style={{ fontSize: 12 }}>
+                Источник контекста: {sipUserCtx.source}
+              </span>
               <GuardCrmLinks />
               {DEV_HINT}
             </>
@@ -307,19 +341,16 @@ export function EditorShellPage() {
   }
 
   if (projectQuery.isError) {
+    const d = describeLoadError(projectQuery.error, 'Проект не найден или недоступен');
     return (
       <div style={{ height: '100vh', padding: 24 }}>
         <EmptyState
-          title="Проект не найден или недоступен"
+          title={d.title}
           description={
             <>
               <span>ID: {projectId}</span>
               <br />
-              <span className="twix-muted">
-                {projectQuery.error instanceof SipApiError
-                  ? projectQuery.error.message
-                  : String(projectQuery.error)}
-              </span>
+              <span className="twix-muted">{d.message}</span>
               <GuardCrmLinks />
             </>
           }
@@ -329,15 +360,12 @@ export function EditorShellPage() {
   }
 
   if (versionQuery.isError) {
+    const d = describeLoadError(versionQuery.error, 'Версия не загружена');
     return (
       <div style={{ height: '100vh', padding: 24 }}>
         <EmptyState
-          title="Версия не загружена"
-          description={
-            versionQuery.error instanceof SipApiError
-              ? versionQuery.error.message
-              : String(versionQuery.error)
-          }
+          title={d.title}
+          description={d.message}
         />
       </div>
     );
@@ -473,7 +501,9 @@ export function EditorShellPage() {
             }}
           />
         ) : (
-          <Preview3DPanel model={draft} activeFloorId={view.activeFloorId} />
+          <ErrorBoundary scope="preview3d">
+            <Preview3DPanel model={draft} activeFloorId={view.activeFloorId} />
+          </ErrorBoundary>
         )}
       </div>
     );

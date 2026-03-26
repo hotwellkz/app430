@@ -2,6 +2,7 @@ import type { ApiErrorBody } from '@2wix/shared-types';
 import { sipUserHeaders } from '@/identity/sipUser';
 
 const base = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+const API_TIMEOUT_MS = 15000;
 
 export function apiUrl(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`;
@@ -33,14 +34,35 @@ export async function fetchJson<T>(
   init?: RequestInit
 ): Promise<T> {
   const sip = sipUserHeaders();
-  const r = await fetch(apiUrl(path), {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...sip,
-      ...(init?.headers ?? {}),
-    },
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  let r: Response;
+  try {
+    r = await fetch(apiUrl(path), {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...sip,
+        ...(init?.headers ?? {}),
+      },
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new SipApiError(504, {
+        code: 'INTERNAL_ERROR',
+        message: 'SIP API не ответил вовремя (timeout). Проверьте backend/proxy.',
+        status: 504,
+      });
+    }
+    throw new SipApiError(503, {
+      code: 'INTERNAL_ERROR',
+      message: 'SIP API недоступен. Проверьте backend/proxy.',
+      status: 503,
+    });
+  } finally {
+    window.clearTimeout(timeout);
+  }
   const text = await r.text();
   let body: unknown = null;
   if (text) {
@@ -55,6 +77,7 @@ export async function fetchJson<T>(
     const apiBody: ApiErrorBody = {
       code: (b.code as ApiErrorBody['code']) ?? 'INTERNAL_ERROR',
       message: typeof b.message === 'string' ? b.message : r.statusText,
+      status: typeof b.status === 'number' ? b.status : r.status,
       details: b.details,
       requestId: b.requestId,
     };

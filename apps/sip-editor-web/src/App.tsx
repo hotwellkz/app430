@@ -1,6 +1,7 @@
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import { DevLaunchPage } from '@/pages/DevLaunchPage';
 import { EditorShellPage } from '@/pages/EditorShellPage';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export default function App() {
   return (
@@ -30,7 +31,14 @@ export default function App() {
           }
         />
         <Route path="/sip-editor/dev-launch" element={<DevLaunchPage />} />
-        <Route path="/sip-editor/:projectId" element={<EditorShellPage />} />
+        <Route
+          path="/sip-editor/:projectId"
+          element={
+            <ErrorBoundary scope="shell">
+              <EditorShellPage />
+            </ErrorBoundary>
+          }
+        />
         <Route path="*" element={<Navigate to="/sip-editor" replace />} />
       </Routes>
     </BrowserRouter>
