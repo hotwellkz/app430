@@ -35,6 +35,11 @@ function isLocalhostUrl(value: string): boolean {
   }
 }
 
+function isRuntimeLocalhost(win: Window | undefined): boolean {
+  const host = win?.location?.hostname;
+  return host === 'localhost' || host === '127.0.0.1';
+}
+
 export function getSipApiBase(env: SipClientEnv = runtimeEnv()): string {
   const raw = env.VITE_SIP_API_BASE_URL;
   if (!raw || !raw.trim()) return '/sip-editor-api';
@@ -42,15 +47,17 @@ export function getSipApiBase(env: SipClientEnv = runtimeEnv()): string {
 }
 
 export function getSipEditorOrigin(env: SipClientEnv = runtimeEnv()): string {
+  const win = typeof window !== 'undefined' ? window : undefined;
+  const runtimeIsLocal = isRuntimeLocalhost(win);
   const raw = env.VITE_SIP_EDITOR_ORIGIN;
   if (!raw || !raw.trim()) {
-    if (env.DEV) return 'http://localhost:5174';
+    if (env.DEV && runtimeIsLocal) return 'http://localhost:5174';
     throw new Error('SIP Editor production URL не настроен: задайте VITE_SIP_EDITOR_ORIGIN');
   }
   const trimmed = raw.trim();
   try {
     const normalized = new URL(trimmed).toString().replace(/\/$/, '');
-    if (env.PROD && isLocalhostUrl(normalized)) {
+    if ((env.PROD || !runtimeIsLocal) && isLocalhostUrl(normalized)) {
       throw new Error(
         'SIP Editor production URL не настроен: localhost запрещен для VITE_SIP_EDITOR_ORIGIN'
       );
