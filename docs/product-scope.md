@@ -246,6 +246,14 @@
 - Candidate применяется в существующий current-version flow (без отдельной параллельной системы версий).
 - Результат и provenance сохраняются в `importJob.projectApply` (audit + summary).
 
+## Завершено: AI import provenance/history backend stage (Sprint 16, этап 7)
+
+- В metadata `ProjectVersion` добавлен lightweight provenance для apply-candidate (`importProvenance`).
+- Добавлен read endpoint:
+  - `GET /api/projects/:projectId/import-apply-history`
+- Endpoint возвращает newest-first AI-import apply историю по проекту из version metadata.
+- Старые версии без provenance поддержаны (не ломают выдачу истории).
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).

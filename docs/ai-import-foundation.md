@@ -22,6 +22,10 @@
   - apply использует `editorApply.candidate.model` как source-of-write;
   - apply требует optimistic concurrency (`expectedCurrentVersionId/expectedVersionNumber/expectedSchemaVersion`);
   - результат пишется в отдельный блок `importJob.projectApply` с audit/provenance.
+- Добавлен provenance metadata в `ProjectVersion`:
+  - сохраняется только после успешного apply-candidate;
+  - не меняет source-of-truth `BuildingModel`;
+  - используется read-only endpoint историй apply операций.
 
 ## Endpoints
 
@@ -49,6 +53,9 @@
   - Preconditions: `job.status=needs_review`, `review.status=applied`, `editorApply.status=candidate_ready`, есть `editorApply.candidate`.
   - При mismatch optimistic marker -> `409 IMPORT_APPLY_CONCURRENCY_CONFLICT`.
   - На успехе сохраняет `projectApply` audit (`appliedBy`, `appliedAt`, `appliedVersionId`, summary).
+- `GET /api/projects/:projectId/import-apply-history`
+  - Возвращает историю AI-import apply по проекту (newest first) из `ProjectVersion.importProvenance`.
+  - Если истории нет, возвращает пустой список.
 
 ## Mock import snapshot
 

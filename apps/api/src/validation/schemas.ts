@@ -21,6 +21,18 @@ export const zBuildingModelPayload = z
   })
   .strict();
 
+export const zVersionImportProvenance = z.object({
+  sourceKind: z.literal('ai_import'),
+  importJobId: z.string().min(1),
+  mapperVersion: z.string().min(1),
+  reviewedSnapshotVersion: z.string().min(1),
+  appliedBy: z.string().min(1),
+  appliedAt: z.string().min(1),
+  warningsCount: z.number().int().min(0),
+  traceCount: z.number().int().min(0),
+  note: z.string().nullable().optional(),
+});
+
 export const zCreateProjectBody = z.object({
   dealId: z.string().nullable().optional(),
   title: z.string().max(500).optional(),
@@ -396,6 +408,25 @@ export const zApplyCandidateToProjectResponse = z.object({
     createdAt: z.string().min(1),
   }),
   applySummary: zCandidateApplySummary,
+});
+
+export const zImportApplyHistoryItem = z.object({
+  versionId: z.string().min(1),
+  versionNumber: z.number().int().positive(),
+  sourceKind: z.literal('ai_import'),
+  importJobId: z.string().min(1),
+  mapperVersion: z.string().min(1),
+  reviewedSnapshotVersion: z.string().min(1),
+  appliedBy: z.string().min(1),
+  appliedAt: z.string().min(1),
+  warningsCount: z.number().int().min(0),
+  traceCount: z.number().int().min(0),
+  note: z.string().nullable().optional(),
+  legacy: z.boolean().optional(),
+});
+
+export const zGetImportApplyHistoryResponse = z.object({
+  items: z.array(zImportApplyHistoryItem),
 });
 
 export function formatZodError(err: z.ZodError): unknown {

@@ -13,6 +13,9 @@ import type {
   ImportReviewState,
   ImportJobStatus,
   ImportProjectApplyState,
+  ImportApplyHistoryItem,
+  GetImportApplyHistoryResponse,
+  VersionImportProvenance,
   ImportUserDecisionSet,
   ListImportJobsResponse,
   PrepareEditorApplyResponse,
@@ -32,6 +35,7 @@ import {
   zPrepareEditorApplyBody,
   zReviewedArchitecturalSnapshot,
   zSaveImportReviewBody,
+  zVersionImportProvenance,
 } from '../validation/schemas.js';
 import { getCurrentVersion, getProject, patchCurrentVersion } from './sipProjectService.js';
 import type { ArchitecturalExtractorAdapter } from './import/extractorAdapter.js';
@@ -223,6 +227,24 @@ function buildCandidateApplySummary(candidate: BuildingModelCandidate): Candidat
     basedOnImportJobId: candidate.basedOnImportJobId,
     basedOnMapperVersion: candidate.mapperVersion,
     basedOnReviewedSnapshotVersion: candidate.basedOnReviewedSnapshotVersion,
+  };
+}
+
+function buildVersionImportProvenance(
+  candidate: BuildingModelCandidate,
+  actorId: string,
+  note?: string
+): VersionImportProvenance {
+  return {
+    sourceKind: 'ai_import',
+    importJobId: candidate.basedOnImportJobId,
+    mapperVersion: candidate.mapperVersion,
+    reviewedSnapshotVersion: candidate.basedOnReviewedSnapshotVersion,
+    appliedBy: actorId,
+    appliedAt: nowIso(),
+    warningsCount: candidate.warnings.length,
+    traceCount: candidate.trace.length,
+    note: note ?? null,
   };
 }
 
@@ -693,6 +715,24 @@ export async function applyImportJobCandidateToProject(
       },
       actorId
     );
+    const versionProvenance = buildVersionImportProvenance(
+      job.editorApply.candidate,
+      actorId,
+      parsed.data.note
+    );
+    const provenanceParsed = zVersionImportProvenance.safeParse(versionProvenance);
+    if (!provenanceParsed.success) {
+      throw new ValidationAppError(
+        'Не удалось сформировать import provenance metadata',
+        formatZodError(provenanceParsed.error)
+      );
+    }
+    await db.collection(COLLECTIONS.PROJECT_VERSIONS).doc(appliedVersion.id).set(
+      {
+        importProvenance: provenanceParsed.data,
+      },
+      { merge: true }
+    );
     const summary = buildCandidateApplySummary(job.editorApply.candidate);
     summary.createdOrUpdatedVersionId = appliedVersion.id;
     await db.collection(COLLECTIONS.IMPORT_JOBS).doc(job.id).update({
@@ -744,4 +784,72 @@ export async function applyImportJobCandidateToProject(
     });
     throw new AppHttpError(500, 'IMPORT_APPLY_FAILED', 'Не удалось применить candidate в текущую версию');
   }
+}
+
+export async function listImportApplyHistory(
+  projectId: string,
+  actorId: string
+): Promise<GetImportApplyHistoryResponse> {
+  await getProject(projectId, actorId);
+  const db = getDb();
+  const qs = await db
+    .collection(COLLECTIONS.PROJECT_VERSIONS)
+    .where('projectId', '==', projectId)
+    .limit(200)
+    .get();
+  const items: ImportApplyHistoryItem[] = [];
+  for (const doc of qs.docs) {
+    const raw = doc.data() ?? {};
+    const parsed = zVersionImportProvenance.safeParse(raw.importProvenance);
+    if (parsed.success) {
+      items.push({
+        versionId: doc.id,
+        versionNumber:
+          typeof raw.versionNumber === 'number' && Number.isFinite(raw.versionNumber)
+            ? raw.versionNumber
+            : 1,
+        sourceKind: 'ai_import',
+        importJobId: parsed.data.importJobId,
+        mapperVersion: parsed.data.mapperVersion,
+        reviewedSnapshotVersion: parsed.data.reviewedSnapshotVersion,
+        appliedBy: parsed.data.appliedBy,
+        appliedAt: parsed.data.appliedAt,
+        warningsCount: parsed.data.warningsCount,
+        traceCount: parsed.data.traceCount,
+        note: parsed.data.note ?? null,
+      });
+      continue;
+    }
+    const maybeLegacy = raw.importProvenance as Record<string, unknown> | undefined;
+    if (maybeLegacy && maybeLegacy.sourceKind === 'ai_import') {
+      items.push({
+        versionId: doc.id,
+        versionNumber:
+          typeof raw.versionNumber === 'number' && Number.isFinite(raw.versionNumber)
+            ? raw.versionNumber
+            : 1,
+        sourceKind: 'ai_import',
+        importJobId: typeof maybeLegacy.importJobId === 'string' ? maybeLegacy.importJobId : 'unknown',
+        mapperVersion: typeof maybeLegacy.mapperVersion === 'string' ? maybeLegacy.mapperVersion : 'unknown',
+        reviewedSnapshotVersion:
+          typeof maybeLegacy.reviewedSnapshotVersion === 'string'
+            ? maybeLegacy.reviewedSnapshotVersion
+            : 'unknown',
+        appliedBy: typeof maybeLegacy.appliedBy === 'string' ? maybeLegacy.appliedBy : 'unknown',
+        appliedAt: typeof maybeLegacy.appliedAt === 'string' ? maybeLegacy.appliedAt : nowIso(),
+        warningsCount:
+          typeof maybeLegacy.warningsCount === 'number' && Number.isFinite(maybeLegacy.warningsCount)
+            ? maybeLegacy.warningsCount
+            : 0,
+        traceCount:
+          typeof maybeLegacy.traceCount === 'number' && Number.isFinite(maybeLegacy.traceCount)
+            ? maybeLegacy.traceCount
+            : 0,
+        note: typeof maybeLegacy.note === 'string' ? maybeLegacy.note : null,
+        legacy: true,
+      });
+    }
+  }
+  items.sort((a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime());
+  return { items };
 }

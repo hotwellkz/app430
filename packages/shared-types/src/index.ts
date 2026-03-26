@@ -28,10 +28,23 @@ export interface ProjectVersion {
   versionNumber: number;
   schemaVersion: number;
   buildingModel: BuildingModel;
+  importProvenance?: VersionImportProvenance | null;
   createdAt: string;
   createdBy: string | null;
   basedOnVersionId?: string | null;
   isSnapshot?: boolean;
+}
+
+export interface VersionImportProvenance {
+  sourceKind: 'ai_import';
+  importJobId: string;
+  mapperVersion: string;
+  reviewedSnapshotVersion: string;
+  appliedBy: string;
+  appliedAt: string;
+  warningsCount: number;
+  traceCount: number;
+  note?: string | null;
 }
 
 /** Метаданные здания; projectId/version* синхронизируются сервисом при сохранении. */
@@ -662,6 +675,25 @@ export interface ApplyCandidateToProjectResponse {
     createdAt: string;
   };
   applySummary: CandidateApplySummary;
+}
+
+export interface ImportApplyHistoryItem {
+  versionId: string;
+  versionNumber: number;
+  sourceKind: 'ai_import';
+  importJobId: string;
+  mapperVersion: string;
+  reviewedSnapshotVersion: string;
+  appliedBy: string;
+  appliedAt: string;
+  warningsCount: number;
+  traceCount: number;
+  note?: string | null;
+  legacy?: boolean;
+}
+
+export interface GetImportApplyHistoryResponse {
+  items: ImportApplyHistoryItem[];
 }
 
 /** Единый формат ошибок API. */

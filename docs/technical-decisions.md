@@ -297,6 +297,19 @@
 - Повторный apply сделан предсказуемым:
   - если `projectApply.status=applied`, возвращается сохранённый summary/result без скрытой повторной записи.
 
+### AI import provenance in ProjectVersion (Sprint 16, этап 7)
+
+- Добавлен lightweight provenance metadata слой на уровне версии проекта (`ProjectVersion.importProvenance`).
+- Почему именно так:
+  - не меняем source-of-truth `BuildingModel`;
+  - provenance живёт рядом с version audit, а не внутри model сущностей.
+- Пишется только после успешного `apply-candidate`:
+  - `sourceKind=ai_import`,
+  - `importJobId`, `mapperVersion`, `reviewedSnapshotVersion`,
+  - `appliedBy`, `appliedAt`,
+  - `warningsCount`, `traceCount`, `note`.
+- История читается отдельным read endpoint из version metadata (`/import-apply-history`), без обязательного сканирования import jobs.
+
 ### Spec-engine boundary (Sprint 10)
 
 - BOM/spec aggregation вынесена в `@2wix/spec-engine`, а не в `panel-engine` и не в React-компоненты.

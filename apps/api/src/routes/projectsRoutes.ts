@@ -13,6 +13,7 @@ import {
   createImportJob,
   getImportJob,
   listImportJobs,
+  listImportApplyHistory,
   prepareImportJobEditorApply,
   saveImportJobReview,
 } from '../services/importJobService.js';
@@ -206,6 +207,19 @@ export async function registerProjectRoutes(app: FastifyInstance): Promise<void>
       try {
         const actorId = requireSipUserId(request);
         const result = await listImportJobs(request.params.projectId, actorId);
+        return reply.send(result);
+      } catch (e) {
+        return sendRouteError(reply, request, e);
+      }
+    }
+  );
+
+  app.get<{ Params: { projectId: string } }>(
+    '/api/projects/:projectId/import-apply-history',
+    async (request, reply) => {
+      try {
+        const actorId = requireSipUserId(request);
+        const result = await listImportApplyHistory(request.params.projectId, actorId);
         return reply.send(result);
       } catch (e) {
         return sendRouteError(reply, request, e);

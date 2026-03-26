@@ -271,7 +271,8 @@ Preconditions:
 
 - делает optimistic concurrency check по `expected*`;
 - применяет `editorApply.candidate.model` в `PATCH current-version` flow;
-- сохраняет audit/result в `ImportJob.projectApply`.
+- сохраняет audit/result в `ImportJob.projectApply`;
+- пишет lightweight provenance в metadata примененной `ProjectVersion` (`importProvenance`).
 
 Ошибки:
 
@@ -281,6 +282,40 @@ Preconditions:
 - `409 IMPORT_CANDIDATE_MISSING` — candidate отсутствует.
 - `409 IMPORT_APPLY_CONCURRENCY_CONFLICT` — mismatch optimistic marker.
 - `500 IMPORT_APPLY_FAILED` — неожиданный persistence/runtime failure.
+
+### `GET /api/projects/:projectId/import-apply-history`
+
+Read-only history AI-import apply событий для проекта.
+
+Поведение:
+
+- проверяет доступ к проекту;
+- читает provenance из metadata `ProjectVersion.importProvenance`;
+- возвращает newest-first;
+- если истории нет, возвращает пустой `items: []`.
+
+Успешный ответ `200`:
+
+```json
+{
+  "items": [
+    {
+      "versionId": "v2",
+      "versionNumber": 2,
+      "sourceKind": "ai_import",
+      "importJobId": "ij-2",
+      "mapperVersion": "import-candidate-v1",
+      "reviewedSnapshotVersion": "rev-2",
+      "appliedBy": "uid",
+      "appliedAt": "ISO",
+      "warningsCount": 1,
+      "traceCount": 17,
+      "note": "optional",
+      "legacy": false
+    }
+  ]
+}
+```
 
 Успешный ответ `200`:
 

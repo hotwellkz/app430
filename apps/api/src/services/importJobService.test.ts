@@ -4,6 +4,62 @@ const store = new Map<string, Record<string, any>>();
 
 function resetStore() {
   store.clear();
+  store.set('sipEditor_projectVersions/v-current', {
+    projectId: 'p1',
+    versionNumber: 1,
+    schemaVersion: 2,
+    buildingModel: {
+      meta: { id: 'm1', name: 'Current' },
+      settings: { units: 'mm', defaultWallThicknessMm: 163, gridStepMm: 100 },
+      floors: [],
+      walls: [],
+      openings: [],
+      slabs: [],
+      roofs: [],
+      panelLibrary: [],
+      panelSettings: {
+        defaultPanelTypeId: null,
+        allowTrimmedPanels: true,
+        minTrimWidthMm: 250,
+        preferFullPanels: true,
+        labelPrefixWall: 'W',
+        labelPrefixRoof: 'R',
+        labelPrefixSlab: 'S',
+      },
+    },
+    createdAt: '2026-03-26T10:00:00.000Z',
+    createdBy: 'u1',
+    basedOnVersionId: null,
+    isSnapshot: false,
+  });
+  store.set('sipEditor_projectVersions/v-legacy', {
+    projectId: 'p1',
+    versionNumber: 2,
+    schemaVersion: 2,
+    buildingModel: {
+      meta: { id: 'm2', name: 'Legacy' },
+      settings: { units: 'mm', defaultWallThicknessMm: 163, gridStepMm: 100 },
+      floors: [],
+      walls: [],
+      openings: [],
+      slabs: [],
+      roofs: [],
+      panelLibrary: [],
+      panelSettings: {
+        defaultPanelTypeId: null,
+        allowTrimmedPanels: true,
+        minTrimWidthMm: 250,
+        preferFullPanels: true,
+        labelPrefixWall: 'W',
+        labelPrefixRoof: 'R',
+        labelPrefixSlab: 'S',
+      },
+    },
+    createdAt: '2026-03-25T10:00:00.000Z',
+    createdBy: 'u1',
+    basedOnVersionId: null,
+    isSnapshot: false,
+  });
   store.set('sipEditor_importJobs/ij-older', {
     projectId: 'p1',
     status: 'queued',
@@ -36,8 +92,17 @@ vi.mock('../firestore/admin.js', () => ({
         const key = `${name}/${docId}`;
         return {
           id: docId,
-          async set(payload: Record<string, unknown>) {
+          async set(payload: Record<string, unknown>, options?: { merge?: boolean }) {
             const nowIso = new Date('2026-03-26T12:00:00.000Z').toISOString();
+            const prev = store.get(key) ?? {};
+            if (options?.merge) {
+              store.set(key, {
+                ...prev,
+                ...payload,
+                updatedAt: nowIso,
+              });
+              return;
+            }
             store.set(key, {
               ...payload,
               createdAt: nowIso,
@@ -134,6 +199,7 @@ import {
   createImportJobRecord,
   failImportJob,
   getImportJobById,
+  listImportApplyHistory,
   listImportJobs,
   runImportJobPipeline,
   prepareImportJobEditorApply,
@@ -499,6 +565,9 @@ describe('importJobService', () => {
     expect(result.job.projectApply?.status).toBe('applied');
     expect(result.job.projectApply?.appliedBy).toBe('u1');
     expect(result.applySummary.warningsCount).toBeGreaterThanOrEqual(0);
+    const versionDoc = store.get('sipEditor_projectVersions/v-current');
+    expect(versionDoc?.importProvenance?.importJobId).toBe(created.job.id);
+    expect(versionDoc?.importProvenance?.mapperVersion).toBe('import-candidate-v1');
   });
 
   it('cannot apply candidate before review is applied', async () => {
@@ -643,5 +712,48 @@ describe('importJobService', () => {
       'u1'
     );
     expect(second.applySummary.createdOrUpdatedVersionId).toBe(first.applySummary.createdOrUpdatedVersionId);
+  });
+
+  it('history lists ai-import applies newest first and skips versions without provenance', async () => {
+    store.set('sipEditor_projectVersions/v-old-ai', {
+      projectId: 'p1',
+      versionNumber: 3,
+      schemaVersion: 2,
+      buildingModel: store.get('sipEditor_projectVersions/v-current')?.buildingModel,
+      createdAt: '2026-03-24T10:00:00.000Z',
+      createdBy: 'u1',
+      importProvenance: {
+        sourceKind: 'ai_import',
+        importJobId: 'ij-old',
+        mapperVersion: 'import-candidate-v1',
+        reviewedSnapshotVersion: 'rev-old',
+        appliedBy: 'u1',
+        appliedAt: '2026-03-24T11:00:00.000Z',
+        warningsCount: 1,
+        traceCount: 2,
+      },
+    });
+    store.set('sipEditor_projectVersions/v-new-ai', {
+      projectId: 'p1',
+      versionNumber: 4,
+      schemaVersion: 2,
+      buildingModel: store.get('sipEditor_projectVersions/v-current')?.buildingModel,
+      createdAt: '2026-03-26T10:00:00.000Z',
+      createdBy: 'u1',
+      importProvenance: {
+        sourceKind: 'ai_import',
+        importJobId: 'ij-new',
+        mapperVersion: 'import-candidate-v1',
+        reviewedSnapshotVersion: 'rev-new',
+        appliedBy: 'u1',
+        appliedAt: '2026-03-26T11:00:00.000Z',
+        warningsCount: 0,
+        traceCount: 3,
+      },
+    });
+    const result = await listImportApplyHistory('p1', 'u1');
+    expect(result.items[0]?.versionId).toBe('v-new-ai');
+    expect(result.items[1]?.versionId).toBe('v-old-ai');
+    expect(result.items.some((x) => x.versionId === 'v-legacy')).toBe(false);
   });
 });

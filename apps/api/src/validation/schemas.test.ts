@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  zGetImportApplyHistoryResponse,
   zArchitecturalImportSnapshot,
   zApplyImportReviewBody,
   zApplyCandidateToProjectBody,
@@ -12,6 +13,7 @@ import {
   zSaveImportReviewBody,
   zCreateVersionBody,
 } from './schemas.js';
+import { z } from 'zod';
 
 const minimalModel = {
   meta: { id: 'm1', name: 'House' },
@@ -213,5 +215,60 @@ describe('import schemas', () => {
         expectedSchemaVersion: 0,
       }).success
     ).toBe(false);
+  });
+
+  it('accepts valid import-apply-history response shape', () => {
+    expect(
+      zGetImportApplyHistoryResponse.safeParse({
+        items: [
+          {
+            versionId: 'v1',
+            versionNumber: 1,
+            sourceKind: 'ai_import',
+            importJobId: 'ij-1',
+            mapperVersion: 'import-candidate-v1',
+            reviewedSnapshotVersion: 'rev-1',
+            appliedBy: 'u1',
+            appliedAt: new Date().toISOString(),
+            warningsCount: 0,
+            traceCount: 10,
+            note: null,
+          },
+        ],
+      }).success
+    ).toBe(true);
+  });
+
+  it('validates apply-candidate conflict error payload shape', () => {
+    const zApplyCandidateConflictError = z.object({
+      code: z.enum([
+        'IMPORT_CANDIDATE_NOT_READY',
+        'IMPORT_REVIEW_NOT_APPLIED',
+        'IMPORT_APPLY_CONCURRENCY_CONFLICT',
+        'IMPORT_CANDIDATE_MISSING',
+      ]),
+      message: z.string().min(1),
+      status: z.literal(409),
+      details: z
+        .object({
+          currentVersionId: z.string().min(1).optional(),
+          currentVersionNumber: z.number().int().positive().optional(),
+          currentSchemaVersion: z.number().int().positive().optional(),
+        })
+        .optional(),
+      requestId: z.string().optional(),
+    });
+    expect(
+      zApplyCandidateConflictError.safeParse({
+        code: 'IMPORT_APPLY_CONCURRENCY_CONFLICT',
+        message: 'Conflict',
+        status: 409,
+        details: {
+          currentVersionId: 'v2',
+          currentVersionNumber: 2,
+          currentSchemaVersion: 2,
+        },
+      }).success
+    ).toBe(true);
   });
 });

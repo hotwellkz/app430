@@ -82,6 +82,31 @@ vi.mock('../services/importJobService.js', () => ({
       },
     ],
   })),
+  listImportApplyHistory: vi.fn(async (projectId: string) => {
+    if (projectId === 'p2') {
+      throw new NotFoundError('Проект не найден: p2');
+    }
+    if (projectId === 'p-empty') {
+      return { items: [] };
+    }
+    return {
+      items: [
+        {
+          versionId: 'v2',
+          versionNumber: 2,
+          sourceKind: 'ai_import',
+          importJobId: 'ij-2',
+          mapperVersion: 'import-candidate-v1',
+          reviewedSnapshotVersion: 'r2',
+          appliedBy: 'u1',
+          appliedAt: '2026-03-26T12:00:00.000Z',
+          warningsCount: 1,
+          traceCount: 10,
+          note: null,
+        },
+      ],
+    };
+  }),
   saveImportJobReview: vi.fn(async (projectId: string, jobId: string, body: { updatedBy?: string }) => {
     if (projectId === 'p2') {
       throw new NotFoundError(`Import job не найден в проекте: ${jobId}`);
@@ -279,7 +304,23 @@ vi.mock('../services/importJobService.js', () => ({
       throw new ValidationAppError('Невалидное тело apply-candidate запроса');
     }
     if (jobId === 'ij-apply-conflict') {
-      throw new AppHttpError(409, 'CONFLICT', 'Editor apply candidate еще не подготовлен');
+      throw new AppHttpError(409, 'IMPORT_APPLY_CONCURRENCY_CONFLICT', 'Concurrency mismatch', {
+        currentVersionId: 'v2',
+        currentVersionNumber: 2,
+        currentSchemaVersion: 2,
+      });
+    }
+    if (jobId === 'ij-no-review') {
+      throw new AppHttpError(409, 'IMPORT_REVIEW_NOT_APPLIED', 'Review not applied');
+    }
+    if (jobId === 'ij-no-candidate') {
+      throw new AppHttpError(409, 'IMPORT_CANDIDATE_MISSING', 'Candidate missing');
+    }
+    if (jobId === 'ij-not-ready-2') {
+      throw new AppHttpError(409, 'IMPORT_CANDIDATE_NOT_READY', 'Candidate not ready');
+    }
+    if (jobId === 'ij-apply-failed') {
+      throw new AppHttpError(500, 'IMPORT_APPLY_FAILED', 'Apply failed');
     }
     return {
       job: {
@@ -397,12 +438,35 @@ describe('import jobs routes', () => {
     const listBody = listRes.json() as { items: Array<{ id: string }> };
     expect(listBody.items[0]?.id).toBe('ij-new');
 
+    const historyRes = await app.inject({
+      method: 'GET',
+      url: '/api/projects/p1/import-apply-history',
+      headers,
+    });
+    expect(historyRes.statusCode).toBe(200);
+    expect((historyRes.json() as { items: Array<{ versionId: string }> }).items[0]?.versionId).toBe('v2');
+
+    const emptyHistoryRes = await app.inject({
+      method: 'GET',
+      url: '/api/projects/p-empty/import-apply-history',
+      headers,
+    });
+    expect(emptyHistoryRes.statusCode).toBe(200);
+    expect((emptyHistoryRes.json() as { items: unknown[] }).items).toHaveLength(0);
+
     const wrongProjectRes = await app.inject({
       method: 'GET',
       url: '/api/projects/p2/import-jobs/ij-1',
       headers,
     });
     expect(wrongProjectRes.statusCode).toBe(404);
+
+    const foreignHistoryRes = await app.inject({
+      method: 'GET',
+      url: '/api/projects/p2/import-apply-history',
+      headers,
+    });
+    expect(foreignHistoryRes.statusCode).toBe(404);
 
     const invalidBodyRes = await app.inject({
       method: 'POST',
@@ -480,6 +544,69 @@ describe('import jobs routes', () => {
       },
     });
     expect(applyEditorConflictRes.statusCode).toBe(409);
+    expect((applyEditorConflictRes.json() as { code: string }).code).toBe(
+      'IMPORT_APPLY_CONCURRENCY_CONFLICT'
+    );
+    expect(
+      ((applyEditorConflictRes.json() as { details?: { currentVersionId?: string } }).details
+        ?.currentVersionId ?? '')
+    ).toBe('v2');
+
+    const applyReviewNotAppliedRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/import-jobs/ij-no-review/apply-candidate',
+      headers,
+      payload: {
+        appliedBy: 'u1',
+        expectedCurrentVersionId: 'v-current',
+        expectedVersionNumber: 1,
+        expectedSchemaVersion: 2,
+      },
+    });
+    expect(applyReviewNotAppliedRes.statusCode).toBe(409);
+    expect((applyReviewNotAppliedRes.json() as { code: string }).code).toBe('IMPORT_REVIEW_NOT_APPLIED');
+
+    const applyCandidateMissingRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/import-jobs/ij-no-candidate/apply-candidate',
+      headers,
+      payload: {
+        appliedBy: 'u1',
+        expectedCurrentVersionId: 'v-current',
+        expectedVersionNumber: 1,
+        expectedSchemaVersion: 2,
+      },
+    });
+    expect(applyCandidateMissingRes.statusCode).toBe(409);
+    expect((applyCandidateMissingRes.json() as { code: string }).code).toBe('IMPORT_CANDIDATE_MISSING');
+
+    const applyCandidateNotReadyRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/import-jobs/ij-not-ready-2/apply-candidate',
+      headers,
+      payload: {
+        appliedBy: 'u1',
+        expectedCurrentVersionId: 'v-current',
+        expectedVersionNumber: 1,
+        expectedSchemaVersion: 2,
+      },
+    });
+    expect(applyCandidateNotReadyRes.statusCode).toBe(409);
+    expect((applyCandidateNotReadyRes.json() as { code: string }).code).toBe('IMPORT_CANDIDATE_NOT_READY');
+
+    const applyCandidateFailedRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/import-jobs/ij-apply-failed/apply-candidate',
+      headers,
+      payload: {
+        appliedBy: 'u1',
+        expectedCurrentVersionId: 'v-current',
+        expectedVersionNumber: 1,
+        expectedSchemaVersion: 2,
+      },
+    });
+    expect(applyCandidateFailedRes.statusCode).toBe(500);
+    expect((applyCandidateFailedRes.json() as { code: string }).code).toBe('IMPORT_APPLY_FAILED');
 
     const applyEditorRes = await app.inject({
       method: 'POST',

@@ -14,11 +14,13 @@ import type {
   Project,
   ProjectStatus,
   ProjectVersion,
+  VersionImportProvenance,
 } from '@2wix/shared-types';
 import { BUILDING_MODEL_SCHEMA_VERSION } from '@2wix/shared-types';
 import {
   zArchitecturalImportSnapshot,
   zImportEditorApplyState,
+  zVersionImportProvenance,
   zImportProjectApplyState,
   zImportReviewState,
 } from '../validation/schemas.js';
@@ -87,12 +89,17 @@ export function mapVersionDoc(
   data: DocumentData,
   buildingModel: BuildingModel
 ): ProjectVersion {
+  const provenanceParsed = zVersionImportProvenance.safeParse(data.importProvenance);
+  const importProvenance: VersionImportProvenance | null = provenanceParsed.success
+    ? (provenanceParsed.data as unknown as VersionImportProvenance)
+    : null;
   return {
     id,
     projectId: typeof data.projectId === 'string' ? data.projectId : '',
     versionNumber: num(data.versionNumber, 1),
     schemaVersion: num(data.schemaVersion, BUILDING_MODEL_SCHEMA_VERSION),
     buildingModel,
+    importProvenance,
     createdAt: tsToIso(data.createdAt),
     createdBy: typeof data.createdBy === 'string' ? data.createdBy : null,
     basedOnVersionId:
