@@ -1,0 +1,7 @@
+dist
+node_modules
+pnpm-lock.yaml
+package-lock.json
+android-2wix-whatsapp
+coverage
+.netlify

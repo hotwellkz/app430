@@ -1,0 +1,135 @@
+/* Инженерный нейтральный shell — без маркетинговых эффектов */
+.twix-ui {
+  --twix-bg: #f4f4f5;
+  --twix-surface: #ffffff;
+  --twix-border: #d4d4d8;
+  --twix-text: #18181b;
+  --twix-muted: #71717a;
+  --twix-accent: #2563eb;
+  --twix-font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--twix-font);
+  color: var(--twix-text);
+  box-sizing: border-box;
+}
+.twix-ui *,
+.twix-ui *::before,
+.twix-ui *::after {
+  box-sizing: inherit;
+}
+
+.twix-appShell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--twix-bg);
+}
+
+.twix-topBar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 16px;
+  background: var(--twix-surface);
+  border-bottom: 1px solid var(--twix-border);
+}
+
+.twix-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+
+.twix-sidebar {
+  flex: none;
+  width: 200px;
+  background: var(--twix-surface);
+  border-right: 1px solid var(--twix-border);
+  padding: 12px 0;
+  overflow: auto;
+}
+
+.twix-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--twix-bg);
+}
+
+.twix-rightPanel {
+  flex: none;
+  width: 280px;
+  background: var(--twix-surface);
+  border-left: 1px solid var(--twix-border);
+  padding: 12px;
+  overflow: auto;
+}
+
+.twix-navItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: var(--twix-text);
+  cursor: pointer;
+}
+.twix-navItem:hover {
+  background: var(--twix-bg);
+}
+.twix-navItem_active {
+  background: #e4e4e7;
+  font-weight: 600;
+}
+
+.twix-canvasPlaceholder {
+  flex: 1;
+  margin: 12px;
+  border: 1px dashed var(--twix-border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--twix-muted);
+  font-size: 14px;
+  text-align: center;
+  padding: 24px;
+  background: #fafafa;
+}
+
+.twix-panelTitle {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--twix-muted);
+  margin: 0 0 8px;
+}
+
+.twix-muted {
+  color: var(--twix-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.twix-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--twix-muted);
+  font-size: 14px;
+}
+
+.twix-loading {
+  padding: 24px;
+  text-align: center;
+  color: var(--twix-muted);
+  font-size: 14px;
+}

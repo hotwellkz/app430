@@ -1,0 +1,228 @@
+# Отключаем срабатывание сканера на Firebase API key (он публичный для клиента)
+# https://ntl.fyi/configure-secrets-scanning
+[build.environment]
+  SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
+
+# Kaspi: синхронизация заказов 4 раза в день (09:00, 13:00, 17:00, 21:00 UTC)
+[functions.kaspi-sync-scheduled]
+  schedule = "0 9,13,17,21 * * *"
+
+[functions.ai-control-alerts-scheduled]
+  schedule = "*/5 * * * *"
+
+# Voice: pending postCallStatus → summary/extraction/CRM (serverless sweep)
+[functions.voice-post-call-sweep]
+  schedule = "*/4 * * * *"
+
+# Voice: scheduled auto-retry / callback dispatch
+[functions.voice-retry-sweep]
+  schedule = "*/5 * * * *"
+
+[functions.voice-campaign-sweep]
+  schedule = "*/2 * * * *"
+
+# Webhook Wazzup → Netlify function (должен быть выше правила /*)
+[[redirects]]
+  from = "/api/wazzup/webhook"
+  to = "/.netlify/functions/wazzup-webhook"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/send-whatsapp-message"
+  to = "/.netlify/functions/send-whatsapp-message"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ai/analyze-client"
+  to = "/.netlify/functions/ai-analyze-client"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ai/generate-reply"
+  to = "/.netlify/functions/ai-generate-reply"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ai/transcribe-voice"
+  to = "/.netlify/functions/ai-transcribe-voice"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ai/analyze-sales"
+  to = "/.netlify/functions/ai-analyze-sales"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/wazzup-integration"
+  to = "/.netlify/functions/wazzup-integration"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/wazzup-verify"
+  to = "/.netlify/functions/wazzup-verify"
+  status = 200
+  force = true
+
+# DELETE /api/templates/{id} — может давать 405 за прокси; клиент шлёт POST на /api/templates-delete
+[[redirects]]
+  from = "/api/templates/*"
+  to = "/.netlify/functions/delete-quick-reply-template?id=:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/templates-delete"
+  to = "/.netlify/functions/delete-quick-reply-template"
+  status = 200
+  force = true
+
+# Поиск чатов: POST /api/chats-search — надёжнее за прокси (GET /api/chats/search даёт HTML)
+[[redirects]]
+  from = "/api/chats/search"
+  to = "/.netlify/functions/chats-search"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/chats-search"
+  to = "/.netlify/functions/chats-search"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/calculator/estimate"
+  to = "/.netlify/functions/calculator-estimate"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/kaspi-integration"
+  to = "/.netlify/functions/kaspi-integration"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/kaspi-verify"
+  to = "/.netlify/functions/kaspi-verify"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/kaspi-sync-orders"
+  to = "/.netlify/functions/kaspi-sync-orders"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/crm-ai-bot-test"
+  to = "/.netlify/functions/crm-ai-bot-test"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/crm-ai-bot-whatsapp-runtime"
+  to = "/.netlify/functions/crm-ai-bot-whatsapp-runtime"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/crm-ai-create-deal-from-recommendation"
+  to = "/.netlify/functions/crm-ai-create-deal-from-recommendation"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/crm-ai-create-task-from-recommendation"
+  to = "/.netlify/functions/crm-ai-create-task-from-recommendation"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ai-control-alert-dispatch"
+  to = "/.netlify/functions/ai-control-alert-dispatch"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/telegram-notify"
+  to = "/.netlify/functions/telegram-notify"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/mobile/register-device"
+  to = "/.netlify/functions/mobile-register-device"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/mobile/unregister-device"
+  to = "/.netlify/functions/mobile-unregister-device"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/send-chat-push"
+  to = "/.netlify/functions/send-chat-push"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/voice/outbound-call"
+  to = "/.netlify/functions/voice-outbound-call"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/voice/operational"
+  to = "/.netlify/functions/voice-operational"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/voice/campaign-operational"
+  to = "/.netlify/functions/voice-campaign-operational"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/voice/integration"
+  to = "/.netlify/functions/voice-integration"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/voice/numbers"
+  to = "/.netlify/functions/voice-numbers"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/voice/provider-webhook"
+  to = "/.netlify/functions/voice-provider-webhook"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/voice/twilio-twiml"
+  to = "/.netlify/functions/voice-twilio-twiml"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/voice/twilio-gather-action"
+  to = "/.netlify/functions/voice-twilio-gather-action"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

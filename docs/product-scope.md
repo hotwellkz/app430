@@ -1,0 +1,60 @@
+# SIP Editor — продуктовый scope
+
+## Завершено: foundation (Sprint 1)
+
+- Monorepo (pnpm), `apps/sip-editor-web`, `apps/api`, `packages/*`.
+- Типы, доменные фабрики, `editor-core` / `ui-kit` shell.
+- Fastify + Firestore `sipEditor_*`, базовые маршруты; CRM entry для редактора — раздел **SIP Проекты** (`/sip-projects`), legacy-страница `/integrations/sip-editor` для отладки.
+
+## Завершено: версии + персистенция + bridge (Sprint 2)
+
+- Расширенные типы `Project` / `ProjectVersion`, audit, `allowedEditorIds`, счётчик версий, `basedOnVersionId`.
+- Zod-валидация тел запросов; единый формат ошибок API (`code`, `message`, `details`, `requestId`).
+- Optimistic concurrency на **PATCH current-version** (409 + детали).
+- Транзакции Firestore для новой версии и сохранения current.
+- Временный bridge **`x-sip-user-id`** + query `sipUserId` в редакторе; CRM передаёт UID и создаёт проект с `createdBy`.
+- Редактор: черновик `buildingModel`, состояния save/conflict, панель **Versions** (read-only список).
+- CRM: привязка `sipEditorProjectId` на сделке, загрузка сделки по `dealId`, открытие существующего SIP-проекта.
+- Unit-тесты: concurrency, доступ, схемы Zod.
+- Документация: `technical-decisions.md`, `api-contracts.md`.
+
+## Завершено: editor core state + команды (Sprint 3)
+
+- **`@2wix/editor-core`**: единый `useEditorStore` — документ (server/draft, save lifecycle), selection, view, история снимков draft, команды (`EditorCommand`) и чистый reducer (`reduceCommand` / `executeCommand`).
+- **Undo/redo** только для изменений модели; вид и выделение в стек не попадают.
+- **Домен**: утилиты модели и операции стен/этажей/проёмов в `@2wix/domain-model` (`cloneBuildingModel`, `createWall`, `addWallToModel`, …).
+- **UI редактора**: бейдж save / несохранённость, Save / Undo / Redo / Discard, списки этажей/стен для выделения, collapsible debug-панель.
+- Тесты Vitest в `packages/editor-core`; описание архитектуры — `docs/editor-core.md`.
+
+## Завершено: 2D walls canvas MVP (Sprint 4)
+
+- SVG-сцена в мм: сетка, стены (полоса по толщине), выделение, ручки концов, preview при рисовании.
+- Инструменты **select / pan / draw-wall** в `view.toolMode` (editor-core); zoom/pan/grid/snap из store; wheel-zoom к курсору.
+- Жесты: клик по стене → выделение; двухкликовое рисование стены → `addWall`; drag конца → `updateWall`; Delete/Backspace и кнопка → `deleteWall`.
+- Левая колонка: этажи + стены активного этажа; правая — инспектор стены (тип, толщина, высота).
+- Тесты: `packages/editor-core` (в т.ч. `updateWall` + undo); `apps/sip-editor-web` — хелперы viewport, hit-test, жесты.
+- Документация: `docs/2d-canvas.md`, обновлены `editor-core.md`, `technical-decisions.md`.
+
+## Завершено: проёмы + вход в редактор (Sprint 5)
+
+- **Модель проёма** (`Opening`): `floorId`, `openingType` (`window` | `door` | `portal`), `bottomOffsetMm`, геометрия вдоль стены; миграция из legacy `kind` в `normalizeBuildingModel`.
+- **Домен**: `openingGeometry`, пресеты `OPENING_DEFAULTS`, валидация границ стены / пересечений / отступов от краёв; каскадное удаление проёмов при удалении этажа.
+- **Команды**: `addOpening` / `updateOpening` / `deleteOpening` в истории и save/discard; сброс выделения при удалении проёма.
+- **Canvas**: слой проёмов, hit-test, инструменты **draw-window / draw-door / draw-portal** (один клик по стене), перетаскивание вдоль стены, **Вписать вид** + авто-fit при первой загрузке этажа.
+- **UI**: список проёмов в сайдбаре, инспектор проёма, тулбар, лёгкий snap узлов стен при отпускании ручки.
+- **Вход**: CRM **`/sip-projects`** (список, тестовый/последний проект, авто-`sipUserId`); карточка сделки — блок SIP; в приложении редактора — **`/sip-editor/dev-launch`**, guard-экраны со ссылками в CRM (и dev-hint только в dev).
+- Тесты: `packages/domain-model` (openingOps), `editor-core`, `sip-editor-web` (hit-test, view fit).
+- Документация: `docs/openings.md`, `docs/dev-launch.md`, обновлены `editor-core.md`, `technical-decisions.md`, `2d-canvas.md`.
+
+## Не входит сейчас
+
+- Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).
+- 3D, кровля/плиты как редактор, SIP-панели, BOM, экспорт.
+- Полноценная RBAC/проверка Firebase token на API (см. bridge в technical-decisions).
+
+## Следующие этапы
+
+| Этап | Фокус |
+|------|--------|
+| Sprint 6+ | Кровля, плиты, 3D, панелизация |
+| Hardening | JWT/Firebase Admin verify, company-scoped projects, Firestore security rules под SIP |

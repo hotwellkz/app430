@@ -1,0 +1,21 @@
+# API → Netlify Functions (должны быть ВЫШЕ catch-all, иначе SPA глотает /api/* → 404)
+/api/wazzup/webhook /.netlify/functions/wazzup-webhook 200
+/api/send-whatsapp-message /.netlify/functions/send-whatsapp-message 200
+/api/ai/analyze-client /.netlify/functions/ai-analyze-client 200
+/api/ai/generate-reply /.netlify/functions/ai-generate-reply 200
+/api/ai/transcribe-voice /.netlify/functions/ai-transcribe-voice 200
+/api/ai/analyze-sales /.netlify/functions/ai-analyze-sales 200
+/api/wazzup-integration /.netlify/functions/wazzup-integration 200
+/api/wazzup-verify /.netlify/functions/wazzup-verify 200
+/api/templates-delete /.netlify/functions/delete-quick-reply-template 200
+/api/chats/search /.netlify/functions/chats-search 200
+/api/chats-search /.netlify/functions/chats-search 200
+/api/crm-ai-bot-test /.netlify/functions/crm-ai-bot-test 200
+/api/crm-ai-bot-whatsapp-runtime /.netlify/functions/crm-ai-bot-whatsapp-runtime 200
+/api/crm-ai-create-deal-from-recommendation /.netlify/functions/crm-ai-create-deal-from-recommendation 200
+/api/crm-ai-create-task-from-recommendation /.netlify/functions/crm-ai-create-task-from-recommendation 200
+# Mobile shell: FCM register / push (выше catch-all, иначе SPA глотает /api/*)
+/api/mobile/register-device /.netlify/functions/mobile-register-device 200
+/api/mobile/unregister-device /.netlify/functions/mobile-unregister-device 200
+/api/send-chat-push /.netlify/functions/send-chat-push 200
+/* /index.html 200

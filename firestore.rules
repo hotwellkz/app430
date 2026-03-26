@@ -1,0 +1,651 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    function isGlobalAdmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'global_admin';
+    }
+
+    // Allow read access to authenticated users for all collections
+    match /{document=**} {
+      allow read: if isAuthenticated();
+    }
+
+    // Companies: свою компанию — всем, все компании — global_admin
+    match /companies/{companyId} {
+      allow read: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isGlobalAdmin());
+    }
+
+    // company_users: документ id = userId; чтение своей записи; owner/admin компании могут читать и обновлять (menuAccess) других пользователей той же компании
+    function isCompanyOwnerOrAdmin() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.role in ['owner', 'admin'];
+    }
+    match /company_users/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isGlobalAdmin();
+      allow read: if isCompanyOwnerOrAdmin() && resource.data.companyId == get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update, delete: if isAuthenticated() && (request.auth.uid == userId || isGlobalAdmin());
+      allow update: if isCompanyOwnerOrAdmin() && resource.data.companyId == get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId;
+      allow delete: if isCompanyOwnerOrAdmin() && resource.data.companyId == get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId;
+    }
+
+    // Users: чтение своего документа; create при регистрации/fallback; global_admin читает всех
+    match /users/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isGlobalAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin() || isGlobalAdmin());
+    }
+
+    // Settings collection
+    match /settings/{documentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Comments collection
+    match /comments/{commentId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Categories: доступ по companyId текущего пользователя или global_admin (без fallback)
+    match /categories/{categoryId} {
+      allow read, update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Expense categories (категории расхода для переводов employee/company → Общ Расх)
+    match /expense_categories/{categoryId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Transactions: доступ только по companyId пользователя или global_admin
+    match /transactions/{transactionId} {
+      allow read, update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Transaction edit audit logs
+    match /transaction_edit_logs/{logId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Employees: доступ только по companyId пользователя или global_admin
+    match /employees/{employeeId} {
+      allow read, update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Clients: доступ только по companyId пользователя или global_admin
+    match /clients/{clientId} {
+      allow read, update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Справочник городов компании (WhatsApp / блок «Город»)
+    match /companyCities/{companyId} {
+      allow read, write: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Deals: доступ только по companyId пользователя или global_admin
+    match /deals/{dealId} {
+      allow read, update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Автоворонки / AI-боты CRM: изоляция по companyId
+    match /crmAiBots/{botId} {
+      allow read, update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Messages: доступ только по companyId пользователя или global_admin
+    match /messages/{messageId} {
+      allow read, update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Products collection
+    match /products/{productId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Product movements collection
+    match /productMovements/{movementId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Product folders collection
+    match /productFolders/{folderId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Warehouse documents collection
+    match /warehouseDocuments/{documentId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Contracts collection
+    match /contracts/{contractId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Estimates collections
+    match /estimates/{estimateId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /foundationEstimates/{estimateId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /sipWallsEstimates/{estimateId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /floorEstimates/{estimateId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /roofEstimates/{estimateId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /partitionEstimates/{estimateId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /consumablesEstimates/{estimateId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /additionalWorksEstimates/{estimateId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Finishing Estimates collection
+    match /finishingEstimates/{estimateId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Finishing Materials collection
+    match /finishingMaterials/{materialId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Contract templates collection
+    match /contractTemplates/{templateId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Receipt settings collection
+    match /receiptSettings/{clientId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Client aggregates collection (предрасчитанные агрегаты для оптимизации)
+    match /clientAggregates/{clientId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated(); // Разрешаем запись аутентифицированным пользователям
+    }
+
+    // AI-отчёты сравнения сметы и факта по проекту (изоляция по companyId)
+    // read/update/delete — проверяем resource.data.companyId; create — request.resource.data (resource при create нет)
+    match /clientEstimateAiReports/{docId} {
+      allow read, update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // WhatsApp CRM: строгая изоляция по companyId пользователя или global_admin
+    match /whatsappClients/{clientId} {
+      allow read, update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+    // Диалоги без companyId (старые createConversation) — иначе update отклоняется и AI автоворонка падает с PERMISSION_DENIED
+    match /whatsappConversations/{conversationId} {
+      function waConvUserMatchesResourceCompany() {
+        return (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+          || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+          || isGlobalAdmin();
+      }
+      function waConvUserMatchesRequestCompany() {
+        return (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+          || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+          || isGlobalAdmin();
+      }
+      function waConvLegacyNoCompanyId() {
+        return !(resource.data.keys().hasAny(['companyId']))
+          || resource.data.companyId == null
+          || resource.data.companyId == '';
+      }
+      allow read: if isAuthenticated() && (
+        waConvUserMatchesResourceCompany()
+        || waConvLegacyNoCompanyId()
+      );
+      allow update: if isAuthenticated() && (
+        waConvUserMatchesResourceCompany()
+        || (waConvLegacyNoCompanyId() && waConvUserMatchesRequestCompany())
+      );
+      allow delete: if isAuthenticated() && waConvUserMatchesResourceCompany();
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+    match /whatsappMessages/{messageId} {
+      allow read, update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Логи запусков AI-бота автоворонок в WhatsApp (аудит)
+    match /whatsappAiBotRuns/{runId} {
+      allow read: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow update, delete: if false;
+    }
+
+    // AI-control workflow sidecar (статус/комментарий/assignee, SLA, история алертов): строго по companyId
+    // read: только resource (request.resource при чтении недоступен)
+    match /whatsappAiRunWorkflow/{runId} {
+      allow read: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      ) && request.resource.data.companyId == resource.data.companyId;
+    }
+
+    // Внутренние уведомления AI-control (создаётся только Admin SDK; клиент — только чтение своих или global_admin)
+    match /aiControlNotifications/{notificationId} {
+      allow read: if isAuthenticated() && (
+        isGlobalAdmin()
+        || (
+          (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+          || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        ) && resource.data.targetUserId == request.auth.uid
+      );
+      allow create, update, delete: if false;
+    }
+
+    // Voice MVP: сессии звонков (отдельно от WhatsApp). Чтение — только своя компания; запись — только Admin SDK.
+    match /voiceCallSessions/{callId} {
+      allow read: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create, update, delete: if false;
+
+      match /events/{eventId} {
+        allow read: if isAuthenticated() && (
+          (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+          || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+          || isGlobalAdmin()
+        );
+        allow create, update, delete: if false;
+      }
+
+      match /turns/{turnId} {
+        allow read: if isAuthenticated() && (
+          (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+          || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+          || isGlobalAdmin()
+        );
+        allow create, update, delete: if false;
+      }
+    }
+
+    // Voice: привязанные номера (исходящий caller ID). Только чтение своей компании; запись — Admin SDK / onboarding function.
+    match /voiceNumbers/{numberId} {
+      allow read: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create, update, delete: if false;
+    }
+
+    // Voice campaigns (mass calling) — строго по companyId
+    match /voiceCampaigns/{campaignId} {
+      allow read, update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    match /voiceCampaignItems/{itemId} {
+      allow read, update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Сделки (воронка продаж): pipelines, pipeline_stages, deals, deal_activity_log
+    match /pipelines/{pipelineId} {
+      allow read, write: if isAuthenticated();
+    }
+    match /pipeline_stages/{stageId} {
+      allow read, write: if isAuthenticated();
+    }
+    match /deals/{dealId} {
+      allow read, write: if isAuthenticated();
+    }
+    match /deal_activity_log/{logId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // История сделок (перемещения, создание) — запись при создании сделки / смене этапа
+    match /deal_history/{entryId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId
+            == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId
+            == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId
+            == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId
+            == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Менеджеры чатов (WhatsApp CRM): чтение — любой авторизованный (фильтр по companyId в запросе), запись — по companyId
+    match /chatManagers/{docId} {
+      allow read: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId
+            == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId
+            == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId
+            == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId
+            == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Статусы сделок (WhatsApp CRM): по companyId или global_admin
+    match /dealStatuses/{docId} {
+      allow read, update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId
+            == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId
+            == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId
+            == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId
+            == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Быстрые ответы WhatsApp (quick_replies): чтение — любой авторизованный (фильтр по companyId в запросе), запись — по companyId
+    match /quick_replies/{docId} {
+      allow read: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId
+            == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId
+            == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId
+            == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId
+            == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Медиа-шаблоны быстрых ответов (набор изображений по /)
+    match /media_quick_replies/{docId} {
+      allow read: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId
+            == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId
+            == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId
+            == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId
+            == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // AI База знаний (knowledgeBase): доступ только по companyId пользователя или global_admin
+    match /knowledgeBase/{docId} {
+      allow read, update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId
+            == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId
+            == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId
+            == request.resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId
+            == request.resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+
+    // Лог действий админа (удаление клиента WhatsApp и т.п.): только запись для авторизованных
+    match /admin_log/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    // Лог открытий Analytics (кто заходил на /analytics)
+    match /analytics_access_log/{logId} {
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) &&
+          request.resource.data.companyId == get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId &&
+          request.resource.data.userId == request.auth.uid)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          request.resource.data.companyId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId &&
+          request.resource.data.userId == request.auth.uid)
+        || isGlobalAdmin()
+      );
+      allow read: if isGlobalAdmin();
+      allow read: if isCompanyOwnerOrAdmin() && resource.data.companyId == get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId;
+      allow update, delete: if false;
+    }
+
+    // Приглашения в компанию: только своя компания (create/read/update по companyId)
+    match /company_invites/{inviteId} {
+      allow read: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && request.resource.data.companyId == get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && request.resource.data.companyId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId)
+        || isGlobalAdmin()
+      );
+      allow update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == resource.data.companyId)
+        || isGlobalAdmin()
+      );
+    }
+  }
+}
