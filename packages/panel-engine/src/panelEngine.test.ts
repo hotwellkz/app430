@@ -134,4 +134,54 @@ describe('panel-engine wall-first', () => {
     const r = buildPanelizationSnapshot(model);
     expect(r.generatedPanels[0]?.label.startsWith('W-1-1-')).toBe(true);
   });
+
+  it('builds simple slab layout', () => {
+    const model = baseModel();
+    model.walls = [
+      wall({ id: 'w1', start: { x: 0, y: 0 }, end: { x: 4000, y: 0 } }),
+      wall({ id: 'w2', start: { x: 4000, y: 0 }, end: { x: 4000, y: 3000 } }),
+      wall({ id: 'w3', start: { x: 4000, y: 3000 }, end: { x: 0, y: 3000 } }),
+      wall({ id: 'w4', start: { x: 0, y: 3000 }, end: { x: 0, y: 0 } }),
+    ];
+    model.slabs = [
+      {
+        id: 's1',
+        floorId: 'f1',
+        slabType: 'interfloor',
+        contourWallIds: ['w1', 'w2', 'w3', 'w4'],
+        direction: 'x',
+        generationMode: 'auto',
+      },
+    ];
+    const r = buildPanelizationSnapshot(model);
+    expect(r.generatedPanels.some((p) => p.sourceType === 'slab')).toBe(true);
+    expect(r.slabSummaries[0]?.panelCount).toBeGreaterThan(0);
+    expect(r.generatedPanels.some((p) => p.label.startsWith('S-1-1-'))).toBe(true);
+  });
+
+  it('builds simple gable roof layout', () => {
+    const model = baseModel();
+    model.walls = [
+      wall({ id: 'w1', start: { x: 0, y: 0 }, end: { x: 4000, y: 0 } }),
+      wall({ id: 'w2', start: { x: 4000, y: 0 }, end: { x: 4000, y: 3000 } }),
+      wall({ id: 'w3', start: { x: 4000, y: 3000 }, end: { x: 0, y: 3000 } }),
+      wall({ id: 'w4', start: { x: 0, y: 3000 }, end: { x: 0, y: 0 } }),
+    ];
+    model.roofs = [
+      {
+        id: 'r1',
+        floorId: 'f1',
+        roofType: 'gable',
+        slopeDegrees: 25,
+        ridgeDirection: 'x',
+        overhangMm: 300,
+        baseElevationMm: 2800,
+        generationMode: 'auto',
+      },
+    ];
+    const r = buildPanelizationSnapshot(model);
+    expect(r.generatedPanels.some((p) => p.sourceType === 'roof')).toBe(true);
+    expect(r.roofSummaries[0]?.panelCount).toBeGreaterThan(0);
+    expect(r.generatedPanels.some((p) => p.label.startsWith('R-1-'))).toBe(true);
+  });
 });

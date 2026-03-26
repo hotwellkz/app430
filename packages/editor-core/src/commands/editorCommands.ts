@@ -79,14 +79,38 @@ export type EditorCommand =
   | {
       type: 'updateSlab';
       slabId: string;
-      patch: Partial<Pick<Slab, 'floorId' | 'slabType' | 'contourWallIds' | 'direction' | 'thicknessMm' | 'generationMode'>>;
+      patch: Partial<
+        Pick<
+          Slab,
+          | 'floorId'
+          | 'slabType'
+          | 'contourWallIds'
+          | 'direction'
+          | 'thicknessMm'
+          | 'generationMode'
+          | 'panelizationEnabled'
+          | 'panelTypeId'
+        >
+      >;
     }
   | { type: 'deleteSlab'; slabId: string }
   | { type: 'addRoof'; roof: Roof }
   | {
       type: 'updateRoof';
       roofId: string;
-      patch: Partial<Pick<Roof, 'floorId' | 'roofType' | 'slopeDegrees' | 'ridgeDirection' | 'overhangMm' | 'baseElevationMm'>>;
+      patch: Partial<
+        Pick<
+          Roof,
+          | 'floorId'
+          | 'roofType'
+          | 'slopeDegrees'
+          | 'ridgeDirection'
+          | 'overhangMm'
+          | 'baseElevationMm'
+          | 'panelizationEnabled'
+          | 'panelTypeId'
+        >
+      >;
     }
   | { type: 'deleteRoof'; roofId: string };
 

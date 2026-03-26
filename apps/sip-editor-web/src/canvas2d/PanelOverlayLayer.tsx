@@ -6,6 +6,8 @@ interface PanelOverlayLayerProps {
   model: BuildingModel;
   panels: GeneratedPanel[];
   selectedWallId: string | null;
+  selectedSlabId: string | null;
+  selectedRoofId: string | null;
   showLabels: boolean;
 }
 
@@ -18,10 +20,48 @@ function axisPoint(wallStart: { x: number; y: number }, wallEnd: { x: number; y:
   };
 }
 
-export function PanelOverlayLayer({ model, panels, selectedWallId, showLabels }: PanelOverlayLayerProps) {
+export function PanelOverlayLayer({
+  model,
+  panels,
+  selectedWallId,
+  selectedSlabId,
+  selectedRoofId,
+  showLabels,
+}: PanelOverlayLayerProps) {
   return (
     <g>
       {panels.map((p) => {
+        if (p.sourceType === 'slab' || p.sourceType === 'roof') {
+          const selected =
+            (p.sourceType === 'slab' && selectedSlabId === p.sourceId) ||
+            (p.sourceType === 'roof' && selectedRoofId === p.sourceId);
+          const stroke = p.sourceType === 'slab' ? '#0369a1' : '#991b1b';
+          return (
+            <g key={p.id}>
+              <rect
+                x={p.originXmm}
+                y={p.originYmm}
+                width={p.widthMm}
+                height={p.heightMm}
+                fill="none"
+                stroke={stroke}
+                strokeWidth={selected ? 110 : 70}
+                vectorEffect="non-scaling-stroke"
+              />
+              {showLabels && selected ? (
+                <text
+                  x={p.originXmm + p.widthMm / 2}
+                  y={p.originYmm + p.heightMm / 2}
+                  textAnchor="middle"
+                  fontSize={180}
+                  fill={stroke}
+                >
+                  {p.label}
+                </text>
+              ) : null}
+            </g>
+          );
+        }
         const wall = findWallById(model, p.sourceId);
         if (!wall) return null;
         const len = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);

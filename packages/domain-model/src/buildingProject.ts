@@ -278,6 +278,12 @@ export function normalizeBuildingModel(raw: unknown): BuildingModel {
       direction: dir,
       thicknessMm: asNumber(s.thicknessMm, DEFAULT_SLAB_THICKNESS_MM),
       generationMode,
+      ...(typeof s.panelizationEnabled === 'boolean'
+        ? { panelizationEnabled: s.panelizationEnabled }
+        : {}),
+      ...(typeof s.panelTypeId === 'string' && s.panelTypeId.trim()
+        ? { panelTypeId: s.panelTypeId }
+        : {}),
     };
   });
 
@@ -301,6 +307,12 @@ export function normalizeBuildingModel(raw: unknown): BuildingModel {
       overhangMm: asNumber(ro.overhangMm, DEFAULT_ROOF_OVERHANG_MM),
       baseElevationMm: asNumber(ro.baseElevationMm, 0),
       generationMode: 'auto',
+      ...(typeof ro.panelizationEnabled === 'boolean'
+        ? { panelizationEnabled: ro.panelizationEnabled }
+        : {}),
+      ...(typeof ro.panelTypeId === 'string' && ro.panelTypeId.trim()
+        ? { panelTypeId: ro.panelTypeId }
+        : {}),
     };
   });
 

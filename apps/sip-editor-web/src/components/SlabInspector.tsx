@@ -1,14 +1,18 @@
 import { getSlabsByFloor } from '@2wix/domain-model';
 import { useEditorStore } from '@2wix/editor-core';
 import type { Slab } from '@2wix/shared-types';
+import { usePanelizationSnapshot } from '../panelization/usePanelizationSnapshot';
 
-type SlabPatch = Partial<Pick<Slab, 'slabType' | 'direction' | 'thicknessMm' | 'generationMode'>>;
+type SlabPatch = Partial<
+  Pick<Slab, 'slabType' | 'direction' | 'thicknessMm' | 'generationMode' | 'panelizationEnabled' | 'panelTypeId'>
+>;
 
 export function SlabInspector() {
   const draft = useEditorStore((s) => s.document.draftModel);
   const selection = useEditorStore((s) => s.selection);
   const view = useEditorStore((s) => s.view);
   const applyCommand = useEditorStore((s) => s.applyCommand);
+  const panelization = usePanelizationSnapshot();
 
   if (!draft) return null;
   const activeFloorId = view.activeFloorId;
@@ -23,6 +27,8 @@ export function SlabInspector() {
   }
 
   const patch = (p: SlabPatch) => applyCommand({ type: 'updateSlab', slabId: slab.id, patch: p });
+  const slabSummary = panelization?.slabSummaries.find((s) => s.slabId === slab.id);
+  const slabWarnings = panelization?.warnings.filter((w) => w.relatedObjectIds.includes(slab.id)) ?? [];
 
   return (
     <div style={{ fontSize: 13 }}>
@@ -59,6 +65,36 @@ export function SlabInspector() {
         </dd>
         <dt className="twix-muted">Режим</dt>
         <dd style={{ margin: 0 }}>{slab.generationMode}</dd>
+        <dt className="twix-muted">SIP panelization</dt>
+        <dd style={{ margin: 0 }}>
+          <label>
+            <input
+              type="checkbox"
+              checked={slab.panelizationEnabled ?? true}
+              onChange={(e) => patch({ panelizationEnabled: e.target.checked })}
+            />{' '}
+            enabled
+          </label>
+        </dd>
+        <dt className="twix-muted">SIP panel type (override)</dt>
+        <dd style={{ margin: 0 }}>
+          <select
+            value={slab.panelTypeId ?? ''}
+            onChange={(e) => patch({ panelTypeId: e.target.value || undefined })}
+            style={{ width: '100%', padding: 4 }}
+          >
+            <option value="">global default</option>
+            {draft.panelLibrary.filter((p) => p.active).map((p) => (
+              <option key={p.id} value={p.id}>{p.code}</option>
+            ))}
+          </select>
+        </dd>
+        <dt className="twix-muted">SIP panels / trimmed / area</dt>
+        <dd style={{ margin: 0 }}>
+          {slabSummary?.panelCount ?? 0} / {slabSummary?.trimmedCount ?? 0} / {slabSummary?.totalAreaM2 ?? 0} m2
+        </dd>
+        <dt className="twix-muted">SIP warnings</dt>
+        <dd style={{ margin: 0 }}>{slabWarnings.length}</dd>
         <dt className="twix-muted">Контур (стены)</dt>
         <dd style={{ margin: 0 }}>{slab.contourWallIds.length} шт.</dd>
       </dl>

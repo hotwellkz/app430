@@ -12,12 +12,19 @@ export type PanelizationWarningCode =
   | 'WALL_TOO_SHORT_FOR_LAYOUT'
   | 'NO_VALID_LAYOUT'
   | 'INTERNAL_WALL_SKIPPED'
-  | 'ROOF_NOT_SUPPORTED_YET'
-  | 'SLAB_NOT_SUPPORTED_YET';
+  | 'SLAB_NOT_PANELIZABLE'
+  | 'SLAB_TOO_SMALL'
+  | 'SLAB_DIRECTION_MISSING'
+  | 'NO_VALID_SLAB_LAYOUT'
+  | 'ROOF_NOT_PANELIZABLE'
+  | 'ROOF_TYPE_NOT_SUPPORTED'
+  | 'ROOF_SLOPE_INVALID'
+  | 'NO_VALID_ROOF_LAYOUT'
+  | 'ROOF_GEOMETRY_INCOMPLETE';
 
 export interface GeneratedPanel {
   id: string;
-  sourceType: 'wall';
+  sourceType: 'wall' | 'slab' | 'roof';
   sourceId: string;
   floorId: string;
   panelTypeId: string;
@@ -28,7 +35,15 @@ export interface GeneratedPanel {
   heightMm: number;
   trimmed: boolean;
   label: string;
-  zoneType?: 'main' | 'left_of_opening' | 'right_of_opening' | 'above_opening' | 'below_opening';
+  zoneType?:
+    | 'main'
+    | 'left_of_opening'
+    | 'right_of_opening'
+    | 'above_opening'
+    | 'below_opening'
+    | 'slab'
+    | 'roof_slope_a'
+    | 'roof_slope_b';
 }
 
 export interface PanelizationWarning {
@@ -53,9 +68,44 @@ export interface WallPanelizationSummary {
 export interface PanelizationStats {
   eligibleWalls: number;
   panelizedWalls: number;
+  eligibleSlabs: number;
+  panelizedSlabs: number;
+  eligibleRoofs: number;
+  panelizedRoofs: number;
+  wallPanels: number;
+  slabPanels: number;
+  roofPanels: number;
+  trimmedPanels: number;
   generatedPanels: number;
   warnings: number;
   errors: number;
+}
+
+export interface SlabPanelizationSummary {
+  slabId: string;
+  floorId: string;
+  eligible: boolean;
+  reason?: string;
+  direction: 'x' | 'y' | null;
+  effectivePanelTypeId: string | null;
+  panelCount: number;
+  trimmedCount: number;
+  totalAreaM2: number;
+  warningCount: number;
+}
+
+export interface RoofPanelizationSummary {
+  roofId: string;
+  floorId: string;
+  eligible: boolean;
+  reason?: string;
+  roofType: 'single_slope' | 'gable' | null;
+  slopeSections: number;
+  effectivePanelTypeId: string | null;
+  panelCount: number;
+  trimmedCount: number;
+  totalAreaM2: number;
+  warningCount: number;
 }
 
 export interface PanelizationResult {
@@ -63,6 +113,8 @@ export interface PanelizationResult {
   warnings: PanelizationWarning[];
   stats: PanelizationStats;
   wallSummaries: WallPanelizationSummary[];
+  slabSummaries: SlabPanelizationSummary[];
+  roofSummaries: RoofPanelizationSummary[];
 }
 
 export interface BuildPanelizationOptions {

@@ -170,6 +170,23 @@
   - избежать преждевременной сложности (roof/slab geometry, cut optimization, nesting);
   - подготовить базу для Sprint 10+ (спецификация и экспорт), не вводя хрупкие полу-решения.
 
+### Roof/slab panelization architecture (Sprint 13)
+
+- В Sprint 13 `panel-engine` расширен инкрементально, без переписывания wall-контура:
+  - добавлены отдельные pipelines для `slab` и `roof`;
+  - сохранён backward-compatible wall контракт (`wallSummaries`, wall labels/warnings).
+- Для MVP выбрана предсказуемая геометрия:
+  - slab: раскладка по contour/bounding box от стен;
+  - roof: параметрические slope-sections для `single_slope`/`gable`.
+- Почему так:
+  - быстрый и стабильный результат для UI/diagnostics;
+  - минимум рисков regressions в wall/spec/export flows;
+  - чистая база для Sprint 14 (source-type aware spec expansion).
+- Сознательно отложено:
+  - production nesting/cut optimization;
+  - CNC maps;
+  - multi-body roof CAD и сложные пересечения.
+
 ### Spec-engine boundary (Sprint 10)
 
 - BOM/spec aggregation вынесена в `@2wix/spec-engine`, а не в `panel-engine` и не в React-компоненты.

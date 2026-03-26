@@ -40,6 +40,7 @@ export function buildSpecSnapshot(
   let totalArea = 0;
 
   for (const panel of panelization.generatedPanels) {
+    if (panel.sourceType !== 'wall') continue;
     const pt = panelTypeById.get(panel.panelTypeId);
     const code = pt?.code ?? panel.panelTypeId;
     const name = pt?.name ?? panel.panelTypeId;
@@ -128,7 +129,7 @@ export function buildSpecSnapshot(
   return {
     items,
     summary: {
-      totalPanels: panelization.generatedPanels.length,
+      totalPanels: [...wallGrouped.values()].reduce((acc, w) => acc + w.panelCount, 0),
       totalTrimmedPanels: totalTrimmed,
       totalPanelAreaM2: round2(totalArea),
       wallCountIncluded: wallSummaries.length,

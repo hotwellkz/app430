@@ -119,6 +119,8 @@ export interface Slab {
   direction: 'x' | 'y';
   thicknessMm?: number;
   generationMode: 'auto' | 'manual';
+  panelizationEnabled?: boolean;
+  panelTypeId?: string;
 }
 
 export interface Roof {
@@ -130,6 +132,8 @@ export interface Roof {
   overhangMm: number;
   baseElevationMm: number;
   generationMode: 'auto';
+  panelizationEnabled?: boolean;
+  panelTypeId?: string;
 }
 
 export interface PanelType {
@@ -248,6 +252,14 @@ export interface ExportPackageSnapshot {
   panelizationSummary: {
     eligibleWalls: number;
     panelizedWalls: number;
+    eligibleSlabs?: number;
+    panelizedSlabs?: number;
+    eligibleRoofs?: number;
+    panelizedRoofs?: number;
+    wallPanels?: number;
+    slabPanels?: number;
+    roofPanels?: number;
+    trimmedPanels?: number;
     generatedPanels: number;
     warnings: number;
     errors: number;

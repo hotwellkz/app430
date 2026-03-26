@@ -94,6 +94,9 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
   const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
   const [hoveredOpeningId, setHoveredOpeningId] = useState<string | null>(null);
   const [showPanels, setShowPanels] = useState(true);
+  const [showWallPanels, setShowWallPanels] = useState(true);
+  const [showSlabPanels, setShowSlabPanels] = useState(true);
+  const [showRoofPanels, setShowRoofPanels] = useState(true);
   const panelization = usePanelizationSnapshot();
 
   const panSessionRef = useRef<PanSession | null>(null);
@@ -538,6 +541,17 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
       ) : (
         <>
         <div style={{ position: 'absolute', right: 8, top: 8, zIndex: 4 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+            <button type="button" onClick={() => setShowWallPanels((v) => !v)} style={{ fontSize: 10, padding: '2px 6px' }}>
+              W {showWallPanels ? 'on' : 'off'}
+            </button>
+            <button type="button" onClick={() => setShowSlabPanels((v) => !v)} style={{ fontSize: 10, padding: '2px 6px' }}>
+              S {showSlabPanels ? 'on' : 'off'}
+            </button>
+            <button type="button" onClick={() => setShowRoofPanels((v) => !v)} style={{ fontSize: 10, padding: '2px 6px' }}>
+              R {showRoofPanels ? 'on' : 'off'}
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => setShowPanels((v) => !v)}
@@ -718,9 +732,21 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
             {showPanels && panelization ? (
               <PanelOverlayLayer
                 model={draft}
-                panels={panelization.generatedPanels.filter((p) => p.floorId === activeFloorId)}
+                panels={panelization.generatedPanels.filter((p) => {
+                  if (p.floorId !== activeFloorId) return false;
+                  if (p.sourceType === 'wall') return showWallPanels;
+                  if (p.sourceType === 'slab') return showSlabPanels;
+                  if (p.sourceType === 'roof') return showRoofPanels;
+                  return false;
+                })}
                 selectedWallId={
                   selection.selectedObjectType === 'wall' ? selection.selectedObjectId : null
+                }
+                selectedSlabId={
+                  selection.selectedObjectType === 'slab' ? selection.selectedObjectId : null
+                }
+                selectedRoofId={
+                  selection.selectedObjectType === 'roof' ? selection.selectedObjectId : null
                 }
                 showLabels
               />

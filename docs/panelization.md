@@ -1,11 +1,11 @@
-# SIP Panelization v1 (Sprint 9)
+# SIP Panelization MVP (Sprint 13)
 
 ## Scope
 
-- Walls-first panelization only.
+- Walls + slabs + roof panelization (MVP).
 - External walls are included by default.
 - Internal walls are included only when `structuralRole="bearing"` and `panelizationEnabled=true`.
-- Roof/slab panelization is intentionally out of scope for v1.
+- Roof/slab panelization без nesting/CNC и без CAD-grade оптимизаций.
 
 ## Engine boundary
 
@@ -16,13 +16,17 @@
   - `warnings`
   - `stats`
   - `wallSummaries`
+  - `slabSummaries`
+  - `roofSummaries`
 
 `generatedPanels` are **derived state** from `draftModel`, not persisted source-of-truth.
 
-## Supported objects (v1)
+## Supported objects
 
 - `Wall` (with `wallType`, `structuralRole`, `panelizationEnabled`, `panelDirection`, `heightMm`)
 - `Opening` (`window`/`door`/`portal`)
+- `Slab` (`direction`, `contourWallIds`, `panelizationEnabled`, `panelTypeId?`)
+- `Roof` (`single_slope`/`gable`, `slopeDegrees`, `ridgeDirection`, `overhangMm`, `panelizationEnabled`, `panelTypeId?`)
 - `Floor` (`level`, `heightMm`)
 - global `panelLibrary` and `panelSettings`
 
@@ -45,9 +49,11 @@ For each eligible wall:
 
 ## Labeling
 
-Stable format v1:
+Stable format:
 
 - `W-{floorLevel}-{wallIndex}-{panelIndex}`
+- `S-{floorLevel}-{slabIndex}-{panelIndex}`
+- `R-{floorLevel}-{roofSectionIndex}-{panelIndex}`
 
 Numbering is deterministic within each wall and reusable for future spec/export.
 
@@ -62,18 +68,25 @@ Numbering is deterministic within each wall and reusable for future spec/export.
 - `WALL_TOO_SHORT_FOR_LAYOUT`
 - `NO_VALID_LAYOUT`
 - `INTERNAL_WALL_SKIPPED`
-- `ROOF_NOT_SUPPORTED_YET`
-- `SLAB_NOT_SUPPORTED_YET`
+- `SLAB_NOT_PANELIZABLE`
+- `SLAB_TOO_SMALL`
+- `SLAB_DIRECTION_MISSING`
+- `NO_VALID_SLAB_LAYOUT`
+- `ROOF_NOT_PANELIZABLE`
+- `ROOF_TYPE_NOT_SUPPORTED`
+- `ROOF_SLOPE_INVALID`
+- `NO_VALID_ROOF_LAYOUT`
+- `ROOF_GEOMETRY_INCOMPLETE`
 
-## UI integration (v1)
+## UI integration
 
-- Right panel: `SIP / Панелизация` summary + settings + warnings.
-- Wall inspector: SIP block with eligibility, direction, enable/disable, panel count, warning summary.
-- 2D canvas: panel overlay on active floor with boundaries/labels and visibility toggle.
+- Right panel: summary по `Walls/Slabs/Roof` + settings + warnings.
+- Wall/Slab/Roof inspectors: panelization status, effective panel type, panel/trim/warning counters.
+- 2D canvas: panel overlay на активном этаже с фильтрами W/S/R.
 
 ## Current limitations
 
-- No roof panelization.
-- No slab panelization.
-- No BOM/spec/export.
+- Roof поддерживает только `single_slope` и `gable`.
+- Slab/roof geometry пока основаны на bounding/parametric assumptions.
+- Spec/BOM по-прежнему wall-first (slab/roof подготовлены как source-aware base).
 - No cut optimization / nesting / CNC maps.

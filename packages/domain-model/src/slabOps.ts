@@ -25,6 +25,12 @@ export function validateSlab(
   if (slab.thicknessMm !== undefined && (!Number.isFinite(slab.thicknessMm) || slab.thicknessMm <= 0)) {
     return { ok: false, reason: 'Толщина перекрытия должна быть > 0' };
   }
+  if (slab.panelizationEnabled !== undefined && typeof slab.panelizationEnabled !== 'boolean') {
+    return { ok: false, reason: 'panelizationEnabled перекрытия должен быть boolean' };
+  }
+  if (slab.panelTypeId !== undefined && typeof slab.panelTypeId !== 'string') {
+    return { ok: false, reason: 'panelTypeId перекрытия должен быть string' };
+  }
   const wallIds = new Set(model.walls.map((w) => w.id));
   for (const id of slab.contourWallIds) {
     if (!wallIds.has(id)) return { ok: false, reason: 'Контур перекрытия содержит несуществующую стену' };
@@ -66,6 +72,8 @@ export function createSlab(input: Partial<Slab> & Pick<Slab, 'floorId'>): Slab {
     direction: input.direction ?? DEFAULT_SLAB_DIRECTION,
     thicknessMm: input.thicknessMm ?? DEFAULT_SLAB_THICKNESS_MM,
     generationMode: input.generationMode ?? 'auto',
+    ...(input.panelizationEnabled !== undefined ? { panelizationEnabled: input.panelizationEnabled } : {}),
+    ...(input.panelTypeId !== undefined ? { panelTypeId: input.panelTypeId } : {}),
   };
 }
 
@@ -84,7 +92,19 @@ export function addSlabToModel(
 export function updateSlabInModel(
   model: BuildingModel,
   slabId: string,
-  patch: Partial<Pick<Slab, 'slabType' | 'contourWallIds' | 'direction' | 'thicknessMm' | 'generationMode' | 'floorId'>>
+  patch: Partial<
+    Pick<
+      Slab,
+      | 'slabType'
+      | 'contourWallIds'
+      | 'direction'
+      | 'thicknessMm'
+      | 'generationMode'
+      | 'floorId'
+      | 'panelizationEnabled'
+      | 'panelTypeId'
+    >
+  >
 ): { ok: true; model: BuildingModel } | { ok: false; reason: string } {
   const idx = model.slabs.findIndex((s) => s.id === slabId);
   if (idx < 0) return { ok: false, reason: 'Перекрытие не найдено' };

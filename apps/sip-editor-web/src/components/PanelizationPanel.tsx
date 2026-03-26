@@ -79,9 +79,18 @@ export function PanelizationPanel() {
         </label>
       </div>
       <p className="twix-muted" style={{ fontSize: 12, marginTop: 8 }}>
-        Eligible walls: {snapshot.stats.eligibleWalls} · Panels: {snapshot.stats.generatedPanels} · Warnings:{' '}
+        Walls: {snapshot.stats.wallPanels} · Slabs: {snapshot.stats.slabPanels} · Roof: {snapshot.stats.roofPanels} ·
+        Total: {snapshot.stats.generatedPanels} · Trimmed: {snapshot.stats.trimmedPanels} · Warnings:{' '}
         {snapshot.stats.warnings} · Errors: {snapshot.stats.errors}
       </p>
+      <p className="twix-muted" style={{ fontSize: 12, marginTop: 4 }}>
+        Eligible walls/slabs/roofs: {snapshot.stats.eligibleWalls}/{snapshot.stats.eligibleSlabs}/{snapshot.stats.eligibleRoofs}
+      </p>
+      <ul style={{ margin: '6px 0 0', paddingLeft: 16, fontSize: 12 }}>
+        <li>Walls: {snapshot.wallSummaries.filter((w) => w.panelCount > 0).length} объектов</li>
+        <li>Slabs: {snapshot.slabSummaries.filter((s) => s.panelCount > 0).length} объектов</li>
+        <li>Roof: {snapshot.roofSummaries.filter((r) => r.panelCount > 0).length} объектов</li>
+      </ul>
       {snapshot.warnings.length > 0 ? (
         <ul style={{ margin: '8px 0 0', paddingLeft: 16, fontSize: 12 }}>
           {snapshot.warnings.slice(0, 8).map((w) => (

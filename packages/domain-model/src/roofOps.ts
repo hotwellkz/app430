@@ -54,6 +54,12 @@ export function validateRoof(
   if (!Number.isFinite(roof.baseElevationMm)) {
     return { ok: false, reason: 'Некорректная базовая отметка крыши' };
   }
+  if (roof.panelizationEnabled !== undefined && typeof roof.panelizationEnabled !== 'boolean') {
+    return { ok: false, reason: 'panelizationEnabled крыши должен быть boolean' };
+  }
+  if (roof.panelTypeId !== undefined && typeof roof.panelTypeId !== 'string') {
+    return { ok: false, reason: 'panelTypeId крыши должен быть string' };
+  }
   if (roof.generationMode !== 'auto') return { ok: false, reason: 'Для MVP generationMode крыши должен быть auto' };
   return { ok: true };
 }
@@ -68,6 +74,8 @@ export function createRoof(input: Partial<Roof> & Pick<Roof, 'floorId'>): Roof {
     overhangMm: input.overhangMm ?? DEFAULT_ROOF_OVERHANG_MM,
     baseElevationMm: input.baseElevationMm ?? 0,
     generationMode: 'auto',
+    ...(input.panelizationEnabled !== undefined ? { panelizationEnabled: input.panelizationEnabled } : {}),
+    ...(input.panelTypeId !== undefined ? { panelTypeId: input.panelTypeId } : {}),
   };
 }
 
@@ -84,7 +92,19 @@ export function addRoofToModel(
 export function updateRoofInModel(
   model: BuildingModel,
   roofId: string,
-  patch: Partial<Pick<Roof, 'roofType' | 'slopeDegrees' | 'ridgeDirection' | 'overhangMm' | 'baseElevationMm' | 'floorId'>>
+  patch: Partial<
+    Pick<
+      Roof,
+      | 'roofType'
+      | 'slopeDegrees'
+      | 'ridgeDirection'
+      | 'overhangMm'
+      | 'baseElevationMm'
+      | 'floorId'
+      | 'panelizationEnabled'
+      | 'panelTypeId'
+    >
+  >
 ): { ok: true; model: BuildingModel } | { ok: false; reason: string } {
   const idx = model.roofs.findIndex((r) => r.id === roofId);
   if (idx < 0) return { ok: false, reason: 'Крыша не найдена' };

@@ -143,6 +143,20 @@
   - экспортировать текущую сохранённую версию.
 - Сохранена backward compatibility для legacy export rows без `storagePath/fileUrl`.
 
+## Завершено: roof/slab panelization MVP (Sprint 13)
+
+- `panel-engine` расширен от wall-only до `wall + slab + roof`.
+- Добавлены slab/roof summaries, totals by sourceType, новые warning codes и стабильные labels:
+  - `W-*`, `S-*`, `R-*`.
+- Реализована упрощенная панелизация:
+  - slabs по contour/bounding geometry;
+  - roof для `single_slope` и `gable` на параметрической модели.
+- UI расширен:
+  - SIP panelization panel показывает секции Walls/Slabs/Roof;
+  - Slab/Roof inspectors показывают panelization diagnostics;
+  - 2D overlay умеет показывать панели стен/перекрытий/крыши с фильтрами.
+- Подготовлена база для следующего расширения spec/BOM по sourceType.
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).
