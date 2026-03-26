@@ -46,6 +46,15 @@
 - Тесты: `packages/domain-model` (openingOps), `editor-core`, `sip-editor-web` (hit-test, view fit).
 - Документация: `docs/openings.md`, `docs/dev-launch.md`, обновлены `editor-core.md`, `technical-decisions.md`, `2d-canvas.md`.
 
+## Завершено: этажи и многоэтажный workflow (Sprint 6)
+
+- **Модель `Floor` v2**: `level`, `heightMm`, `floorType` (`full` | `mansard` | `basement`), миграция в `normalizeBuildingModel`, `BUILDING_MODEL_SCHEMA_VERSION = 2`.
+- **Домен**: `validateFloorShape`, `tryDeleteFloorFromModel`, `updateFloorInModel`, `duplicateFloorInModel`, `getFloorsSorted`, `suggestNextFloor`, шаблоны 1/2 этажа для пустой модели.
+- **Команды**: `addFloor`, `updateFloor`, `duplicateFloor`, `deleteFloor`, `setActiveFloor` (вид без истории); `clampActiveFloorToModel` после undo/redo/save.
+- **UI**: список этажей с дублированием и безопасным удалением (`confirm`), инспектор этажа, сводка объекта, шаблоны на пустой модели, empty-state на canvas для пустого этажа.
+- Тесты: `domain-model/floorOps.test.ts`, расширен `editorCore.test.ts`, RTL `EditorSidebarFloors.test.tsx`.
+- Документация: `docs/floors.md`, обновлены `editor-core.md`, `technical-decisions.md`.
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).

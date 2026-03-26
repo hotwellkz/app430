@@ -3,6 +3,8 @@ import type {
   BuildingModel,
   BuildingSettings,
   CreateProjectRequest,
+  Floor,
+  FloorType,
   Opening,
   OpeningType,
   Project,
@@ -84,6 +86,13 @@ function asNumber(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }
 
+function parseFloorType(v: unknown): FloorType {
+  if (v === 'mansard' || v === 'basement' || v === 'full') return v;
+  return 'full';
+}
+
+const DEFAULT_FLOOR_HEIGHT_MM = 2800;
+
 /** Приводит сырой JSON к BuildingModel с дефолтами (миграции — в следующих спринтах). */
 export function normalizeBuildingModel(raw: unknown): BuildingModel {
   const empty = createEmptyBuildingModel();
@@ -133,12 +142,22 @@ export function normalizeBuildingModel(raw: unknown): BuildingModel {
       ? arr.filter((f): f is Record<string, unknown> => typeof f === 'object' && f !== null)
       : [];
 
-  const floorsIn = mapFloors(r.floors).map((f, i) => ({
-    id: asString(f.id, `floor_${i}`),
-    label: asString(f.label, `Этаж ${i + 1}`),
-    elevationMm: asNumber(f.elevationMm, 0),
-    sortIndex: asNumber(f.sortIndex, i),
-  }));
+  const floorsIn: Floor[] = mapFloors(r.floors).map((f, i) => {
+    const levelRaw = f.level;
+    const heightRaw = f.heightMm;
+    const hasLevel = typeof levelRaw === 'number' && Number.isFinite(levelRaw);
+    const hasHeight =
+      typeof heightRaw === 'number' && Number.isFinite(heightRaw) && heightRaw > 0;
+    return {
+      id: asString(f.id, `floor_${i}`),
+      label: asString(f.label, `Этаж ${i + 1}`),
+      elevationMm: asNumber(f.elevationMm, 0),
+      sortIndex: asNumber(f.sortIndex, i),
+      level: hasLevel ? Math.max(1, Math.round(levelRaw as number)) : i + 1,
+      heightMm: hasHeight ? (heightRaw as number) : DEFAULT_FLOOR_HEIGHT_MM,
+      floorType: parseFloorType(f.floorType),
+    };
+  });
 
   const wallsIn = mapFloors(r.walls).map((w, i) => {
     const wt = w.wallType;

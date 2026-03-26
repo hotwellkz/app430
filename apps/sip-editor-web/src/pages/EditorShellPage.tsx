@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { VersionConflictDetails } from '@2wix/shared-types';
-import { isBuildingModelEmpty } from '@2wix/domain-model';
+import {
+  createFloor,
+  DEFAULT_FLOOR_HEIGHT_MM,
+  isBuildingModelEmpty,
+} from '@2wix/domain-model';
 import { useEditorStore } from '@2wix/editor-core';
 import { AppShell, EmptyState, LoadingState, RightPanel, TopBar } from '@2wix/ui-kit';
 import { SipApiError } from '@/api/http';
@@ -11,8 +15,10 @@ import { EditorCanvas2D } from '@/canvas2d/EditorCanvas2D';
 import { VersionsPanel } from '@/components/VersionsPanel';
 import { EditorLeftSidebar } from '@/components/EditorLeftSidebar';
 import { EditorToolbar } from '@/components/EditorToolbar';
-import { WallInspector } from '@/components/WallInspector';
+import { BuildingSummaryPanel } from '@/components/BuildingSummaryPanel';
+import { FloorInspector } from '@/components/FloorInspector';
 import { OpeningInspector } from '@/components/OpeningInspector';
+import { WallInspector } from '@/components/WallInspector';
 import { getSipUserId } from '@/identity/sipUser';
 import {
   useSipCurrentVersion,
@@ -115,6 +121,7 @@ export function EditorShellPage() {
   const markSaveConflict = useEditorStore((s) => s.markSaveConflict);
   const markSaveError = useEditorStore((s) => s.markSaveError);
   const clearSelection = useEditorStore((s) => s.clearSelection);
+  const setActiveFloor = useEditorStore((s) => s.setActiveFloor);
 
   const document = useEditorStore((s) => s.document);
   const selection = useEditorStore((s) => s.selection);
@@ -368,7 +375,59 @@ export function EditorShellPage() {
           <div style={{ flex: 'none' }}>
             <EmptyState
               title="Пустая модель"
-              description="Добавьте этаж слева, затем инструмент «Стена» на canvas или кнопку + Этаж и рисование."
+              description={
+                <>
+                  Быстрый старт этажей (без стен) или добавьте этаж в списке слева, затем инструмент «Стена».
+                  <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    <button
+                      type="button"
+                      style={{ fontSize: 13, padding: '6px 12px' }}
+                      onClick={() => {
+                        if (!draft || draft.floors.length > 0) return;
+                        const f = createFloor({
+                          label: '1 этаж',
+                          level: 1,
+                          elevationMm: 0,
+                          heightMm: DEFAULT_FLOOR_HEIGHT_MM,
+                          floorType: 'full',
+                          sortIndex: 0,
+                        });
+                        if (applyCommand({ type: 'addFloor', floor: f }).ok) setActiveFloor(f.id);
+                      }}
+                    >
+                      Шаблон: 1 этаж
+                    </button>
+                    <button
+                      type="button"
+                      style={{ fontSize: 13, padding: '6px 12px' }}
+                      onClick={() => {
+                        if (!draft || draft.floors.length > 0) return;
+                        const f1 = createFloor({
+                          label: '1 этаж',
+                          level: 1,
+                          elevationMm: 0,
+                          heightMm: DEFAULT_FLOOR_HEIGHT_MM,
+                          floorType: 'full',
+                          sortIndex: 0,
+                        });
+                        const f2 = createFloor({
+                          label: '2 этаж',
+                          level: 2,
+                          elevationMm: DEFAULT_FLOOR_HEIGHT_MM,
+                          heightMm: DEFAULT_FLOOR_HEIGHT_MM,
+                          floorType: 'full',
+                          sortIndex: 1,
+                        });
+                        if (applyCommand({ type: 'addFloor', floor: f1 }).ok) {
+                          if (applyCommand({ type: 'addFloor', floor: f2 }).ok) setActiveFloor(f2.id);
+                        }
+                      }}
+                    >
+                      Шаблон: 2 этажа
+                    </button>
+                  </div>
+                </>
+              }
             />
           </div>
         ) : null}
@@ -405,6 +464,7 @@ export function EditorShellPage() {
         main={mainContent}
         rightPanel={
           <RightPanel>
+            <BuildingSummaryPanel />
             <div
               style={{
                 marginBottom: 12,
@@ -497,7 +557,13 @@ export function EditorShellPage() {
               </div>
             ) : null}
 
-            {selection.selectedObjectType === 'opening' ? <OpeningInspector /> : <WallInspector />}
+            {selection.selectedObjectType === 'opening' ? (
+              <OpeningInspector />
+            ) : selection.selectedObjectType === 'wall' ? (
+              <WallInspector />
+            ) : (
+              <FloorInspector />
+            )}
 
             <p className="twix-panelTitle" style={{ marginTop: 16 }}>
               Активный раздел

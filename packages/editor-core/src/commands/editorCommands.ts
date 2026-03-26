@@ -18,6 +18,14 @@ export type EditorCommand =
   | { type: 'toggleGrid' }
   | { type: 'toggleSnap' }
   | { type: 'addFloor'; floor: Floor }
+  | {
+      type: 'updateFloor';
+      floorId: string;
+      patch: Partial<
+        Pick<Floor, 'label' | 'level' | 'elevationMm' | 'heightMm' | 'floorType' | 'sortIndex'>
+      >;
+    }
+  | { type: 'duplicateFloor'; sourceFloorId: string }
   | { type: 'deleteFloor'; floorId: string }
   | { type: 'addWall'; wall: Wall }
   | {
@@ -52,6 +60,8 @@ export function isModelMutationCommand(cmd: EditorCommand): boolean {
     case 'resetDraftToServer':
     case 'setMetaName':
     case 'addFloor':
+    case 'updateFloor':
+    case 'duplicateFloor':
     case 'deleteFloor':
     case 'addWall':
     case 'updateWall':

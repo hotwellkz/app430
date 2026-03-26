@@ -13,13 +13,27 @@ export {
   compareBuildingModelsForDirtyCheck,
   findWallById,
   getFloorById,
+  getFloorsSorted,
   getWallById,
   getOpeningById,
   assertFloorExists,
   assertWallExists,
   assertOpeningExists,
 } from './modelUtils.js';
-export { createFloor, addFloorToModel, deleteFloorFromModel } from './floorOps.js';
+export {
+  DEFAULT_FLOOR_HEIGHT_MM,
+  createFloor,
+  addFloorToModel,
+  deleteFloorFromModel,
+  tryDeleteFloorFromModel,
+  updateFloorInModel,
+  duplicateFloorInModel,
+  validateFloorShape,
+  suggestNextFloor,
+  applySingleFloorTemplate,
+  applyTwoStoryFloorTemplate,
+} from './floorOps.js';
+export type { FloorPatch } from './floorOps.js';
 export {
   computeWallLengthMm,
   createWall,

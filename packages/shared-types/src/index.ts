@@ -1,5 +1,5 @@
 /** Схема доменной модели здания (версионируется в ProjectVersion). */
-export const BUILDING_MODEL_SCHEMA_VERSION = 1 as const;
+export const BUILDING_MODEL_SCHEMA_VERSION = 2 as const;
 
 export type ProjectStatus = 'draft' | 'calculated' | 'reviewed' | 'approved';
 
@@ -55,10 +55,21 @@ export interface Point2D {
   y: number;
 }
 
+/** Тип этажа (планировка/учёт; не кровля/плиты). */
+export type FloorType = 'full' | 'mansard' | 'basement';
+
 export interface Floor {
   id: string;
+  /** Отображаемое имя этажа. */
   label: string;
+  /** Порядковый уровень (1 = первый над условным нулём, для UX и спецификации). */
+  level: number;
+  /** Отметка низа этажа, мм (глобальная). */
   elevationMm: number;
+  /** Высота этажа (до перекрытия), мм. */
+  heightMm: number;
+  floorType: FloorType;
+  /** Порядок в списках UI (независимо от физической отметки). */
   sortIndex: number;
 }
 

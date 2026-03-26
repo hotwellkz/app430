@@ -1,5 +1,14 @@
 import type { BuildingModel, Floor, Opening, Wall } from '@2wix/shared-types';
 
+/** Этажи в порядке отображения: sortIndex, затем level. */
+export function getFloorsSorted(model: BuildingModel): Floor[] {
+  return [...model.floors].sort((a, b) => {
+    if (a.sortIndex !== b.sortIndex) return a.sortIndex - b.sortIndex;
+    if (a.level !== b.level) return a.level - b.level;
+    return a.elevationMm - b.elevationMm;
+  });
+}
+
 /** Глубокая копия модели здания (structuredClone при наличии). */
 export function cloneBuildingModel(model: BuildingModel): BuildingModel {
   return structuredClone(model);

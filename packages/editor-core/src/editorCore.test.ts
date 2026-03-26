@@ -15,7 +15,7 @@ function sampleVersion(model = createEmptyBuildingModel()): ProjectVersion {
     id: 'v1',
     projectId: 'p1',
     versionNumber: 1,
-    schemaVersion: 1,
+    schemaVersion: 2,
     buildingModel: model,
     createdAt: '2025-01-01T00:00:00.000Z',
     createdBy: 'user1',
@@ -116,7 +116,7 @@ describe('editor-core', () => {
       id: 'v1',
       projectId: 'p1',
       versionNumber: 1,
-      schemaVersion: 1,
+      schemaVersion: 2,
       buildingModel: draft,
       createdAt: '2025-01-01T00:00:00.000Z',
       createdBy: 'user1',
@@ -215,6 +215,117 @@ describe('editor-core', () => {
     expect(useEditorStore.getState().view.toolMode).toBe('draw-wall');
     useEditorStore.getState().setToolMode('draw-window');
     expect(useEditorStore.getState().view.toolMode).toBe('draw-window');
+  });
+
+  it('setActiveFloor does not grow history', () => {
+    const floor = createFloor({ id: 'f1', label: '1', sortIndex: 0 });
+    const model = { ...createEmptyBuildingModel(), floors: [floor] };
+    useEditorStore.getState().loadDocumentFromServer({
+      projectId: 'p1',
+      projectTitle: null,
+      version: sampleVersion(model),
+    });
+    const n = useEditorStore.getState().history.past.length;
+    useEditorStore.getState().setActiveFloor('f1');
+    expect(useEditorStore.getState().history.past.length).toBe(n);
+    expect(useEditorStore.getState().view.activeFloorId).toBe('f1');
+  });
+
+  it('setActiveFloor rejects unknown floor id', () => {
+    const floor = createFloor({ id: 'f1', label: '1', sortIndex: 0 });
+    const model = { ...createEmptyBuildingModel(), floors: [floor] };
+    useEditorStore.getState().loadDocumentFromServer({
+      projectId: 'p1',
+      projectTitle: null,
+      version: sampleVersion(model),
+    });
+    const r = useEditorStore.getState().applyCommand({ type: 'setActiveFloor', floorId: 'nope' });
+    expect(r.ok).toBe(false);
+  });
+
+  it('deleteFloor rejects last remaining floor', () => {
+    const floor = createFloor({ id: 'f1', label: '1', sortIndex: 0 });
+    const model = { ...createEmptyBuildingModel(), floors: [floor] };
+    useEditorStore.getState().loadDocumentFromServer({
+      projectId: 'p1',
+      projectTitle: null,
+      version: sampleVersion(model),
+    });
+    const r = useEditorStore.getState().applyCommand({ type: 'deleteFloor', floorId: 'f1' });
+    expect(r.ok).toBe(false);
+  });
+
+  it('deleteFloor removes linked walls and switches active floor', () => {
+    const f1 = createFloor({ id: 'f1', label: '1', sortIndex: 0 });
+    const f2 = createFloor({ id: 'f2', label: '2', sortIndex: 1 });
+    const wall = createWall({
+      id: 'w1',
+      floorId: 'f2',
+      start: { x: 0, y: 0 },
+      end: { x: 1000, y: 0 },
+      thicknessMm: 200,
+    });
+    const model = {
+      ...createEmptyBuildingModel(),
+      floors: [f1, f2],
+      walls: [wall],
+    };
+    useEditorStore.getState().loadDocumentFromServer({
+      projectId: 'p1',
+      projectTitle: null,
+      version: sampleVersion(model),
+    });
+    useEditorStore.getState().setActiveFloor('f2');
+    const r = useEditorStore.getState().applyCommand({ type: 'deleteFloor', floorId: 'f2' });
+    expect(r.ok).toBe(true);
+    const s = useEditorStore.getState();
+    expect(s.document.draftModel!.floors).toHaveLength(1);
+    expect(s.document.draftModel!.walls).toHaveLength(0);
+    expect(s.view.activeFloorId).toBe('f1');
+  });
+
+  it('duplicateFloor selects new floor and marks dirty', () => {
+    const f1 = createFloor({ id: 'f1', label: '1', sortIndex: 0 });
+    const wall = createWall({
+      id: 'w1',
+      floorId: 'f1',
+      start: { x: 0, y: 0 },
+      end: { x: 2000, y: 0 },
+      thicknessMm: 200,
+    });
+    const model = { ...createEmptyBuildingModel(), floors: [f1], walls: [wall] };
+    useEditorStore.getState().loadDocumentFromServer({
+      projectId: 'p1',
+      projectTitle: null,
+      version: sampleVersion(model),
+    });
+    const r = useEditorStore.getState().applyCommand({ type: 'duplicateFloor', sourceFloorId: 'f1' });
+    expect(r.ok).toBe(true);
+    const s = useEditorStore.getState();
+    expect(s.document.draftModel!.floors).toHaveLength(2);
+    expect(s.document.draftModel!.walls).toHaveLength(2);
+    expect(s.view.activeFloorId).not.toBe('f1');
+    expect(s.selection.selectedObjectType).toBe('floor');
+    expect(s.document.hasUnsavedChanges).toBe(true);
+  });
+
+  it('updateFloor changes height and undo restores', () => {
+    const floor = createFloor({ id: 'f1', label: '1', sortIndex: 0 });
+    const model = { ...createEmptyBuildingModel(), floors: [floor] };
+    useEditorStore.getState().loadDocumentFromServer({
+      projectId: 'p1',
+      projectTitle: null,
+      version: sampleVersion(model),
+    });
+    const before = useEditorStore.getState().document.draftModel!.floors[0]!.heightMm;
+    useEditorStore.getState().applyCommand({
+      type: 'updateFloor',
+      floorId: 'f1',
+      patch: { heightMm: 3200 },
+    });
+    expect(useEditorStore.getState().document.draftModel!.floors[0]!.heightMm).toBe(3200);
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().document.draftModel!.floors[0]!.heightMm).toBe(before);
   });
 
   it('addOpening marks dirty and undo removes opening', () => {
@@ -321,7 +432,7 @@ describe('editor-core', () => {
         projectId: 'p1',
         serverModel: createEmptyBuildingModel(),
         draftModel: createEmptyBuildingModel(),
-        schemaVersion: 1,
+        schemaVersion: 2,
         saveStatus: 'saved',
         hasUnsavedChanges: false,
       },

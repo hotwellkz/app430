@@ -523,6 +523,33 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
           Выберите этаж слева или добавьте этаж — без активного этажа стены не отображаются.
         </div>
       ) : (
+        <>
+        {floorWalls.length === 0 && displayOpenings.length === 0 ? (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+              zIndex: 2,
+            }}
+          >
+            <span
+              style={{
+                padding: '8px 14px',
+                background: 'rgba(255,255,255,0.92)',
+                borderRadius: 8,
+                fontSize: 13,
+                color: '#64748b',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+              }}
+            >
+              На этом этаже пока нет стен и проёмов — выберите инструмент и нарисуйте стену.
+            </span>
+          </div>
+        ) : null}
         <svg
           ref={svgRef}
           width={size.w}
@@ -582,6 +609,7 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
             ) : null}
           </g>
         </svg>
+        </>
       )}
     </div>
   );

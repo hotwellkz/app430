@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import type { ProjectVersion } from '@2wix/shared-types';
-import { cloneBuildingModel, syncBuildingModelMeta } from '@2wix/domain-model';
+import { cloneBuildingModel, getFloorsSorted, syncBuildingModelMeta } from '@2wix/domain-model';
 import type { EditorCommand } from '../commands/editorCommands.js';
 import { recomputeDocumentAfterDraftChange } from '../pure/documentDraft.js';
 import { reduceCommand } from '../pure/reduceCommand.js';
 import { pruneSelectionForModel } from '../pure/selectionPrune.js';
+import { clampActiveFloorToModel } from '../pure/viewClamp.js';
 import type { ActivePanel, CanvasToolMode, EditorObjectType, EditorState } from '../types/state.js';
 import { DEFAULT_HISTORY_LIMIT } from '../types/state.js';
 
@@ -107,7 +108,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         ...base.view,
         activePanel: prev.view.activePanel,
         toolMode: 'select',
-        activeFloorId: draft.floors[0]?.id ?? null,
+        activeFloorId: getFloorsSorted(draft)[0]?.id ?? null,
       },
       document: {
         projectId,
@@ -184,6 +185,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         },
         history: { ...s.history, past: [], future: [] },
         selection: pruneSelectionForModel(s.selection, draft),
+        view: clampActiveFloorToModel(s.view, draft),
       };
     });
   },
@@ -232,6 +234,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       document,
       history: { past: newPast, future: newFuture, limit },
       selection: pruneSelectionForModel(state.selection, nextDraft),
+      view: clampActiveFloorToModel(state.view, nextDraft),
     });
   },
 
@@ -252,6 +255,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       document,
       history: { past: trimmedPast, future: newFuture, limit },
       selection: pruneSelectionForModel(state.selection, nextDraft),
+      view: clampActiveFloorToModel(state.view, nextDraft),
     });
   },
 

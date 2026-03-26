@@ -7,12 +7,14 @@ export { recomputeDocumentAfterDraftChange } from './pure/documentDraft.js';
 export { reduceCommand, executeCommand } from './pure/reduceCommand.js';
 export type { ReduceCommandResult } from './pure/reduceCommand.js';
 export { pruneSelectionForModel } from './pure/selectionPrune.js';
-export {
-  createInitialEditorState,
-  useEditorStore,
-} from './store/editorStore.js';
+export { createInitialEditorState, useEditorStore } from './store/editorStore.js';
 export type { EditorStore, EditorStoreActions } from './store/editorStore.js';
-export { clampEditorZoom, EDITOR_VIEW_MAX_ZOOM, EDITOR_VIEW_MIN_ZOOM } from './pure/viewClamp.js';
+export {
+  clampActiveFloorToModel,
+  clampEditorZoom,
+  EDITOR_VIEW_MAX_ZOOM,
+  EDITOR_VIEW_MIN_ZOOM,
+} from './pure/viewClamp.js';
 export type {
   ActivePanel,
   CanvasToolMode,

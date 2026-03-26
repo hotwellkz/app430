@@ -10,7 +10,7 @@ function proj(p: Partial<Project>): Project {
     status: 'draft',
     currentVersionId: 'v1',
     currentVersionNumber: 1,
-    schemaVersion: 1,
+    schemaVersion: 2,
     createdAt: '',
     updatedAt: '',
     createdBy: 'alice',

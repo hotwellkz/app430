@@ -4,11 +4,16 @@ import {
   addOpeningToModel,
   addWallToModel,
   cloneBuildingModel,
-  deleteFloorFromModel,
   deleteOpeningFromModel,
   deleteWallFromModel,
+  duplicateFloorInModel,
+  getFloorById,
+  getFloorsSorted,
+  tryDeleteFloorFromModel,
+  updateFloorInModel,
   updateOpeningInModel,
   updateWallInModel,
+  validateFloorShape,
 } from '@2wix/domain-model';
 import type { EditorCommand } from '../commands/editorCommands.js';
 import {
@@ -114,6 +119,8 @@ export function reduceCommand(state: EditorState, command: EditorCommand): Reduc
     case 'addFloor': {
       const draft = state.document.draftModel;
       if (!draft) return { ok: false, error: 'Нет черновика модели' };
+      const v = validateFloorShape(command.floor);
+      if (v) return { ok: false, error: v };
       const next = addFloorToModel(draft, command.floor);
       return {
         ok: true,
@@ -122,13 +129,51 @@ export function reduceCommand(state: EditorState, command: EditorCommand): Reduc
         state: withDraft(state, next),
       };
     }
+    case 'updateFloor': {
+      const draft = state.document.draftModel;
+      if (!draft) return { ok: false, error: 'Нет черновика модели' };
+      const result = updateFloorInModel(draft, command.floorId, command.patch);
+      if (!result.ok) return { ok: false, error: result.reason };
+      return {
+        ok: true,
+        draftChanged: true,
+        history: meta,
+        state: withDraft(state, result.model),
+      };
+    }
+    case 'duplicateFloor': {
+      const draft = state.document.draftModel;
+      if (!draft) return { ok: false, error: 'Нет черновика модели' };
+      const dup = duplicateFloorInModel(draft, command.sourceFloorId);
+      if (!dup.ok) return { ok: false, error: dup.error };
+      const view = { ...state.view, activeFloorId: dup.newFloorId };
+      const selection = {
+        ...state.selection,
+        selectedObjectId: dup.newFloorId,
+        selectedObjectType: 'floor' as const,
+        multiSelectIds: [],
+      };
+      return {
+        ok: true,
+        draftChanged: true,
+        history: meta,
+        state: withDraft({ ...state, view, selection }, dup.model),
+      };
+    }
     case 'deleteFloor': {
       const draft = state.document.draftModel;
       if (!draft) return { ok: false, error: 'Нет черновика модели' };
-      const next = deleteFloorFromModel(draft, command.floorId);
+      const removed = tryDeleteFloorFromModel(draft, command.floorId);
+      if (!removed.ok) return { ok: false, error: removed.error };
+      const next = removed.model;
       let view = state.view;
-      if (view.activeFloorId === command.floorId) {
-        view = { ...view, activeFloorId: next.floors[0]?.id ?? null };
+      const deletedId = command.floorId;
+      if (
+        view.activeFloorId === deletedId ||
+        (view.activeFloorId != null &&
+          !next.floors.some((f) => f.id === view.activeFloorId))
+      ) {
+        view = { ...view, activeFloorId: getFloorsSorted(next)[0]?.id ?? null };
       }
       const sel =
         state.selection.selectedObjectType === 'floor' &&
@@ -300,7 +345,13 @@ export function reduceCommand(state: EditorState, command: EditorCommand): Reduc
           view: { ...state.view, activePanel: command.panel },
         },
       };
-    case 'setActiveFloor':
+    case 'setActiveFloor': {
+      if (command.floorId !== null) {
+        const draft = state.document.draftModel;
+        if (draft && !getFloorById(draft, command.floorId)) {
+          return { ok: false, error: 'Этаж не найден' };
+        }
+      }
       return {
         ok: true,
         draftChanged: false,
@@ -310,6 +361,7 @@ export function reduceCommand(state: EditorState, command: EditorCommand): Reduc
           view: { ...state.view, activeFloorId: command.floorId },
         },
       };
+    }
     case 'setToolMode':
       return {
         ok: true,

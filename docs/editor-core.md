@@ -32,7 +32,17 @@
 
 ## Загрузка версии
 
-**`loadDocumentFromServer({ projectId, projectTitle, version })`** клонирует `version.buildingModel`, прогоняет через `syncBuildingModelMeta`, выставляет server/draft одинаково, сбрасывает историю и selection, выставляет `activeFloorId` на первый этаж при наличии.
+**`loadDocumentFromServer({ projectId, projectTitle, version })`** клонирует `version.buildingModel`, прогоняет через `syncBuildingModelMeta`, выставляет server/draft одинаково, сбрасывает историю и selection, выставляет **`activeFloorId`** на первый этаж по **`getFloorsSorted(draft)[0]`** (порядок UI, не сырой порядок массива).
+
+### Активный этаж и этажные команды (Sprint 6)
+
+- **`view.activeFloorId`** — только **view state**: команда **`setActiveFloor`** не пишет в `past` и не помечает черновик грязным.
+- Мутации **`addFloor` / `updateFloor` / `duplicateFloor` / `deleteFloor`** идут через **`reduceCommand`**, попадают в dirty и undo/redo.
+- **`deleteFloor`**: домен **`tryDeleteFloorFromModel`** запрещает удаление последнего этажа; при удалении активного этажа `activeFloorId` переключается на первый из **`getFloorsSorted`** оставшейся модели.
+- **`duplicateFloor`**: после успеха активный этаж и выделение переключаются на новый этаж.
+- **`clampActiveFloorToModel`**: после **undo**, **redo** и **applySaveSuccess**, если текущий `activeFloorId` отсутствует в модели, выставляется валидный этаж (иначе после отката оставался бы «битый» id).
+
+Подробнее: **`docs/floors.md`**.
 
 При явном **перезагрузке с сервера после конфликта** в UI дополнительно увеличивается локальный счётчик синхронизации, чтобы подтянуть новое тело той же версии, если id/номер схемы не изменились.
 
@@ -47,6 +57,6 @@ pnpm --filter @2wix/editor-core test
 ## Связь с 2D-сценой (Sprint 4–5)
 
 - Компонент **`EditorCanvas2D`** в `sip-editor-web` подписан на **`draftModel`**, **`view`** (включая `activeFloorId`, `zoom`, `pan`, `gridVisible`, `snapEnabled`, `toolMode`) и **`selection`**.
-- **Мутации модели** на canvas: стены — **`addWall`**, **`updateWall`**, **`deleteWall`**; проёмы — **`addOpening`**, **`updateOpening`**, **`deleteOpening`**. Выделение — **`selectObject`** / **`clearSelection`**. Ошибки валидации домена показываются кратким toast в UI, черновик не ломается.
+- **Мутации модели** на canvas: стены — **`addWall`**, **`updateWall`**, **`deleteWall`**; проёмы — **`addOpening`**, **`updateOpening`**, **`deleteOpening`**; этажи — см. **`docs/floors.md`**. Выделение — **`selectObject`** / **`clearSelection`**. Ошибки валидации домена показываются кратким toast в UI, черновик не ломается.
 - **Инструменты** переключаются через **`setToolMode`** → команда `setToolMode`; это **не** попадает в undo/redo.
 - Подробности viewport, hit-test и проёмов: **`docs/2d-canvas.md`**, **`docs/openings.md`**.
