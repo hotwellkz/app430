@@ -4,6 +4,8 @@
 
 ### CRM (root)
 - `VITE_SIP_EDITOR_ORIGIN` — origin приложения редактора.
+  - production: обязателен и должен быть публичным URL (не localhost);
+  - dev: можно `http://localhost:5174`.
 - `VITE_SIP_API_BASE_URL` — обычно `/sip-editor-api` (через proxy/redirect).
 - `VITE_CRM_ORIGIN` (опционально) — для ссылок «назад в CRM».
 

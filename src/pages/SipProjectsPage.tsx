@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Layers, ExternalLink, Plus, RefreshCw, Search } from 'lucide-react';
 import { useCurrentSipUser } from '../hooks/useCurrentSipUser';
-import { buildSipEditorUrl } from '../lib/sip/sipEditorUrl';
+import { openSipEditorWindow } from '../lib/sip/sipEditorUrl';
 import { SipApiError, sipCreateProject, sipListProjects } from '../lib/sip/sipApi';
 import type { SipProjectRow } from '../lib/sip/sipTypes';
 
@@ -31,8 +31,7 @@ function formatDt(iso: string): string {
 
 function openEditorTab(projectId: string, uid: string): void {
   localStorage.setItem(LS_LAST_PROJECT, projectId);
-  const url = buildSipEditorUrl(projectId, uid);
-  window.open(url, '_blank', 'noopener,noreferrer');
+  openSipEditorWindow(projectId, uid);
 }
 
 export const SipProjectsPage: React.FC = () => {
@@ -150,7 +149,11 @@ export const SipProjectsPage: React.FC = () => {
       toast.error('Нет сохранённого проекта');
       return;
     }
-    openEditorTab(id, sipUserId);
+    try {
+      openEditorTab(id, sipUserId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'SIP Editor production URL не настроен');
+    }
   };
 
   const lastId = typeof localStorage !== 'undefined' ? localStorage.getItem(LS_LAST_PROJECT)?.trim() : null;
@@ -313,7 +316,17 @@ export const SipProjectsPage: React.FC = () => {
                     <td className="px-4 py-3">
                       <button
                         type="button"
-                        onClick={() => openEditorTab(p.id, sipUserId)}
+                        onClick={() => {
+                          try {
+                            openEditorTab(p.id, sipUserId);
+                          } catch (error) {
+                            toast.error(
+                              error instanceof Error
+                                ? error.message
+                                : 'SIP Editor production URL не настроен'
+                            );
+                          }
+                        }}
                         className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />

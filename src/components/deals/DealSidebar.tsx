@@ -28,7 +28,7 @@ import {
 import { db } from '../../lib/firebase/config';
 import { UniversalVoiceCallLauncher } from '../voice/UniversalVoiceCallLauncher';
 import { useAuth } from '../../hooks/useAuth';
-import { buildSipEditorUrl } from '../../lib/sip/sipEditorUrl';
+import { openSipEditorWindow } from '../../lib/sip/sipEditorUrl';
 import { sipCreateProject, sipGetProject } from '../../lib/sip/sipApi';
 import type { SipProjectRow } from '../../lib/sip/sipTypes';
 
@@ -338,7 +338,11 @@ export const DealSidebar: React.FC<DealSidebarProps> = ({
       toast.error('Нет проекта или сессии');
       return;
     }
-    window.open(buildSipEditorUrl(pid, user.uid), '_blank', 'noopener,noreferrer');
+    try {
+      openSipEditorWindow(pid, user.uid);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'SIP Editor production URL не настроен');
+    }
   };
 
   const createSipProject = async () => {
@@ -356,7 +360,7 @@ export const DealSidebar: React.FC<DealSidebarProps> = ({
       await updateDeal(deal.id, { sipEditorProjectId: project.id });
       onSipProjectLinked?.(deal.id, project.id);
       toast.success('SIP-проект создан');
-      window.open(buildSipEditorUrl(project.id, user.uid), '_blank', 'noopener,noreferrer');
+      openSipEditorWindow(project.id, user.uid);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Не удалось создать проект');
     } finally {

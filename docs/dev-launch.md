@@ -31,6 +31,11 @@ URL редактора после открытия:
 
 Переменные окружения CRM: **`VITE_SIP_EDITOR_ORIGIN`**, **`VITE_SIP_API_BASE_URL`**, опционально **`VITE_CRM_ORIGIN`** (для ссылок из приложения редактора, если origin другой) — см. `.env.example`.
 
+Важно:
+
+- в `DEV` допустим fallback на `http://localhost:5174`;
+- в `PRODUCTION` fallback на localhost запрещен — при отсутствии `VITE_SIP_EDITOR_ORIGIN` UI покажет ошибку конфигурации `SIP Editor production URL не настроен`.
+
 ## Быстрый runtime-checklist
 
 1. В URL редактора есть path `/sip-editor/<projectId>`.

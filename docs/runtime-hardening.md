@@ -34,6 +34,11 @@ CRM (`/sip-projects` или сделка) -> `buildSipEditorUrl(projectId, uid)`
 3. **Missing user context**
    - редактор открыт без `sipUserId` и без сохранённого session/local state.
 
+4. **Editor origin misconfigured**
+   - в CRM не задан `VITE_SIP_EDITOR_ORIGIN` для production;
+   - задан `localhost` в production env;
+   - open-flow должен показывать явную config error, а не открывать `localhost:5174`.
+
 ## UI fail-safe
 
 - Shell error boundary не роняет весь SPA.

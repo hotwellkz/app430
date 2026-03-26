@@ -1,3 +1,15 @@
+export interface SipClientEnv {
+  VITE_SIP_API_BASE_URL?: string;
+  VITE_SIP_EDITOR_ORIGIN?: string;
+  VITE_CRM_ORIGIN?: string;
+  DEV?: boolean;
+  PROD?: boolean;
+}
+
+function runtimeEnv(): SipClientEnv {
+  return import.meta.env as unknown as SipClientEnv;
+}
+
 function requireValidBase(value: string, key: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -14,25 +26,49 @@ function requireValidBase(value: string, key: string): string {
   }
 }
 
-export function getSipApiBase(): string {
-  const raw = import.meta.env.VITE_SIP_API_BASE_URL as string | undefined;
+function isLocalhostUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+export function getSipApiBase(env: SipClientEnv = runtimeEnv()): string {
+  const raw = env.VITE_SIP_API_BASE_URL;
   if (!raw || !raw.trim()) return '/sip-editor-api';
   return requireValidBase(raw, 'VITE_SIP_API_BASE_URL');
 }
 
-export function getSipEditorOrigin(): string {
-  const raw = import.meta.env.VITE_SIP_EDITOR_ORIGIN as string | undefined;
-  if (!raw || !raw.trim()) return 'http://localhost:5174';
+export function getSipEditorOrigin(env: SipClientEnv = runtimeEnv()): string {
+  const raw = env.VITE_SIP_EDITOR_ORIGIN;
+  if (!raw || !raw.trim()) {
+    if (env.DEV) return 'http://localhost:5174';
+    throw new Error('SIP Editor production URL не настроен: задайте VITE_SIP_EDITOR_ORIGIN');
+  }
   const trimmed = raw.trim();
   try {
-    return new URL(trimmed).toString().replace(/\/$/, '');
-  } catch {
+    const normalized = new URL(trimmed).toString().replace(/\/$/, '');
+    if (env.PROD && isLocalhostUrl(normalized)) {
+      throw new Error(
+        'SIP Editor production URL не настроен: localhost запрещен для VITE_SIP_EDITOR_ORIGIN'
+      );
+    }
+    return normalized;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('localhost запрещен')) {
+      throw error;
+    }
     throw new Error('VITE_SIP_EDITOR_ORIGIN должен быть валидным абсолютным URL');
   }
 }
 
-export function getCrmOriginOrWindow(): string {
-  const raw = import.meta.env.VITE_CRM_ORIGIN as string | undefined;
+export function getCrmOriginOrWindow(
+  env: SipClientEnv = runtimeEnv(),
+  win: Window | undefined = typeof window !== 'undefined' ? window : undefined
+): string {
+  const raw = env.VITE_CRM_ORIGIN;
   if (raw && raw.trim()) {
     try {
       return new URL(raw.trim()).toString().replace(/\/$/, '');
@@ -40,15 +76,18 @@ export function getCrmOriginOrWindow(): string {
       throw new Error('VITE_CRM_ORIGIN должен быть валидным абсолютным URL');
     }
   }
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin;
+  if (win?.location?.origin) {
+    return win.location.origin;
   }
   return '';
 }
 
 export function validateSipEnv(): void {
-  void getSipApiBase();
-  void getSipEditorOrigin();
-  void getCrmOriginOrWindow();
+  const env = runtimeEnv();
+  void getSipApiBase(env);
+  if (env.VITE_SIP_EDITOR_ORIGIN?.trim()) {
+    void getSipEditorOrigin(env);
+  }
+  void getCrmOriginOrWindow(env);
 }
 
