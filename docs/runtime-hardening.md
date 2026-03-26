@@ -14,6 +14,7 @@ CRM (`/sip-projects` или сделка) -> `buildSipEditorUrl(projectId, uid)`
 - `GET /health` — summary c `ok/checks/requestId`.
 - `GET /health/details` — в dev: расширенные diagnostics (latency/errors/collections), в prod: только summary.
 - Для production incident-response используйте `docs/sip-api-ops-runbook.md`.
+- Для Cloud Run deploy/cutover используйте `docs/cloud-run-deploy.md`.
 
 Проверки:
 - Firebase Admin init;

@@ -1,0 +1,12 @@
+# Keep Cloud Build source uploads small and deterministic.
+.git
+.github
+node_modules
+**/node_modules
+**/.DS_Store
+**/dist
+coverage
+tmp
+*.log
+agent-transcripts
+ios-2wix-whatsapp

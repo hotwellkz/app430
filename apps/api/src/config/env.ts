@@ -1,9 +1,10 @@
 interface ApiEnv {
   port: number;
   corsOrigins: string[];
-  nodeEnv: string;
+  nodeEnv: 'development' | 'test' | 'production';
   hasFirebaseJson: boolean;
   firebaseProjectId: string | null;
+  googleApplicationCredentials: string | null;
 }
 
 function parsePort(raw: string | undefined): number {
@@ -24,15 +25,36 @@ function parseCorsOrigins(raw: string | undefined): string[] {
   return list;
 }
 
+function parseNodeEnv(raw: string | undefined): ApiEnv['nodeEnv'] {
+  if (!raw || !raw.trim()) return 'development';
+  if (raw === 'development' || raw === 'test' || raw === 'production') return raw;
+  throw new Error(`NODE_ENV должен быть development|test|production, получено: ${raw}`);
+}
+
+function assertProdCorsSafety(nodeEnv: ApiEnv['nodeEnv'], corsOrigins: string[]): void {
+  if (nodeEnv !== 'production') return;
+  const hasLocalhost = corsOrigins.some((origin) =>
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)
+  );
+  if (hasLocalhost) {
+    throw new Error(
+      'CORS_ORIGINS для production не должен содержать localhost/127.0.0.1'
+    );
+  }
+}
+
 export function loadApiEnv(src: NodeJS.ProcessEnv = process.env): ApiEnv {
   const port = parsePort(src.PORT);
   const corsOrigins = parseCorsOrigins(src.CORS_ORIGINS);
+  const nodeEnv = parseNodeEnv(src.NODE_ENV);
+  assertProdCorsSafety(nodeEnv, corsOrigins);
   return {
     port,
     corsOrigins,
-    nodeEnv: src.NODE_ENV ?? 'development',
+    nodeEnv,
     hasFirebaseJson: Boolean(src.FIREBASE_SERVICE_ACCOUNT_JSON?.trim()),
     firebaseProjectId: src.FIREBASE_PROJECT_ID?.trim() || null,
+    googleApplicationCredentials: src.GOOGLE_APPLICATION_CREDENTIALS?.trim() || null,
   };
 }
 

@@ -15,6 +15,18 @@ async function main() {
 
   registerRequestContext(app);
 
+  app.log.info(
+    {
+      nodeEnv: env.nodeEnv,
+      port: env.port,
+      corsOrigins: env.corsOrigins,
+      firebaseProjectId: env.firebaseProjectId,
+      hasFirebaseJson: env.hasFirebaseJson,
+      hasGoogleApplicationCredentials: Boolean(env.googleApplicationCredentials),
+    },
+    'SIP API startup config'
+  );
+
   await app.register(cors, {
     origin: (origin, cb) => {
       if (!origin) {
@@ -70,6 +82,7 @@ async function main() {
 
   try {
     await app.listen({ port: PORT, host: '0.0.0.0' });
+    app.log.info({ port: PORT }, 'SIP API listening');
   } catch (err) {
     app.log.error(err);
     process.exit(1);

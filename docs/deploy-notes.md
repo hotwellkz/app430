@@ -22,7 +22,8 @@
 ## Proxy expectations
 
 - Dev (CRM vite): `/sip-editor-api` -> `http://127.0.0.1:3001`
-- Prod (Netlify): redirect `/sip-editor-api/*` -> `https://api.2wix.ru/:splat`
+- Prod (target): `api.2wix.ru` обслуживается через Cloud Run + HTTPS Load Balancer.
+- Transitional prod (если сохраняется proxy): redirect `/sip-editor-api/*` -> `https://api.2wix.ru/:splat`
 
 Важно: redirect должен быть выше catch-all `/* /index.html 200`.
 
@@ -34,4 +35,5 @@
 Используйте для быстрой диагностики до проверки UI.
 
 Подробный incident runbook (prod, 5-10 минут): `docs/sip-api-ops-runbook.md`.
+Cloud Run deploy guide: `docs/cloud-run-deploy.md`.
 
