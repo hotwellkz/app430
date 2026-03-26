@@ -84,9 +84,50 @@ vi.mock('./sipProjectService.js', () => ({
   getProject: vi.fn(async (projectId: string) => ({
     id: projectId,
   })),
+  patchCurrentVersion: vi.fn(async (_projectId: string, body: { buildingModel: unknown }) => ({
+    id: 'v-current',
+    projectId: 'p1',
+    versionNumber: 1,
+    schemaVersion: 2,
+    buildingModel: body.buildingModel,
+    createdAt: new Date('2026-03-26T10:00:00.000Z').toISOString(),
+    createdBy: 'u1',
+    basedOnVersionId: null,
+    isSnapshot: false,
+  })),
+  getCurrentVersion: vi.fn(async () => ({
+    id: 'v-current',
+    projectId: 'p1',
+    versionNumber: 1,
+    schemaVersion: 2,
+    buildingModel: {
+      meta: { id: 'm1', name: 'Current' },
+      settings: { units: 'mm', defaultWallThicknessMm: 163, gridStepMm: 100 },
+      floors: [],
+      walls: [],
+      openings: [],
+      slabs: [],
+      roofs: [],
+      panelLibrary: [],
+      panelSettings: {
+        defaultPanelTypeId: null,
+        allowTrimmedPanels: true,
+        minTrimWidthMm: 250,
+        preferFullPanels: true,
+        labelPrefixWall: 'W',
+        labelPrefixRoof: 'R',
+        labelPrefixSlab: 'S',
+      },
+    },
+    createdAt: new Date('2026-03-26T10:00:00.000Z').toISOString(),
+    createdBy: 'u1',
+    basedOnVersionId: null,
+    isSnapshot: false,
+  })),
 }));
 
 import {
+  applyImportJobCandidateToProject,
   applyImportJobReview,
   completeImportJobWithSnapshot,
   createImportJob,
@@ -418,5 +459,189 @@ describe('importJobService', () => {
     );
     expect(two.candidate.mapperVersion).toBe(one.candidate.mapperVersion);
     expect(two.candidate.basedOnImportJobId).toBe(one.candidate.basedOnImportJobId);
+  });
+
+  it('applies candidate into current version with optimistic concurrency payload', async () => {
+    const created = await createImportJob(
+      'p1',
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      'u1'
+    );
+    await saveImportJobReview(
+      'p1',
+      created.job.id,
+      {
+        updatedBy: 'u1',
+        decisions: {
+          floorHeightsMmByFloorId: { 'floor-1': 2800 },
+          roofTypeConfirmed: 'gabled',
+          internalBearingWalls: { confirmed: true, wallIds: [] },
+          scale: { mode: 'confirmed' },
+          issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
+        },
+      },
+      'u1'
+    );
+    await applyImportJobReview('p1', created.job.id, { appliedBy: 'u1' }, 'u1');
+    await prepareImportJobEditorApply('p1', created.job.id, { generatedBy: 'u1' }, 'u1');
+    const result = await applyImportJobCandidateToProject(
+      'p1',
+      created.job.id,
+      {
+        appliedBy: 'u1',
+        expectedCurrentVersionId: 'v-current',
+        expectedVersionNumber: 1,
+        expectedSchemaVersion: 2,
+      },
+      'u1'
+    );
+    expect(result.appliedVersionMeta.id).toBe('v-current');
+    expect(result.job.projectApply?.status).toBe('applied');
+    expect(result.job.projectApply?.appliedBy).toBe('u1');
+    expect(result.applySummary.warningsCount).toBeGreaterThanOrEqual(0);
+  });
+
+  it('cannot apply candidate before review is applied', async () => {
+    const created = await createImportJob(
+      'p1',
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      'u1'
+    );
+    await expect(
+      applyImportJobCandidateToProject(
+        'p1',
+        created.job.id,
+        {
+          appliedBy: 'u1',
+          expectedCurrentVersionId: 'v-current',
+          expectedVersionNumber: 1,
+          expectedSchemaVersion: 2,
+        },
+        'u1'
+      )
+    ).rejects.toThrow(/Review должен быть applied/);
+  });
+
+  it('cannot apply candidate before candidate_ready', async () => {
+    const created = await createImportJob(
+      'p1',
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      'u1'
+    );
+    await saveImportJobReview(
+      'p1',
+      created.job.id,
+      {
+        updatedBy: 'u1',
+        decisions: {
+          floorHeightsMmByFloorId: { 'floor-1': 2800 },
+          roofTypeConfirmed: 'gabled',
+          internalBearingWalls: { confirmed: true, wallIds: [] },
+          scale: { mode: 'confirmed' },
+          issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
+        },
+      },
+      'u1'
+    );
+    await applyImportJobReview('p1', created.job.id, { appliedBy: 'u1' }, 'u1');
+    await expect(
+      applyImportJobCandidateToProject(
+        'p1',
+        created.job.id,
+        {
+          appliedBy: 'u1',
+          expectedCurrentVersionId: 'v-current',
+          expectedVersionNumber: 1,
+          expectedSchemaVersion: 2,
+        },
+        'u1'
+      )
+    ).rejects.toThrow(/candidate еще не подготовлен/);
+  });
+
+  it('blocks apply on concurrency mismatch', async () => {
+    const created = await createImportJob(
+      'p1',
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      'u1'
+    );
+    await saveImportJobReview(
+      'p1',
+      created.job.id,
+      {
+        updatedBy: 'u1',
+        decisions: {
+          floorHeightsMmByFloorId: { 'floor-1': 2800 },
+          roofTypeConfirmed: 'gabled',
+          internalBearingWalls: { confirmed: true, wallIds: [] },
+          scale: { mode: 'confirmed' },
+          issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
+        },
+      },
+      'u1'
+    );
+    await applyImportJobReview('p1', created.job.id, { appliedBy: 'u1' }, 'u1');
+    await prepareImportJobEditorApply('p1', created.job.id, { generatedBy: 'u1' }, 'u1');
+    await expect(
+      applyImportJobCandidateToProject(
+        'p1',
+        created.job.id,
+        {
+          appliedBy: 'u1',
+          expectedCurrentVersionId: 'v-other',
+          expectedVersionNumber: 999,
+          expectedSchemaVersion: 2,
+        },
+        'u1'
+      )
+    ).rejects.toThrow(/версия проекта изменилась/);
+  });
+
+  it('repeated apply returns previously applied summary', async () => {
+    const created = await createImportJob(
+      'p1',
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      'u1'
+    );
+    await saveImportJobReview(
+      'p1',
+      created.job.id,
+      {
+        updatedBy: 'u1',
+        decisions: {
+          floorHeightsMmByFloorId: { 'floor-1': 2800 },
+          roofTypeConfirmed: 'gabled',
+          internalBearingWalls: { confirmed: true, wallIds: [] },
+          scale: { mode: 'confirmed' },
+          issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
+        },
+      },
+      'u1'
+    );
+    await applyImportJobReview('p1', created.job.id, { appliedBy: 'u1' }, 'u1');
+    await prepareImportJobEditorApply('p1', created.job.id, { generatedBy: 'u1' }, 'u1');
+    const first = await applyImportJobCandidateToProject(
+      'p1',
+      created.job.id,
+      {
+        appliedBy: 'u1',
+        expectedCurrentVersionId: 'v-current',
+        expectedVersionNumber: 1,
+        expectedSchemaVersion: 2,
+      },
+      'u1'
+    );
+    const second = await applyImportJobCandidateToProject(
+      'p1',
+      created.job.id,
+      {
+        appliedBy: 'u1',
+        expectedCurrentVersionId: 'v-current',
+        expectedVersionNumber: 1,
+        expectedSchemaVersion: 2,
+      },
+      'u1'
+    );
+    expect(second.applySummary.createdOrUpdatedVersionId).toBe(first.applySummary.createdOrUpdatedVersionId);
   });
 });

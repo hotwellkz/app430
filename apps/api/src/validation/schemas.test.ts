@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   zArchitecturalImportSnapshot,
   zApplyImportReviewBody,
+  zApplyCandidateToProjectBody,
   zCreateExportBody,
   zCreateImportJobBody,
   zPrepareEditorApplyBody,
@@ -191,6 +192,25 @@ describe('import schemas', () => {
     expect(
       zPrepareEditorApplyBody.safeParse({
         generatedBy: '',
+      }).success
+    ).toBe(false);
+  });
+
+  it('accepts valid and rejects invalid apply-candidate request', () => {
+    expect(
+      zApplyCandidateToProjectBody.safeParse({
+        appliedBy: 'u1',
+        expectedCurrentVersionId: 'v1',
+        expectedVersionNumber: 1,
+        expectedSchemaVersion: 2,
+      }).success
+    ).toBe(true);
+    expect(
+      zApplyCandidateToProjectBody.safeParse({
+        appliedBy: 'u1',
+        expectedCurrentVersionId: '',
+        expectedVersionNumber: 0,
+        expectedSchemaVersion: 0,
       }).success
     ).toBe(false);
   });

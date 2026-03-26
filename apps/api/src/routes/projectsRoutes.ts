@@ -8,6 +8,7 @@ import {
   listProjectExports,
 } from '../services/exportService.js';
 import {
+  applyImportJobCandidateToProject,
   applyImportJobReview,
   createImportJob,
   getImportJob,
@@ -271,6 +272,24 @@ export async function registerProjectRoutes(app: FastifyInstance): Promise<void>
       try {
         const actorId = requireSipUserId(request);
         const result = await prepareImportJobEditorApply(
+          request.params.projectId,
+          request.params.jobId,
+          request.body,
+          actorId
+        );
+        return reply.send(result);
+      } catch (e) {
+        return sendRouteError(reply, request, e);
+      }
+    }
+  );
+
+  app.post<{ Params: { projectId: string; jobId: string } }>(
+    '/api/projects/:projectId/import-jobs/:jobId/apply-candidate',
+    async (request, reply) => {
+      try {
+        const actorId = requireSipUserId(request);
+        const result = await applyImportJobCandidateToProject(
           request.params.projectId,
           request.params.jobId,
           request.body,

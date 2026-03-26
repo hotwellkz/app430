@@ -234,6 +234,18 @@
   - с warnings + traceability.
 - Candidate сохраняется в `importJob.editorApply`, но не применяется в реальный проект/version на этом этапе.
 
+## Завершено: AI import apply-candidate stage (Sprint 16, этап 6)
+
+- Добавлен endpoint:
+  - `POST /api/projects/:projectId/import-jobs/:jobId/apply-candidate`
+- Apply-candidate выполняется отдельным explicit шагом (без авто-apply внутри `prepare-editor-apply`).
+- Добавлены preconditions и conflict semantics:
+  - review должен быть `applied`;
+  - candidate должен быть `candidate_ready` и существовать;
+  - optimistic concurrency marker (`expectedCurrentVersionId/expectedVersionNumber/expectedSchemaVersion`) обязателен.
+- Candidate применяется в существующий current-version flow (без отдельной параллельной системы версий).
+- Результат и provenance сохраняются в `importJob.projectApply` (audit + summary).
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).

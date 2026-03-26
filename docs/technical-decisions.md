@@ -283,6 +283,20 @@
   - проще контролировать unsupported-кейсы через warnings;
   - editor integration становится независимым следующим этапом.
 
+### AI import apply-candidate stage (Sprint 16, этап 6)
+
+- Добавлен отдельный explicit контракт `POST /import-jobs/:jobId/apply-candidate`.
+- Stage разделён с `prepare-editor-apply`:
+  - `prepare-editor-apply` только строит candidate;
+  - `apply-candidate` только пишет candidate в project current-version flow.
+- Для записи используется существующий optimistic concurrency механизм `PATCH current-version` (никаких direct writes мимо version flow).
+- Audit/provenance фиксируется в `ImportJob.projectApply`:
+  - `appliedBy/appliedAt/appliedVersionId`;
+  - summary counts/warnings/trace;
+  - linkage к `importJobId`, `mapperVersion`, `reviewedSnapshotVersion`.
+- Повторный apply сделан предсказуемым:
+  - если `projectApply.status=applied`, возвращается сохранённый summary/result без скрытой повторной записи.
+
 ### Spec-engine boundary (Sprint 10)
 
 - BOM/spec aggregation вынесена в `@2wix/spec-engine`, а не в `panel-engine` и не в React-компоненты.

@@ -14,7 +14,7 @@
 
 ```json
 {
-  "code": "VALIDATION_ERROR | NOT_FOUND | CONFLICT | FORBIDDEN | UNAUTHORIZED | INTERNAL_ERROR",
+  "code": "VALIDATION_ERROR | NOT_FOUND | CONFLICT | FORBIDDEN | UNAUTHORIZED | INTERNAL_ERROR | IMPORT_CANDIDATE_NOT_READY | IMPORT_REVIEW_NOT_APPLIED | IMPORT_APPLY_CONCURRENCY_CONFLICT | IMPORT_CANDIDATE_MISSING | IMPORT_APPLY_FAILED",
   "message": "Человекочитаемое описание",
   "status": 400,
   "details": {},
@@ -245,6 +245,66 @@ Preconditions:
 ```
 
 `BuildingModelCandidate` — отдельный backend result; он не применяет данные в текущую `ProjectVersion` автоматически.
+
+### `POST /api/projects/:projectId/import-jobs/:jobId/apply-candidate`
+
+Тело:
+
+```json
+{
+  "appliedBy": "== x-sip-user-id",
+  "expectedCurrentVersionId": "current version id",
+  "expectedVersionNumber": 1,
+  "expectedSchemaVersion": 2,
+  "note": "optional audit note"
+}
+```
+
+Preconditions:
+
+- `ImportJob.status = needs_review`
+- `ImportJob.review.status = applied`
+- `ImportJob.editorApply.status = candidate_ready`
+- `ImportJob.editorApply.candidate` существует
+
+Поведение:
+
+- делает optimistic concurrency check по `expected*`;
+- применяет `editorApply.candidate.model` в `PATCH current-version` flow;
+- сохраняет audit/result в `ImportJob.projectApply`.
+
+Ошибки:
+
+- `404 NOT_FOUND` — job не найдена или foreign project/job.
+- `409 IMPORT_CANDIDATE_NOT_READY` — candidate stage не готов.
+- `409 IMPORT_REVIEW_NOT_APPLIED` — review не в applied.
+- `409 IMPORT_CANDIDATE_MISSING` — candidate отсутствует.
+- `409 IMPORT_APPLY_CONCURRENCY_CONFLICT` — mismatch optimistic marker.
+- `500 IMPORT_APPLY_FAILED` — неожиданный persistence/runtime failure.
+
+Успешный ответ `200`:
+
+```json
+{
+  "job": { "...": "ImportJob with projectApply state" },
+  "appliedVersionMeta": {
+    "id": "v1",
+    "projectId": "p1",
+    "versionNumber": 1,
+    "schemaVersion": 2,
+    "createdAt": "ISO"
+  },
+  "applySummary": {
+    "createdOrUpdatedVersionId": "v1",
+    "appliedObjectCounts": { "floors": 1, "walls": 4, "openings": 2, "slabs": 1, "roofs": 1 },
+    "warningsCount": 0,
+    "traceCount": 7,
+    "basedOnImportJobId": "ij-1",
+    "basedOnMapperVersion": "import-candidate-v1",
+    "basedOnReviewedSnapshotVersion": "..."
+  }
+}
+```
 
 ## Доступ
 

@@ -1,8 +1,10 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import type {
+  ApplyCandidateToProjectResponse,
   ArchitecturalImportSnapshot,
   ApplyImportReviewResponse,
   BuildingModelCandidate,
+  CandidateApplySummary,
   CreateImportJobRequest,
   CreateImportJobResponse,
   ImportEditorApplyState,
@@ -10,6 +12,7 @@ import type {
   ImportRequiredDecision,
   ImportReviewState,
   ImportJobStatus,
+  ImportProjectApplyState,
   ImportUserDecisionSet,
   ListImportJobsResponse,
   PrepareEditorApplyResponse,
@@ -17,19 +20,20 @@ import type {
   SaveImportReviewResponse,
 } from '@2wix/shared-types';
 import { COLLECTIONS } from '../config/collections.js';
-import { AppHttpError, NotFoundError, ValidationAppError } from '../errors/httpErrors.js';
+import { AppHttpError, NotFoundError, ValidationAppError, VersionConflictError } from '../errors/httpErrors.js';
 import { getDb } from '../firestore/admin.js';
 import { mapImportJobDoc } from '../mappers/firestoreMappers.js';
 import {
   formatZodError,
   zApplyImportReviewBody,
+  zApplyCandidateToProjectBody,
   zArchitecturalImportSnapshot,
   zCreateImportJobBody,
   zPrepareEditorApplyBody,
   zReviewedArchitecturalSnapshot,
   zSaveImportReviewBody,
 } from '../validation/schemas.js';
-import { getProject } from './sipProjectService.js';
+import { getCurrentVersion, getProject, patchCurrentVersion } from './sipProjectService.js';
 import type { ArchitecturalExtractorAdapter } from './import/extractorAdapter.js';
 import { resolveExtractorAdapter } from './import/resolveExtractorAdapter.js';
 import type { ImportJobRunner } from './import/importJobRunner.js';
@@ -191,6 +195,37 @@ function createInitialEditorApplyState(): ImportEditorApplyState {
   };
 }
 
+function createInitialProjectApplyState(): ImportProjectApplyState {
+  return {
+    status: 'draft',
+    appliedVersionId: null,
+    appliedVersionNumber: null,
+    appliedAt: null,
+    appliedBy: null,
+    errorMessage: null,
+    note: null,
+    summary: null,
+  };
+}
+
+function buildCandidateApplySummary(candidate: BuildingModelCandidate): CandidateApplySummary {
+  return {
+    createdOrUpdatedVersionId: candidate.model.meta.versionId ?? '',
+    appliedObjectCounts: {
+      floors: candidate.model.floors.length,
+      walls: candidate.model.walls.length,
+      openings: candidate.model.openings.length,
+      slabs: candidate.model.slabs.length,
+      roofs: candidate.model.roofs.length,
+    },
+    warningsCount: candidate.warnings.length,
+    traceCount: candidate.trace.length,
+    basedOnImportJobId: candidate.basedOnImportJobId,
+    basedOnMapperVersion: candidate.mapperVersion,
+    basedOnReviewedSnapshotVersion: candidate.basedOnReviewedSnapshotVersion,
+  };
+}
+
 function applyReviewDecisions(
   snapshot: ArchitecturalImportSnapshot,
   decisions: ImportUserDecisionSet
@@ -311,6 +346,7 @@ export async function completeImportJobWithSnapshot(
     snapshot: snapshotValid.data,
     review: buildReviewState(snapshotValid.data, {}, current.createdBy, current.review),
     editorApply: createInitialEditorApplyState(),
+    projectApply: createInitialProjectApplyState(),
     errorMessage: null,
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -418,6 +454,7 @@ export async function saveImportJobReview(
   await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).update({
     review: nextReview,
     editorApply: createInitialEditorApplyState(),
+    projectApply: createInitialProjectApplyState(),
     updatedAt: FieldValue.serverTimestamp(),
   });
   return { job: await getImportJobById(jobId) };
@@ -539,7 +576,6 @@ export async function prepareImportJobEditorApply(
     await db.collection(COLLECTIONS.IMPORT_JOBS).doc(job.id).update({
       editorApply: {
         status: 'failed',
-        candidate: null,
         errorMessage: error instanceof Error ? error.message : 'Candidate generation failed',
         generatedAt: nowIso(),
         generatedBy: actorId,
@@ -560,8 +596,152 @@ export async function prepareImportJobEditorApply(
       generatedBy: actorId,
       mapperVersion: candidate.mapperVersion,
     },
+    projectApply: createInitialProjectApplyState(),
     updatedAt: FieldValue.serverTimestamp(),
   });
   const updated = await getImportJobById(job.id);
   return { job: updated, candidate };
+}
+
+export async function applyImportJobCandidateToProject(
+  projectId: string,
+  jobId: string,
+  body: unknown,
+  actorId: string
+): Promise<ApplyCandidateToProjectResponse> {
+  const parsed = zApplyCandidateToProjectBody.safeParse(body);
+  if (!parsed.success) {
+    throw new ValidationAppError(
+      'Невалидное тело apply-candidate запроса',
+      formatZodError(parsed.error)
+    );
+  }
+  if (parsed.data.appliedBy !== actorId) {
+    throw new ValidationAppError('appliedBy должен совпадать с x-sip-user-id');
+  }
+  await getProject(projectId, actorId);
+  const job = await getImportJobById(jobId);
+  if (job.projectId !== projectId) {
+    throw new NotFoundError(`Import job не найден в проекте: ${jobId}`);
+  }
+  if (job.status !== 'needs_review') {
+    throw new AppHttpError(409, 'IMPORT_CANDIDATE_NOT_READY', 'Import job не готов к apply-candidate');
+  }
+  if (!job.review || job.review.status !== 'applied' || !job.review.reviewedSnapshot) {
+    throw new AppHttpError(409, 'IMPORT_REVIEW_NOT_APPLIED', 'Review должен быть applied перед apply-candidate');
+  }
+  if (!job.editorApply || job.editorApply.status !== 'candidate_ready') {
+    throw new AppHttpError(409, 'IMPORT_CANDIDATE_NOT_READY', 'Editor apply candidate еще не подготовлен');
+  }
+  if (!job.editorApply.candidate) {
+    throw new AppHttpError(409, 'IMPORT_CANDIDATE_MISSING', 'Editor apply candidate отсутствует');
+  }
+  const currentVersion = await getCurrentVersion(projectId, actorId);
+  if (!currentVersion) {
+    throw new NotFoundError('Текущая версия не назначена');
+  }
+  if (
+    currentVersion.id !== parsed.data.expectedCurrentVersionId ||
+    currentVersion.versionNumber !== parsed.data.expectedVersionNumber ||
+    currentVersion.schemaVersion !== parsed.data.expectedSchemaVersion
+  ) {
+    throw new AppHttpError(
+      409,
+      'IMPORT_APPLY_CONCURRENCY_CONFLICT',
+      'Текущая версия проекта изменилась, apply-candidate отклонен',
+      {
+        currentVersionId: currentVersion.id,
+        currentVersionNumber: currentVersion.versionNumber,
+        currentSchemaVersion: currentVersion.schemaVersion,
+      }
+    );
+  }
+  if (job.projectApply?.status === 'applied' && job.projectApply.summary) {
+    return {
+      job,
+      appliedVersionMeta: {
+        id: currentVersion.id,
+        projectId: currentVersion.projectId,
+        versionNumber: currentVersion.versionNumber,
+        schemaVersion: currentVersion.schemaVersion,
+        createdAt: currentVersion.createdAt,
+      },
+      applySummary: job.projectApply.summary,
+    };
+  }
+
+  const db = getDb();
+  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(job.id).update({
+    projectApply: {
+      ...(job.projectApply ?? createInitialProjectApplyState()),
+      status: 'draft',
+      errorMessage: null,
+      note: parsed.data.note ?? null,
+    },
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  try {
+    const appliedVersion = await patchCurrentVersion(
+      projectId,
+      {
+        buildingModel: job.editorApply.candidate.model,
+        updatedBy: actorId,
+        expectedCurrentVersionId: parsed.data.expectedCurrentVersionId,
+        expectedVersionNumber: parsed.data.expectedVersionNumber,
+        expectedSchemaVersion: parsed.data.expectedSchemaVersion,
+      },
+      actorId
+    );
+    const summary = buildCandidateApplySummary(job.editorApply.candidate);
+    summary.createdOrUpdatedVersionId = appliedVersion.id;
+    await db.collection(COLLECTIONS.IMPORT_JOBS).doc(job.id).update({
+      projectApply: {
+        status: 'applied',
+        summary,
+        appliedAt: nowIso(),
+        appliedBy: actorId,
+        appliedVersionId: appliedVersion.id,
+        appliedVersionNumber: appliedVersion.versionNumber,
+        errorMessage: null,
+        note: parsed.data.note ?? null,
+      },
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    const updatedJob = await getImportJobById(job.id);
+    return {
+      job: updatedJob,
+      appliedVersionMeta: {
+        id: appliedVersion.id,
+        projectId: appliedVersion.projectId,
+        versionNumber: appliedVersion.versionNumber,
+        schemaVersion: appliedVersion.schemaVersion,
+        createdAt: appliedVersion.createdAt,
+      },
+      applySummary: summary,
+    };
+  } catch (error) {
+    if (error instanceof VersionConflictError) {
+      throw new AppHttpError(
+        409,
+        'IMPORT_APPLY_CONCURRENCY_CONFLICT',
+        'Текущая версия проекта изменилась, apply-candidate отклонен',
+        error.details
+      );
+    }
+    await db.collection(COLLECTIONS.IMPORT_JOBS).doc(job.id).update({
+      projectApply: {
+        status: 'failed',
+        errorMessage: error instanceof Error ? error.message : 'Import apply failed',
+        appliedAt: null,
+        appliedBy: null,
+        appliedVersionId: null,
+        appliedVersionNumber: null,
+        summary: null,
+        note: parsed.data.note ?? null,
+      },
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    throw new AppHttpError(500, 'IMPORT_APPLY_FAILED', 'Не удалось применить candidate в текущую версию');
+  }
 }

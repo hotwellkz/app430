@@ -498,6 +498,33 @@ export interface ImportEditorApplyState {
   mapperVersion?: string | null;
 }
 
+export interface CandidateApplySummary {
+  createdOrUpdatedVersionId: string;
+  appliedObjectCounts: {
+    floors: number;
+    walls: number;
+    openings: number;
+    slabs: number;
+    roofs: number;
+  };
+  warningsCount: number;
+  traceCount: number;
+  basedOnImportJobId: string;
+  basedOnMapperVersion: string;
+  basedOnReviewedSnapshotVersion: string;
+}
+
+export interface ImportProjectApplyState {
+  status: 'draft' | 'applied' | 'failed';
+  appliedVersionId?: string | null;
+  appliedVersionNumber?: number | null;
+  appliedAt?: string | null;
+  appliedBy?: string | null;
+  errorMessage?: string | null;
+  note?: string | null;
+  summary?: CandidateApplySummary | null;
+}
+
 export interface ArchitecturalImportSnapshot {
   projectMeta: {
     name?: string;
@@ -569,6 +596,7 @@ export interface ImportJob {
   snapshot: ArchitecturalImportSnapshot | null;
   review?: ImportReviewState;
   editorApply?: ImportEditorApplyState;
+  projectApply?: ImportProjectApplyState;
   errorMessage?: string | null;
 }
 
@@ -616,6 +644,26 @@ export interface PrepareEditorApplyResponse {
   candidate: BuildingModelCandidate;
 }
 
+export interface ApplyCandidateToProjectRequest {
+  appliedBy: string;
+  expectedCurrentVersionId: string;
+  expectedVersionNumber: number;
+  expectedSchemaVersion: number;
+  note?: string;
+}
+
+export interface ApplyCandidateToProjectResponse {
+  job: ImportJob;
+  appliedVersionMeta: {
+    id: string;
+    projectId: string;
+    versionNumber: number;
+    schemaVersion: number;
+    createdAt: string;
+  };
+  applySummary: CandidateApplySummary;
+}
+
 /** Единый формат ошибок API. */
 export type ApiErrorCode =
   | 'VALIDATION_ERROR'
@@ -623,7 +671,12 @@ export type ApiErrorCode =
   | 'CONFLICT'
   | 'FORBIDDEN'
   | 'UNAUTHORIZED'
-  | 'INTERNAL_ERROR';
+  | 'INTERNAL_ERROR'
+  | 'IMPORT_CANDIDATE_NOT_READY'
+  | 'IMPORT_REVIEW_NOT_APPLIED'
+  | 'IMPORT_APPLY_CONCURRENCY_CONFLICT'
+  | 'IMPORT_CANDIDATE_MISSING'
+  | 'IMPORT_APPLY_FAILED';
 
 export interface ApiErrorBody {
   code: ApiErrorCode;

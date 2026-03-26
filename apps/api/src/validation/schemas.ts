@@ -280,6 +280,33 @@ export const zImportEditorApplyState = z.object({
   mapperVersion: z.string().nullable().optional(),
 });
 
+export const zCandidateApplySummary = z.object({
+  createdOrUpdatedVersionId: z.string().min(1),
+  appliedObjectCounts: z.object({
+    floors: z.number().int().min(0),
+    walls: z.number().int().min(0),
+    openings: z.number().int().min(0),
+    slabs: z.number().int().min(0),
+    roofs: z.number().int().min(0),
+  }),
+  warningsCount: z.number().int().min(0),
+  traceCount: z.number().int().min(0),
+  basedOnImportJobId: z.string().min(1),
+  basedOnMapperVersion: z.string().min(1),
+  basedOnReviewedSnapshotVersion: z.string().min(1),
+});
+
+export const zImportProjectApplyState = z.object({
+  status: z.enum(['draft', 'applied', 'failed']),
+  appliedAt: z.string().nullable().optional(),
+  appliedBy: z.string().nullable().optional(),
+  appliedVersionId: z.string().nullable().optional(),
+  appliedVersionNumber: z.number().int().positive().nullable().optional(),
+  errorMessage: z.string().nullable().optional(),
+  note: z.string().nullable().optional(),
+  summary: zCandidateApplySummary.nullable().optional(),
+});
+
 export const zImportReviewState = z.object({
   status: z.enum(['draft', 'complete', 'applied']),
   applyStatus: z.enum(['not_ready', 'ready', 'applied']),
@@ -309,6 +336,14 @@ export const zPrepareEditorApplyBody = z.object({
   generatedBy: z.string().min(1).max(128),
 });
 
+export const zApplyCandidateToProjectBody = z.object({
+  appliedBy: z.string().min(1).max(128),
+  expectedCurrentVersionId: z.string().min(1),
+  expectedVersionNumber: z.number().int().positive(),
+  expectedSchemaVersion: z.number().int().min(1).max(BUILDING_MODEL_SCHEMA_VERSION + 5),
+  note: z.string().max(2000).optional(),
+});
+
 export const zImportJob = z.object({
   id: z.string().min(1),
   projectId: z.string().min(1),
@@ -321,6 +356,7 @@ export const zImportJob = z.object({
   snapshot: zArchitecturalImportSnapshot.nullable(),
   review: zImportReviewState.optional(),
   editorApply: zImportEditorApplyState.optional(),
+  projectApply: zImportProjectApplyState.optional(),
   errorMessage: z.string().nullable().optional(),
 });
 
@@ -348,6 +384,18 @@ export const zApplyImportReviewResponse = z.object({
 export const zPrepareEditorApplyResponse = z.object({
   job: zImportJob,
   candidate: zBuildingModelCandidate,
+});
+
+export const zApplyCandidateToProjectResponse = z.object({
+  job: zImportJob,
+  appliedVersionMeta: z.object({
+    id: z.string().min(1),
+    projectId: z.string().min(1),
+    versionNumber: z.number().int().positive(),
+    schemaVersion: z.number().int().positive(),
+    createdAt: z.string().min(1),
+  }),
+  applySummary: zCandidateApplySummary,
 });
 
 export function formatZodError(err: z.ZodError): unknown {

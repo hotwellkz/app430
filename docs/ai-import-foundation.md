@@ -16,7 +16,12 @@
 - Добавлен explicit editor-apply backend stage:
   - из `review.reviewedSnapshot` строится `BuildingModelCandidate`;
   - candidate сохраняется в `importJob.editorApply`;
-  - реальный apply в editor/version пока не выполняется.
+  - реальный apply в editor/version выполняется отдельным explicit контрактом `apply-candidate`.
+- Добавлен explicit project-apply backend stage:
+  - `POST /api/projects/:projectId/import-jobs/:jobId/apply-candidate`;
+  - apply использует `editorApply.candidate.model` как source-of-write;
+  - apply требует optimistic concurrency (`expectedCurrentVersionId/expectedVersionNumber/expectedSchemaVersion`);
+  - результат пишется в отдельный блок `importJob.projectApply` с audit/provenance.
 
 ## Endpoints
 
@@ -39,6 +44,11 @@
   - Проверяет preconditions (`review.status=applied`, есть `reviewedSnapshot`).
   - Строит `BuildingModelCandidate` через deterministic mapper.
   - Сохраняет candidate в `editorApply`.
+- `POST /api/projects/:projectId/import-jobs/:jobId/apply-candidate`
+  - Отдельный explicit шаг применения candidate в текущую project version.
+  - Preconditions: `job.status=needs_review`, `review.status=applied`, `editorApply.status=candidate_ready`, есть `editorApply.candidate`.
+  - При mismatch optimistic marker -> `409 IMPORT_APPLY_CONCURRENCY_CONFLICT`.
+  - На успехе сохраняет `projectApply` audit (`appliedBy`, `appliedAt`, `appliedVersionId`, summary).
 
 ## Mock import snapshot
 
@@ -73,12 +83,14 @@
 - `review.isReadyToApply` + `review.missingRequiredDecisions` + `review.remainingBlockingIssueIds` — централизованная оценка готовности.
 - `review.reviewedSnapshot` — отдельный результат apply-review; исходный `snapshot` при этом не мутируется.
 - `editorApply.candidate` — отдельный editor-compatible кандидат, не равный `BuildingModel` проекта.
+- `projectApply` — отдельный результат применения candidate в project/version (не смешан с candidate generation).
 
 ## Что пока не сделано
 
 - Реальный extractor (OCR/vision/LLM).
 - Wizard/review/apply flow.
-- Применение editor candidate в реальный project version/editor store.
+- UI diff и merge candidate с ручными правками.
+- Worker/queue infrastructure.
 - Construction profile engine.
 - Upload pipeline бинарников изображений (храним только refs/metadata).
 

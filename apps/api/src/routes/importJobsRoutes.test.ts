@@ -271,6 +271,82 @@ vi.mock('../services/importJobService.js', () => ({
       },
     };
   }),
+  applyImportJobCandidateToProject: vi.fn(async (projectId: string, jobId: string, body: { appliedBy?: string }) => {
+    if (projectId === 'p2') {
+      throw new NotFoundError(`Import job не найден в проекте: ${jobId}`);
+    }
+    if (!body?.appliedBy) {
+      throw new ValidationAppError('Невалидное тело apply-candidate запроса');
+    }
+    if (jobId === 'ij-apply-conflict') {
+      throw new AppHttpError(409, 'CONFLICT', 'Editor apply candidate еще не подготовлен');
+    }
+    return {
+      job: {
+        id: jobId,
+        projectId,
+        status: 'needs_review',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: 'u1',
+        importSchemaVersion: 1,
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+        snapshot: null,
+        review: {
+          status: 'applied',
+          applyStatus: 'applied',
+          decisions: {},
+          missingRequiredDecisions: [],
+          remainingBlockingIssueIds: [],
+          isReadyToApply: true,
+        },
+        editorApply: {
+          status: 'candidate_ready',
+          errorMessage: null,
+        },
+        projectApply: {
+          status: 'applied',
+          appliedAt: new Date().toISOString(),
+          appliedBy: body.appliedBy,
+          appliedVersionId: 'v-current',
+          appliedVersionNumber: 1,
+          errorMessage: null,
+          summary: {
+            createdOrUpdatedVersionId: 'v-current',
+            appliedObjectCounts: {
+              floors: 1,
+              walls: 2,
+              openings: 1,
+              slabs: 0,
+              roofs: 1,
+            },
+            warningsCount: 0,
+            traceCount: 0,
+            basedOnImportJobId: jobId,
+            basedOnMapperVersion: 'import-candidate-v1',
+            basedOnReviewedSnapshotVersion: 'x',
+          },
+        },
+        errorMessage: null,
+      },
+      appliedVersionMeta: {
+        id: 'v-current',
+        projectId,
+        versionNumber: 1,
+        schemaVersion: 2,
+        createdAt: new Date().toISOString(),
+      },
+      applySummary: {
+        createdOrUpdatedVersionId: 'v-current',
+        appliedObjectCounts: { floors: 1, walls: 2, openings: 1, slabs: 0, roofs: 1 },
+        warningsCount: 0,
+        traceCount: 0,
+        basedOnImportJobId: jobId,
+        basedOnMapperVersion: 'import-candidate-v1',
+        basedOnReviewedSnapshotVersion: 'x',
+      },
+    };
+  }),
 }));
 
 describe('import jobs routes', () => {
@@ -391,6 +467,40 @@ describe('import jobs routes', () => {
       payload: { generatedBy: 'u1' },
     });
     expect(prepareForeignRes.statusCode).toBe(404);
+
+    const applyEditorConflictRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/import-jobs/ij-apply-conflict/apply-candidate',
+      headers,
+      payload: {
+        appliedBy: 'u1',
+        expectedCurrentVersionId: 'v-current',
+        expectedVersionNumber: 1,
+        expectedSchemaVersion: 2,
+      },
+    });
+    expect(applyEditorConflictRes.statusCode).toBe(409);
+
+    const applyEditorRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/import-jobs/ij-1/apply-candidate',
+      headers,
+      payload: {
+        appliedBy: 'u1',
+        expectedCurrentVersionId: 'v-current',
+        expectedVersionNumber: 1,
+        expectedSchemaVersion: 2,
+      },
+    });
+    expect(applyEditorRes.statusCode).toBe(200);
+
+    const applyEditorInvalidRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/import-jobs/ij-1/apply-candidate',
+      headers,
+      payload: {},
+    });
+    expect(applyEditorInvalidRes.statusCode).toBe(400);
 
     await app.close();
     process.env.IMPORT_JOB_EXECUTION_MODE = undefined;
