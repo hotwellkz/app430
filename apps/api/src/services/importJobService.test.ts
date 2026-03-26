@@ -97,6 +97,7 @@ import {
   updateImportJobStatus,
 } from './importJobService.js';
 import { createMockArchitecturalImportSnapshot } from './import/mockExtractorAdapter.js';
+import { AsyncInlineImportJobRunner } from './import/importJobRunner.js';
 
 describe('importJobService', () => {
   beforeEach(() => {
@@ -117,6 +118,33 @@ describe('importJobService', () => {
     expect(res.job.snapshot?.floors[0]?.id).toBe('floor-1');
     expect(res.job.snapshot?.projectMeta.name).toBe('My Project');
     expect(res.job.errorMessage).toBeNull();
+  });
+
+  it('createImportJob in async-inline mode returns early job and updates later', async () => {
+    let deferredTask: unknown = null;
+    const res = await createImportJob(
+      'p1',
+      {
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+        projectName: 'Async Demo',
+      },
+      'u1',
+      {
+        resolveRunner: () =>
+          new AsyncInlineImportJobRunner((task) => {
+            deferredTask = task;
+          }),
+      }
+    );
+    expect(res.job.status).toBe('queued');
+    expect(res.job.snapshot).toBeNull();
+
+    if (typeof deferredTask === 'function') {
+      await (deferredTask as () => Promise<void>)();
+    }
+    const updated = await getImportJobById(res.job.id);
+    expect(updated.status).toBe('needs_review');
+    expect(updated.snapshot?.projectMeta.name).toBe('Async Demo');
   });
 
   it('pipeline error: queued/running -> failed', async () => {

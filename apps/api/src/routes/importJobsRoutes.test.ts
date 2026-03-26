@@ -13,7 +13,10 @@ vi.mock('../services/importJobService.js', () => ({
       job: {
         id: 'ij-1',
         projectId,
-        status: 'needs_review',
+        status:
+          process.env.IMPORT_JOB_EXECUTION_MODE === 'async-inline'
+            ? 'queued'
+            : 'needs_review',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         createdBy: 'u1',
@@ -88,6 +91,7 @@ describe('import jobs routes', () => {
     await registerProjectRoutes(app);
 
     const headers = { 'x-sip-user-id': 'u1' };
+    process.env.IMPORT_JOB_EXECUTION_MODE = 'sync';
     const createRes = await app.inject({
       method: 'POST',
       url: '/api/projects/p1/import-jobs',
@@ -98,6 +102,19 @@ describe('import jobs routes', () => {
       },
     });
     expect(createRes.statusCode).toBe(201);
+    expect((createRes.json() as { job: { status: string } }).job.status).toBe('needs_review');
+
+    process.env.IMPORT_JOB_EXECUTION_MODE = 'async-inline';
+    const createAsyncRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/import-jobs',
+      headers,
+      payload: {
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+      },
+    });
+    expect(createAsyncRes.statusCode).toBe(201);
+    expect((createAsyncRes.json() as { job: { status: string } }).job.status).toBe('queued');
 
     const getRes = await app.inject({
       method: 'GET',
@@ -131,5 +148,6 @@ describe('import jobs routes', () => {
     expect(invalidBodyRes.statusCode).toBe(400);
 
     await app.close();
+    process.env.IMPORT_JOB_EXECUTION_MODE = undefined;
   });
 });

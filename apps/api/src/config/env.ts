@@ -7,6 +7,7 @@ interface ApiEnv {
   googleApplicationCredentials: string | null;
   storageBucket: string | null;
   importExtractorMode: 'mock';
+  importJobExecutionMode: 'sync' | 'async-inline';
 }
 
 function parsePort(raw: string | undefined): number {
@@ -38,6 +39,16 @@ function parseImportExtractorMode(raw: string | undefined): ApiEnv['importExtrac
   return 'mock';
 }
 
+function parseImportJobExecutionMode(
+  raw: string | undefined
+): ApiEnv['importJobExecutionMode'] {
+  if (!raw || !raw.trim()) return 'sync';
+  if (raw === 'sync' || raw === 'async-inline') return raw;
+  throw new Error(
+    `IMPORT_JOB_EXECUTION_MODE должен быть sync|async-inline, получено: ${raw}`
+  );
+}
+
 function assertProdCorsSafety(nodeEnv: ApiEnv['nodeEnv'], corsOrigins: string[]): void {
   if (nodeEnv !== 'production') return;
   const hasLocalhost = corsOrigins.some((origin) =>
@@ -64,6 +75,7 @@ export function loadApiEnv(src: NodeJS.ProcessEnv = process.env): ApiEnv {
     googleApplicationCredentials: src.GOOGLE_APPLICATION_CREDENTIALS?.trim() || null,
     storageBucket: src.FIREBASE_STORAGE_BUCKET?.trim() || null,
     importExtractorMode: parseImportExtractorMode(src.IMPORT_EXTRACTOR_MODE),
+    importJobExecutionMode: parseImportJobExecutionMode(src.IMPORT_JOB_EXECUTION_MODE),
   };
 }
 

@@ -5,6 +5,9 @@
 - Добавлен lifecycle pipeline для `import-job`: `queued -> running -> needs_review | failed`.
 - Добавлен orchestration service с централизованными status transitions.
 - Введена extractor adapter abstraction (`mock` implementation + resolver).
+- Добавлены execution modes для запуска pipeline:
+  - `sync`
+  - `async-inline`
 - Сохранена canonical intermediate schema `ArchitecturalImportSnapshot`.
 - Персистенция import jobs остаётся в отдельной Firestore коллекции.
 
@@ -13,10 +16,7 @@
 - `POST /api/projects/:projectId/import-jobs`
   - Создаёт import-job.
   - Сохраняет refs исходных изображений.
-  - Синхронно запускает backend pipeline:
-    - `queued`
-    - `running`
-    - `needs_review` с snapshot (или `failed` с errorMessage).
+  - Запускает backend pipeline через runner abstraction.
 - `GET /api/projects/:projectId/import-jobs`
   - Возвращает jobs проекта (новые сверху).
 - `GET /api/projects/:projectId/import-jobs/:jobId`
@@ -39,6 +39,15 @@
 - `running` — backend pipeline выполняет extraction.
 - `needs_review` — extraction завершён, snapshot сохранён, требуется human review.
 - `failed` — pipeline завершился ошибкой, сохранён `errorMessage`.
+
+## Execution modes
+
+- `sync` (по умолчанию):
+  - `POST` ждёт завершения pipeline и возвращает финальный статус (`needs_review` или `failed`).
+- `async-inline`:
+  - `POST` создаёт job и инициирует pipeline отдельно от request-response пути;
+  - ответ возвращается ранним (`queued`), а финальный статус читается через `GET` endpoints;
+  - это переходный режим перед будущим worker/queue execution.
 
 ## Что пока не сделано
 

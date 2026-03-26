@@ -19,11 +19,14 @@ import {
 import { getProject } from './sipProjectService.js';
 import type { ArchitecturalExtractorAdapter } from './import/extractorAdapter.js';
 import { resolveExtractorAdapter } from './import/resolveExtractorAdapter.js';
+import type { ImportJobRunner } from './import/importJobRunner.js';
+import { resolveImportJobRunner } from './import/resolveImportJobRunner.js';
 
 export const IMPORT_SCHEMA_VERSION = 1;
 
 interface ImportPipelineDeps {
   resolveAdapter?: () => ArchitecturalExtractorAdapter;
+  resolveRunner?: () => ImportJobRunner;
 }
 
 function assertStatusTransitionAllowed(
@@ -145,7 +148,8 @@ export async function runImportJobPipeline(
 export async function createImportJob(
   projectId: string,
   body: unknown,
-  actorId: string
+  actorId: string,
+  deps?: ImportPipelineDeps
 ): Promise<CreateImportJobResponse> {
   const parsed = zCreateImportJobBody.safeParse(body);
   if (!parsed.success) {
@@ -153,8 +157,16 @@ export async function createImportJob(
   }
   await getProject(projectId, actorId);
   const queuedJob = await createImportJobRecord(projectId, actorId, parsed.data);
-  const finalJob = await runImportJobPipeline(queuedJob, parsed.data);
-  return { job: finalJob };
+  const runner = deps?.resolveRunner?.() ?? resolveImportJobRunner();
+  const job = await runner.execute({
+    queuedJob,
+    request: parsed.data,
+    runPipeline: (jobForRun, reqForRun) =>
+      runImportJobPipeline(jobForRun, reqForRun, {
+        resolveAdapter: deps?.resolveAdapter,
+      }),
+  });
+  return { job };
 }
 
 export async function getImportJob(

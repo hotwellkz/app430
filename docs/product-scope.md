@@ -204,6 +204,15 @@
 - Добавлен extractor adapter слой (mock implementation + resolver) для будущей интеграции real extractor без ломки API.
 - Централизованы status transitions и инварианты хранения snapshot/errorMessage.
 
+## Завершено: AI import async-friendly execution mode (Sprint 16, этап 3)
+
+- Добавлен runner/scheduler abstraction для запуска import pipeline.
+- Поддержаны execution modes:
+  - `sync` (финальный статус в ответе POST),
+  - `async-inline` (ранний статус + последующее обновление через GET).
+- Режим выбирается централизованно через `IMPORT_JOB_EXECUTION_MODE`.
+- Архитектура подготовлена к замене `async-inline` на реальный worker mode в следующих этапах.
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).

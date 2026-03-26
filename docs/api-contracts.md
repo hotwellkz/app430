@@ -156,6 +156,14 @@ Optimistic concurrency. Тело:
 
 То есть `POST` возвращает итоговое состояние pipeline (`needs_review` или `failed`).
 
+Режим выполнения управляется env `IMPORT_JOB_EXECUTION_MODE`:
+
+- `sync` (default):
+  - `POST` возвращает финальный `job` (`needs_review` или `failed`).
+- `async-inline`:
+  - `POST` возвращает ранний `job` (`queued` или `running`);
+  - дальнейшее обновление статуса нужно читать через `GET /import-jobs` и `GET /import-jobs/:jobId`.
+
 ### `GET /api/projects/:projectId/import-jobs`
 
 Ответ: `{ "items": ImportJob[] }` (новые сверху по `createdAt`).

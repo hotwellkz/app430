@@ -244,6 +244,17 @@
   - adapter возвращает только `ArchitecturalImportSnapshot`;
   - orchestration слой управляет статусами/персистенцией.
 
+### AI import execution modes (Sprint 16, этап 3)
+
+- Введён отдельный runner/scheduler слой для запуска pipeline, чтобы route handler не управлял scheduling напрямую.
+- Поддержаны режимы:
+  - `sync` — детерминированный mode для dev/tests (ожидание финального статуса в POST);
+  - `async-inline` — ранний ответ POST + локальный отложенный kickoff без внешней очереди.
+- Почему `async-inline`:
+  - позволяет проверить API/доменный контракт раннего ответа уже сейчас;
+  - сохраняет тот же lifecycle и invariants;
+  - подготавливает replace `async-inline` на worker/queue без ломки route/service контрактов.
+
 ### Spec-engine boundary (Sprint 10)
 
 - BOM/spec aggregation вынесена в `@2wix/spec-engine`, а не в `panel-engine` и не в React-компоненты.

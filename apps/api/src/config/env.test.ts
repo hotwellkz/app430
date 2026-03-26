@@ -9,6 +9,7 @@ describe('loadApiEnv', () => {
     expect(env.corsOrigins.length).toBeGreaterThan(0);
     expect(env.storageBucket).toBeNull();
     expect(env.importExtractorMode).toBe('mock');
+    expect(env.importJobExecutionMode).toBe('sync');
   });
 
   it('валидирует порт', () => {
@@ -31,6 +32,15 @@ describe('loadApiEnv', () => {
         CORS_ORIGINS: 'http://localhost:5173,https://2wix.ru',
       })
     ).toThrow(/CORS_ORIGINS/);
+  });
+
+  it('валидирует IMPORT_JOB_EXECUTION_MODE', () => {
+    expect(loadApiEnv({ IMPORT_JOB_EXECUTION_MODE: 'async-inline' }).importJobExecutionMode).toBe(
+      'async-inline'
+    );
+    expect(() => loadApiEnv({ IMPORT_JOB_EXECUTION_MODE: 'queue-worker' })).toThrow(
+      /IMPORT_JOB_EXECUTION_MODE/
+    );
   });
 });
 
