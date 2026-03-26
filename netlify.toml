@@ -224,7 +224,7 @@
 
 [[redirects]]
   from = "/sip-editor-api/*"
-  to = "https://api.2wix.ru/:splat"
+  to = "https://sip-editor-api-wpgpcbv3hq-ey.a.run.app/:splat"
   status = 200
   force = true
 

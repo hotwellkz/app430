@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore } from 'firebase/firestore';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 
@@ -124,7 +124,18 @@ setPersistence(auth, browserLocalPersistence).catch((err) => {
   console.error('Error setting auth persistence:', err);
 });
 
-export const db = getFirestore(app);
+export const db = (() => {
+  try {
+    return initializeFirestore(app, {
+      // Helps in restricted/proxy networks where WebChannel is blocked.
+      experimentalAutoDetectLongPolling: true,
+      useFetchStreams: false
+    });
+  } catch {
+    // Firestore may already be initialized (HMR/multiple imports).
+    return getFirestore(app);
+  }
+})();
 export const storage = getStorage(app);
 
 export { getStorage, ref, uploadBytesResumable, getDownloadURL };

@@ -18,5 +18,5 @@
 /api/mobile/register-device /.netlify/functions/mobile-register-device 200
 /api/mobile/unregister-device /.netlify/functions/mobile-unregister-device 200
 /api/send-chat-push /.netlify/functions/send-chat-push 200
-/sip-editor-api/* https://api.2wix.ru/:splat 200
+/sip-editor-api/* https://sip-editor-api-wpgpcbv3hq-ey.a.run.app/:splat 200
 /* /index.html 200
