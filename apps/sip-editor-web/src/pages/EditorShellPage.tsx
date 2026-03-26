@@ -17,6 +17,7 @@ import { EditorLeftSidebar } from '@/components/EditorLeftSidebar';
 import { EditorToolbar } from '@/components/EditorToolbar';
 import { BuildingSummaryPanel } from '@/components/BuildingSummaryPanel';
 import { BuildingWarningsPanel } from '@/components/BuildingWarningsPanel';
+import { PanelizationPanel } from '@/components/PanelizationPanel';
 import { FloorInspector } from '@/components/FloorInspector';
 import { OpeningInspector } from '@/components/OpeningInspector';
 import { RoofInspector } from '@/components/RoofInspector';
@@ -539,6 +540,7 @@ export function EditorShellPage() {
           <RightPanel>
             <BuildingSummaryPanel />
             <BuildingWarningsPanel />
+            <PanelizationPanel />
             <div
               style={{
                 marginBottom: 12,

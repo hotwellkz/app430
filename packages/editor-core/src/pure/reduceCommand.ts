@@ -247,6 +247,23 @@ export function reduceCommand(state: EditorState, command: EditorCommand): Reduc
         state: withDraft({ ...state, selection: sel }, next),
       };
     }
+    case 'updatePanelSettings': {
+      const draft = state.document.draftModel;
+      if (!draft) return { ok: false, error: 'Нет черновика модели' };
+      const next = {
+        ...draft,
+        panelSettings: {
+          ...draft.panelSettings,
+          ...command.patch,
+        },
+      };
+      return {
+        ok: true,
+        draftChanged: true,
+        history: meta,
+        state: withDraft(state, next),
+      };
+    }
     case 'addOpening': {
       const draft = state.document.draftModel;
       if (!draft) return { ok: false, error: 'Нет черновика модели' };

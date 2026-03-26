@@ -75,6 +75,8 @@ export interface Floor {
 
 /** Тип стены для отображения и спецификации (по умолчанию в нормализации — external). */
 export type WallType = 'external' | 'internal';
+export type StructuralRole = 'bearing' | 'partition';
+export type PanelDirection = 'vertical' | 'horizontal';
 
 export interface Wall {
   id: string;
@@ -83,6 +85,9 @@ export interface Wall {
   end: Point2D;
   thicknessMm: number;
   wallType?: WallType;
+  structuralRole?: StructuralRole;
+  panelizationEnabled?: boolean;
+  panelDirection?: PanelDirection;
   /** Высота стены в мм (опционально, для панелей и спецификации). */
   heightMm?: number;
 }
@@ -126,16 +131,24 @@ export interface Roof {
   generationMode: 'auto';
 }
 
-export interface PanelLibraryEntry {
+export interface PanelType {
   id: string;
   code: string;
+  name: string;
+  widthMm: number;
+  heightMm: number;
   thicknessMm: number;
-  label: string;
+  active: boolean;
 }
 
 export interface PanelSettings {
-  defaultSupplier: string | null;
-  toleranceMm: number;
+  defaultPanelTypeId: string | null;
+  allowTrimmedPanels: boolean;
+  minTrimWidthMm: number;
+  preferFullPanels: boolean;
+  labelPrefixWall: string;
+  labelPrefixRoof: string;
+  labelPrefixSlab: string;
 }
 
 export interface BuildingModel {
@@ -146,7 +159,7 @@ export interface BuildingModel {
   openings: Opening[];
   slabs: Slab[];
   roofs: Roof[];
-  panelLibrary: PanelLibraryEntry[];
+  panelLibrary: PanelType[];
   panelSettings: PanelSettings;
 }
 

@@ -149,6 +149,27 @@
   - на каждом сегменте вырезаем вертикальные интервалы, оставшиеся части становятся box-мешами.
 - 3D preview строится из `draftModel`, поэтому undo/redo/discard/save автоматически отражаются в viewer без отдельного состояния модели.
 
+### Panel engine boundary (Sprint 9)
+
+- Логика SIP-панелизации вынесена в отдельный package `@2wix/panel-engine`, а не в React/JSX и не в 3D renderer.
+- Причины:
+  - алгоритм должен быть детерминированным, тестируемым и переиспользуемым для будущих BOM/spec/export этапов;
+  - UI остаётся потребителем snapshot, а не местом бизнес-расчёта;
+  - проще развивать wall-first MVP без риска поломать canvas/preview.
+
+### Почему generated panels = derived state
+
+- Source of truth остаётся `BuildingModel` (`walls/openings/floors/settings`).
+- `generatedPanels` пересчитываются на лету из `draftModel` и не пишутся как канонические данные в Firestore.
+- Это снижает риск рассинхронизации и упрощает эволюцию алгоритма в следующих спринтах (BOM/spec/export).
+
+### Почему roof/slab panelization отложены
+
+- В Sprint 9 целенаправленно ограничен scope до walls-first:
+  - быстрее получить устойчивый инженерный контур с warnings и overlay;
+  - избежать преждевременной сложности (roof/slab geometry, cut optimization, nesting);
+  - подготовить базу для Sprint 10+ (спецификация и экспорт), не вводя хрупкие полу-решения.
+
 ## Коллекции Firestore
 
 | Коллекция | Назначение |

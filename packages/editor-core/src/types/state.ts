@@ -32,6 +32,7 @@ export type ActivePanel =
   | 'floors'
   | 'walls'
   | 'openings'
+  | 'sip'
   | 'roof'
   | 'slabs'
   | 'versions';

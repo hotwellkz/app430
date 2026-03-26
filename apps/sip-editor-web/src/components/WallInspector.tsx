@@ -1,11 +1,13 @@
 import { computeWallLengthMm, findWallById, getEffectiveWallHeight, getFloorById, getWallHeightMode } from '@2wix/domain-model';
 import { useEditorStore } from '@2wix/editor-core';
 import type { WallType } from '@2wix/shared-types';
+import { usePanelizationSnapshot } from '../panelization/usePanelizationSnapshot';
 
 export function WallInspector() {
   const draft = useEditorStore((s) => s.document.draftModel);
   const selection = useEditorStore((s) => s.selection);
   const applyCommand = useEditorStore((s) => s.applyCommand);
+  const panelization = usePanelizationSnapshot();
 
   if (!draft || selection.selectedObjectType !== 'wall' || !selection.selectedObjectId) {
     return (
@@ -23,6 +25,11 @@ export function WallInspector() {
   const floor = getFloorById(draft, wall.floorId);
   const effectiveHeight = getEffectiveWallHeight(wall, floor);
   const heightMode = getWallHeightMode(wall);
+  const summary = panelization?.wallSummaries.find((x) => x.wallId === wall.id);
+  const wallWarnings = panelization?.warnings.filter((w) => w.relatedObjectIds.includes(wall.id)) ?? [];
+  const structuralRole = wall.structuralRole ?? 'bearing';
+  const panelDirection = wall.panelDirection ?? 'vertical';
+  const enabled = wall.panelizationEnabled ?? wallType === 'external';
 
   return (
     <div style={{ fontSize: 13 }}>
@@ -112,6 +119,75 @@ export function WallInspector() {
         <dd style={{ margin: 0 }}>{heightMode === 'inherited' ? 'inherited (из этажа)' : 'overridden (у стены)'}</dd>
         <dt className="twix-muted">Effective height (мм)</dt>
         <dd style={{ margin: 0 }}>{effectiveHeight}</dd>
+        <dt className="twix-muted" style={{ marginTop: 8 }}>SIP: structural role</dt>
+        <dd style={{ margin: 0 }}>
+          <select
+            value={structuralRole}
+            onChange={(e) =>
+              applyCommand({
+                type: 'updateWall',
+                wallId: wall.id,
+                patch: { structuralRole: e.target.value as 'bearing' | 'partition' },
+              })
+            }
+            style={{ width: '100%', padding: 4 }}
+          >
+            <option value="bearing">bearing</option>
+            <option value="partition">partition</option>
+          </select>
+        </dd>
+        <dt className="twix-muted">SIP: panelization enabled</dt>
+        <dd style={{ margin: 0 }}>
+          <label>
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) =>
+                applyCommand({
+                  type: 'updateWall',
+                  wallId: wall.id,
+                  patch: { panelizationEnabled: e.target.checked },
+                })
+              }
+            />{' '}
+            enabled
+          </label>
+        </dd>
+        <dt className="twix-muted">SIP: direction</dt>
+        <dd style={{ margin: 0 }}>
+          <select
+            value={panelDirection}
+            onChange={(e) =>
+              applyCommand({
+                type: 'updateWall',
+                wallId: wall.id,
+                patch: { panelDirection: e.target.value as 'vertical' | 'horizontal' },
+              })
+            }
+            style={{ width: '100%', padding: 4 }}
+          >
+            <option value="vertical">vertical</option>
+            <option value="horizontal">horizontal</option>
+          </select>
+        </dd>
+        <dt className="twix-muted">SIP eligibility</dt>
+        <dd style={{ margin: 0 }}>{summary?.eligible ? 'eligible' : `skipped (${summary?.reason ?? '—'})`}</dd>
+        <dt className="twix-muted">SIP panels / warnings</dt>
+        <dd style={{ margin: 0 }}>
+          {summary?.panelCount ?? 0} / {wallWarnings.length}
+        </dd>
+        {wallWarnings.length > 0 ? (
+          <>
+            <dt className="twix-muted">SIP warning list</dt>
+            <dd style={{ margin: 0 }}>
+              <ul style={{ margin: 0, paddingLeft: 16 }}>
+                {wallWarnings.slice(0, 4).map((w) => (
+                  <li key={w.id}>[{w.code}] {w.message}</li>
+                ))}
+              </ul>
+            </dd>
+          </>
+        ) : null}
       </dl>
     </div>
   );

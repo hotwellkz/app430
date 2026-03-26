@@ -43,10 +43,34 @@ export function createEmptyBuildingModel(): BuildingModel {
     openings: [],
     slabs: [],
     roofs: [],
-    panelLibrary: [],
+    panelLibrary: [
+      {
+        id: 'panel-std-174',
+        code: 'SIP-174-1250x2800',
+        name: 'SIP 174 / 1250x2800',
+        widthMm: 1250,
+        heightMm: 2800,
+        thicknessMm: 174,
+        active: true,
+      },
+      {
+        id: 'panel-std-174-600',
+        code: 'SIP-174-600x2800',
+        name: 'SIP 174 / 600x2800',
+        widthMm: 600,
+        heightMm: 2800,
+        thicknessMm: 174,
+        active: true,
+      },
+    ],
     panelSettings: {
-      defaultSupplier: null,
-      toleranceMm: 2,
+      defaultPanelTypeId: 'panel-std-174',
+      allowTrimmedPanels: true,
+      minTrimWidthMm: 250,
+      preferFullPanels: true,
+      labelPrefixWall: 'W',
+      labelPrefixRoof: 'R',
+      labelPrefixSlab: 'S',
     },
   };
 }
@@ -180,9 +204,22 @@ export function normalizeBuildingModel(raw: unknown): BuildingModel {
       end: isPoint2D(w.end) ? w.end : { x: 0, y: 0 },
       thicknessMm: asNumber(w.thicknessMm, settings.defaultWallThicknessMm),
     };
+    const structuralRole =
+      w.structuralRole === 'bearing' || w.structuralRole === 'partition'
+        ? w.structuralRole
+        : undefined;
+    const panelDirection =
+      w.panelDirection === 'vertical' || w.panelDirection === 'horizontal'
+        ? w.panelDirection
+        : undefined;
+    const panelizationEnabled =
+      typeof w.panelizationEnabled === 'boolean' ? w.panelizationEnabled : undefined;
     return {
       ...base,
       ...(wallType !== undefined ? { wallType } : {}),
+      ...(structuralRole !== undefined ? { structuralRole } : {}),
+      ...(panelDirection !== undefined ? { panelDirection } : {}),
+      ...(panelizationEnabled !== undefined ? { panelizationEnabled } : {}),
       ...(heightMm !== undefined ? { heightMm } : {}),
     };
   });
@@ -268,25 +305,42 @@ export function normalizeBuildingModel(raw: unknown): BuildingModel {
   const libIn = mapFloors(r.panelLibrary).map((p, i) => ({
     id: asString(p.id, `panel_${i}`),
     code: asString(p.code, ''),
+    name: asString(p.name, asString(p.label, '')),
+    widthMm: asNumber(p.widthMm, 1250),
+    heightMm: asNumber(p.heightMm, DEFAULT_FLOOR_HEIGHT_MM),
     thicknessMm: asNumber(p.thicknessMm, 174),
-    label: asString(p.label, ''),
+    active: typeof p.active === 'boolean' ? p.active : true,
   }));
 
   const psRaw = r.panelSettings;
   const panelSettings =
     typeof psRaw === 'object' && psRaw !== null
       ? {
-          defaultSupplier:
-            (psRaw as Record<string, unknown>).defaultSupplier === null
+          defaultPanelTypeId:
+            (psRaw as Record<string, unknown>).defaultPanelTypeId === null
               ? null
-              : asString(
-                  (psRaw as Record<string, unknown>).defaultSupplier,
-                  ''
-                ) || null,
-          toleranceMm: asNumber(
-            (psRaw as Record<string, unknown>).toleranceMm,
-            empty.panelSettings.toleranceMm
+              : asString((psRaw as Record<string, unknown>).defaultPanelTypeId, '') || null,
+          allowTrimmedPanels:
+            typeof (psRaw as Record<string, unknown>).allowTrimmedPanels === 'boolean'
+              ? Boolean((psRaw as Record<string, unknown>).allowTrimmedPanels)
+              : empty.panelSettings.allowTrimmedPanels,
+          minTrimWidthMm: asNumber(
+            (psRaw as Record<string, unknown>).minTrimWidthMm,
+            empty.panelSettings.minTrimWidthMm
           ),
+          preferFullPanels:
+            typeof (psRaw as Record<string, unknown>).preferFullPanels === 'boolean'
+              ? Boolean((psRaw as Record<string, unknown>).preferFullPanels)
+              : empty.panelSettings.preferFullPanels,
+          labelPrefixWall:
+            asString((psRaw as Record<string, unknown>).labelPrefixWall, '') ||
+            empty.panelSettings.labelPrefixWall,
+          labelPrefixRoof:
+            asString((psRaw as Record<string, unknown>).labelPrefixRoof, '') ||
+            empty.panelSettings.labelPrefixRoof,
+          labelPrefixSlab:
+            asString((psRaw as Record<string, unknown>).labelPrefixSlab, '') ||
+            empty.panelSettings.labelPrefixSlab,
         }
       : empty.panelSettings;
 

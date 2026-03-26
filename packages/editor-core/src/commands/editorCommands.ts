@@ -1,4 +1,12 @@
-import type { BuildingModel, Floor, Opening, Roof, Slab, Wall } from '@2wix/shared-types';
+import type {
+  BuildingModel,
+  Floor,
+  Opening,
+  PanelSettings,
+  Roof,
+  Slab,
+  Wall,
+} from '@2wix/shared-types';
 import type { ActivePanel, CanvasToolMode, EditorObjectType } from '../types/state.js';
 
 /** Команды редактора: исполняются чистым reducer/store, без React и без HTTP. */
@@ -31,8 +39,22 @@ export type EditorCommand =
   | {
       type: 'updateWall';
       wallId: string;
-      patch: Partial<Pick<Wall, 'floorId' | 'start' | 'end' | 'thicknessMm' | 'wallType' | 'heightMm'>>;
+      patch: Partial<
+        Pick<
+          Wall,
+          | 'floorId'
+          | 'start'
+          | 'end'
+          | 'thicknessMm'
+          | 'wallType'
+          | 'structuralRole'
+          | 'panelizationEnabled'
+          | 'panelDirection'
+          | 'heightMm'
+        >
+      >;
     }
+  | { type: 'updatePanelSettings'; patch: Partial<PanelSettings> }
   | { type: 'deleteWall'; wallId: string }
   | { type: 'addOpening'; opening: Opening }
   | {
@@ -80,6 +102,7 @@ export function isModelMutationCommand(cmd: EditorCommand): boolean {
     case 'addWall':
     case 'updateWall':
     case 'deleteWall':
+    case 'updatePanelSettings':
     case 'addOpening':
     case 'updateOpening':
     case 'deleteOpening':

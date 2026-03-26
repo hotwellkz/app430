@@ -1,0 +1,21 @@
+{
+  "name": "@2wix/panel-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@2wix/domain-model": "workspace:*",
+    "@2wix/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.3",
+    "vitest": "^3.2.4"
+  }
+}

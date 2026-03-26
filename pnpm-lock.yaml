@@ -343,6 +343,9 @@ importers:
       '@2wix/editor-core':
         specifier: workspace:*
         version: link:../../packages/editor-core
+      '@2wix/panel-engine':
+        specifier: workspace:*
+        version: link:../../packages/panel-engine
       '@2wix/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
@@ -426,6 +429,22 @@ importers:
       zustand:
         specifier: ^4.5.5
         version: 4.5.7(@types/react@18.3.28)(immer@11.1.4)(react@18.3.1)
+    devDependencies:
+      typescript:
+        specifier: ^5.5.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.19.15)(jsdom@29.0.1)
+
+  packages/panel-engine:
+    dependencies:
+      '@2wix/domain-model':
+        specifier: workspace:*
+        version: link:../domain-model
+      '@2wix/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
     devDependencies:
       typescript:
         specifier: ^5.5.3

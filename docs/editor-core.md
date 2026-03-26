@@ -64,6 +64,15 @@
   - `applySaveSuccess` не ломает 3D, так как draft/server снова синхронны.
 - Floor filtering (`all`/`active-only`) выполняется в adapter-слое по `activeFloorId`, без мутации доменной модели.
 
+### Panelization snapshot и draftModel (Sprint 9)
+
+- Панелизация рассчитывается в отдельном пакете `@2wix/panel-engine` как **derived state**:
+  - вход: `document.draftModel`;
+  - выход: `PanelizationResult` (`generatedPanels`, `warnings`, `stats`, `wallSummaries`).
+- `editor-core` не хранит generated panels в persisted state и не включает их в undo-history как source of truth.
+- В `editor-core` добавлена только модельная команда `updatePanelSettings` для правки глобальных SIP-настроек в `draftModel.panelSettings`.
+- Любая команда, меняющая `draftModel` (стены, проёмы, этажи, wall SIP fields, panel settings), автоматически даёт новый snapshot при следующем пересчёте в UI-слое (`useMemo`).
+
 ### Effective высота стен
 
 - Для стены введена логика **effective height**:

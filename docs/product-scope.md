@@ -86,6 +86,19 @@
 - Улучшена устойчивость user context в editor (query/session/localStorage fallback).
 - Добавлены тесты на env/context hardening.
 
+## Завершено: panelization MVP (Sprint 9, walls-first)
+
+- Добавлен отдельный слой расчёта `@2wix/panel-engine` с `buildPanelizationSnapshot(buildingModel)`.
+- В MVP панелизируются только стены: наружные по умолчанию, внутренние — только `bearing` + `panelizationEnabled=true`.
+- Реализованы wall-настройки SIP: `structuralRole`, `panelizationEnabled`, `panelDirection`.
+- Добавлены глобальные settings панелизации: `defaultPanelTypeId`, `allowTrimmedPanels`, `minTrimWidthMm`, `preferFullPanels`, label-префиксы.
+- Учтены проёмы (left/right/above/below зоны), добавлены структурированные warning/error коды.
+- В `sip-editor-web` добавлены:
+  - панель `SIP / Панелизация` со статистикой, настройками и warnings;
+  - 2D overlay панелей для active floor с labels и toggle;
+  - блок SIP в `WallInspector` (eligibility/panels/warnings/editable fields).
+- Generated panels остаются derived state и не становятся source of truth в Firestore.
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).

@@ -52,6 +52,8 @@ import { findClosestOpeningAtPoint } from './openingHitTest.js';
 import { proposeOpeningDragAlongWall } from './openingDrag.js';
 import { computeFitViewTransform, computeWallsBoundingBoxMm } from './viewFit.js';
 import { snapPointToNearbyWallJoints } from './endpointJointSnap.js';
+import { PanelOverlayLayer } from './PanelOverlayLayer.js';
+import { usePanelizationSnapshot } from '../panelization/usePanelizationSnapshot';
 
 const MAJOR_GRID_MM = 5000;
 
@@ -91,6 +93,8 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
   const [toast, setToast] = useState<string | null>(null);
   const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
   const [hoveredOpeningId, setHoveredOpeningId] = useState<string | null>(null);
+  const [showPanels, setShowPanels] = useState(true);
+  const panelization = usePanelizationSnapshot();
 
   const panSessionRef = useRef<PanSession | null>(null);
   const dragSessionRef = useRef<DragSession | null>(null);
@@ -533,6 +537,21 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
         </div>
       ) : (
         <>
+        <div style={{ position: 'absolute', right: 8, top: 8, zIndex: 4 }}>
+          <button
+            type="button"
+            onClick={() => setShowPanels((v) => !v)}
+            style={{
+              fontSize: 11,
+              padding: '4px 8px',
+              borderRadius: 6,
+              border: '1px solid #cbd5e1',
+              background: '#fff',
+            }}
+          >
+            {showPanels ? 'Скрыть панели' : 'Показать панели'}
+          </button>
+        </div>
         {floorWalls.length === 0 && displayOpenings.length === 0 ? (
           <div
             style={{
@@ -696,6 +715,16 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
               }
               hoveredOpeningId={hoveredOpeningId}
             />
+            {showPanels && panelization ? (
+              <PanelOverlayLayer
+                model={draft}
+                panels={panelization.generatedPanels.filter((p) => p.floorId === activeFloorId)}
+                selectedWallId={
+                  selection.selectedObjectType === 'wall' ? selection.selectedObjectId : null
+                }
+                showLabels
+              />
+            ) : null}
             {view.toolMode === 'draw-wall' && drawState.kind === 'drawing' ? (
               <line
                 x1={drawState.start.x}

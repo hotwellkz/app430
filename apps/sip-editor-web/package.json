@@ -13,6 +13,7 @@
   "dependencies": {
     "@2wix/domain-model": "workspace:*",
     "@2wix/editor-core": "workspace:*",
+    "@2wix/panel-engine": "workspace:*",
     "@2wix/shared-types": "workspace:*",
     "@2wix/ui-kit": "workspace:*",
     "@react-three/drei": "^9.108.3",
