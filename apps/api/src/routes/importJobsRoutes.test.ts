@@ -89,6 +89,41 @@ vi.mock('../services/importJobService.js', () => ({
     if (projectId === 'p-empty') {
       return { items: [] };
     }
+    if (projectId === 'p-mixed') {
+      return {
+        items: [
+          {
+            versionId: 'v-new',
+            versionNumber: 10,
+            sourceKind: 'ai_import',
+            importJobId: 'ij-new',
+            mapperVersion: 'import-candidate-v1',
+            reviewedSnapshotVersion: 'r-new',
+            appliedBy: 'u1',
+            appliedAt: '2026-03-27T12:00:00.000Z',
+            warningsCount: 0,
+            traceCount: 3,
+            note: null,
+          },
+          {
+            versionId: 'v-legacy',
+            versionNumber: 8,
+            sourceKind: 'ai_import',
+            importJobId: 'ij-legacy',
+            mapperVersion: 'unknown',
+            reviewedSnapshotVersion: 'unknown',
+            appliedBy: 'unknown',
+            appliedAt: '2026-03-26T11:00:00.000Z',
+            warningsCount: 0,
+            traceCount: 0,
+            note: null,
+            isLegacy: true,
+            isIncomplete: true,
+            missingFields: ['reviewedSnapshotVersion', 'appliedBy'],
+          },
+        ],
+      };
+    }
     return {
       items: [
         {
@@ -391,6 +426,45 @@ vi.mock('../services/importJobService.js', () => ({
 }));
 
 describe('import jobs routes', () => {
+  it('import-apply-history returns mixed response shape with newest-first sorting', async () => {
+    const app = Fastify();
+    registerRequestContext(app);
+    await registerProjectRoutes(app);
+    const headers = { 'x-sip-user-id': 'u1' };
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/projects/p-mixed/import-apply-history',
+      headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      items: Array<{
+        versionId: string;
+        appliedAt: string;
+        isLegacy?: boolean;
+        isIncomplete?: boolean;
+        missingFields?: string[];
+      }>;
+    };
+    expect(body.items).toHaveLength(2);
+    expect(body.items[0]?.versionId).toBe('v-new');
+    expect(body.items[1]?.versionId).toBe('v-legacy');
+    expect(new Date(body.items[0]?.appliedAt ?? '').getTime()).toBeGreaterThan(
+      new Date(body.items[1]?.appliedAt ?? '').getTime()
+    );
+    expect(body.items[0]?.isLegacy).toBeUndefined();
+    expect(body.items[0]?.missingFields).toBeUndefined();
+    expect(body.items[1]?.isLegacy).toBe(true);
+    expect(body.items[1]?.isIncomplete).toBe(true);
+    expect(body.items[1]?.missingFields).toEqual(
+      expect.arrayContaining(['reviewedSnapshotVersion', 'appliedBy'])
+    );
+
+    await app.close();
+  });
+
   it('create/get/list/review/apply/prepare and validation scenarios', async () => {
     const app = Fastify();
     registerRequestContext(app);

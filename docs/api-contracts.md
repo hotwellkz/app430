@@ -296,6 +296,13 @@ Read-only history AI-import apply событий для проекта.
 - soft legacy policy:
   - версия без `importProvenance` не попадает в историю;
   - неполный legacy provenance возвращается безопасно с `isLegacy=true`, `isIncomplete=true`, `missingFields`.
+  - mixed набор (normal + legacy) сохраняет `newest-first` сортировку по `appliedAt`.
+
+Observability markers (backend logs, без внешних SDK):
+
+- `import_apply_candidate_success` — успешный `apply-candidate` (project/job/version).
+- `import_apply_candidate_conflict` — conflict при `apply-candidate` (code + version context).
+- `import_history_legacy_item_detected` — обнаружен legacy/incomplete item в history mapping.
 
 Успешный ответ `200`:
 

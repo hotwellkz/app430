@@ -313,6 +313,11 @@
   - версии без `importProvenance` игнорируются в истории;
   - неполные legacy provenance не валят endpoint;
   - такие записи возвращаются с `isLegacy/isIncomplete/missingFields`.
+- Legacy policy вынесена в отдельный pure classifier helper (unit-testable, без зависимости от Fastify/Firestore).
+- Добавлены минимальные observability markers без vendor lock-in:
+  - `import_apply_candidate_success`,
+  - `import_apply_candidate_conflict`,
+  - `import_history_legacy_item_detected`.
 
 ### Spec-engine boundary (Sprint 10)
 

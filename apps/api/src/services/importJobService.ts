@@ -46,6 +46,8 @@ import {
   buildBuildingModelCandidateFromReviewedSnapshot,
   IMPORT_CANDIDATE_MAPPER_VERSION,
 } from './import/buildBuildingModelCandidate.js';
+import { classifyImportApplyHistoryVersion } from './import/historyClassifier.js';
+import { logObservabilityEvent } from '../utils/observability.js';
 
 export const IMPORT_SCHEMA_VERSION = 1;
 
@@ -247,16 +249,6 @@ function buildVersionImportProvenance(
     note: note ?? null,
   };
 }
-
-const REQUIRED_PROVENANCE_FIELDS = [
-  'importJobId',
-  'mapperVersion',
-  'reviewedSnapshotVersion',
-  'appliedBy',
-  'appliedAt',
-  'warningsCount',
-  'traceCount',
-] as const;
 
 function applyReviewDecisions(
   snapshot: ArchitecturalImportSnapshot,
@@ -677,6 +669,13 @@ export async function applyImportJobCandidateToProject(
     currentVersion.versionNumber !== parsed.data.expectedVersionNumber ||
     currentVersion.schemaVersion !== parsed.data.expectedSchemaVersion
   ) {
+    logObservabilityEvent('import_apply_candidate_conflict', {
+      projectId,
+      jobId,
+      code: 'IMPORT_APPLY_CONCURRENCY_CONFLICT',
+      currentVersionId: currentVersion.id,
+      currentVersionNumber: currentVersion.versionNumber,
+    }, 'warn');
     throw new AppHttpError(
       409,
       'IMPORT_APPLY_CONCURRENCY_CONFLICT',
@@ -759,6 +758,12 @@ export async function applyImportJobCandidateToProject(
       updatedAt: FieldValue.serverTimestamp(),
     });
     const updatedJob = await getImportJobById(job.id);
+    logObservabilityEvent('import_apply_candidate_success', {
+      projectId,
+      jobId: job.id,
+      versionId: appliedVersion.id,
+      versionNumber: appliedVersion.versionNumber,
+    });
     return {
       job: updatedJob,
       appliedVersionMeta: {
@@ -772,6 +777,12 @@ export async function applyImportJobCandidateToProject(
     };
   } catch (error) {
     if (error instanceof VersionConflictError) {
+      logObservabilityEvent('import_apply_candidate_conflict', {
+        projectId,
+        jobId,
+        code: 'IMPORT_APPLY_CONCURRENCY_CONFLICT',
+        ...(error.details ?? {}),
+      }, 'warn');
       throw new AppHttpError(
         409,
         'IMPORT_APPLY_CONCURRENCY_CONFLICT',
@@ -810,63 +821,22 @@ export async function listImportApplyHistory(
   const items: ImportApplyHistoryItem[] = [];
   for (const doc of qs.docs) {
     const raw = doc.data() ?? {};
-    const parsed = zVersionImportProvenance.safeParse(raw.importProvenance);
-    if (parsed.success) {
-      items.push({
-        versionId: doc.id,
-        versionNumber:
-          typeof raw.versionNumber === 'number' && Number.isFinite(raw.versionNumber)
-            ? raw.versionNumber
-            : 1,
-        sourceKind: 'ai_import',
-        importJobId: parsed.data.importJobId,
-        mapperVersion: parsed.data.mapperVersion,
-        reviewedSnapshotVersion: parsed.data.reviewedSnapshotVersion,
-        appliedBy: parsed.data.appliedBy,
-        appliedAt: parsed.data.appliedAt,
-        warningsCount: parsed.data.warningsCount,
-        traceCount: parsed.data.traceCount,
-        note: parsed.data.note ?? null,
-      });
-      continue;
+    const classified = classifyImportApplyHistoryVersion({
+      versionId: doc.id,
+      versionNumberRaw: raw.versionNumber,
+      importProvenanceRaw: raw.importProvenance,
+      nowIso,
+    });
+    if (classified.item) {
+      items.push(classified.item);
     }
-    const maybeLegacy = raw.importProvenance as Record<string, unknown> | undefined;
-    if (maybeLegacy && maybeLegacy.sourceKind === 'ai_import') {
-      const missingFields: string[] = [];
-      for (const field of REQUIRED_PROVENANCE_FIELDS) {
-        const value = maybeLegacy[field];
-        if (value === undefined || value === null || value === '') {
-          missingFields.push(field);
-        }
-      }
-      items.push({
+    if (classified.isLegacyDetected) {
+      logObservabilityEvent('import_history_legacy_item_detected', {
+        projectId,
         versionId: doc.id,
-        versionNumber:
-          typeof raw.versionNumber === 'number' && Number.isFinite(raw.versionNumber)
-            ? raw.versionNumber
-            : 1,
-        sourceKind: 'ai_import',
-        importJobId: typeof maybeLegacy.importJobId === 'string' ? maybeLegacy.importJobId : 'unknown',
-        mapperVersion: typeof maybeLegacy.mapperVersion === 'string' ? maybeLegacy.mapperVersion : 'unknown',
-        reviewedSnapshotVersion:
-          typeof maybeLegacy.reviewedSnapshotVersion === 'string'
-            ? maybeLegacy.reviewedSnapshotVersion
-            : 'unknown',
-        appliedBy: typeof maybeLegacy.appliedBy === 'string' ? maybeLegacy.appliedBy : 'unknown',
-        appliedAt: typeof maybeLegacy.appliedAt === 'string' ? maybeLegacy.appliedAt : nowIso(),
-        warningsCount:
-          typeof maybeLegacy.warningsCount === 'number' && Number.isFinite(maybeLegacy.warningsCount)
-            ? maybeLegacy.warningsCount
-            : 0,
-        traceCount:
-          typeof maybeLegacy.traceCount === 'number' && Number.isFinite(maybeLegacy.traceCount)
-            ? maybeLegacy.traceCount
-            : 0,
-        note: typeof maybeLegacy.note === 'string' ? maybeLegacy.note : null,
-        isLegacy: true,
-        isIncomplete: missingFields.length > 0,
-        missingFields,
-      });
+        importJobId: classified.item?.importJobId ?? 'unknown',
+        missingFieldsCount: classified.item?.missingFields?.length ?? 0,
+      }, 'warn');
     }
   }
   items.sort((a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime());

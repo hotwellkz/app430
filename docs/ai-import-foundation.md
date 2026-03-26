@@ -57,6 +57,7 @@
   - Возвращает историю AI-import apply по проекту (newest first) из `ProjectVersion.importProvenance`.
   - Если истории нет, возвращает пустой список.
   - Legacy/incomplete provenance обрабатывается мягко (`isLegacy`, `isIncomplete`, `missingFields`).
+  - Legacy classification выполняется pure helper-слоем (deterministic mapping, unit-testable).
 
 ## Mock import snapshot
 
@@ -92,6 +93,10 @@
 - `review.reviewedSnapshot` — отдельный результат apply-review; исходный `snapshot` при этом не мутируется.
 - `editorApply.candidate` — отдельный editor-compatible кандидат, не равный `BuildingModel` проекта.
 - `projectApply` — отдельный результат применения candidate в project/version (не смешан с candidate generation).
+- Observability markers:
+  - `import_apply_candidate_success`,
+  - `import_apply_candidate_conflict`,
+  - `import_history_legacy_item_detected`.
 
 ## Что пока не сделано
 

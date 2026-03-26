@@ -528,6 +528,7 @@ describe('importJobService', () => {
   });
 
   it('applies candidate into current version with optimistic concurrency payload', async () => {
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const created = await createImportJob(
       'p1',
       { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
@@ -568,6 +569,11 @@ describe('importJobService', () => {
     const versionDoc = store.get('sipEditor_projectVersions/v-current');
     expect(versionDoc?.importProvenance?.importJobId).toBe(created.job.id);
     expect(versionDoc?.importProvenance?.mapperVersion).toBe('import-candidate-v1');
+    expect(infoSpy).toHaveBeenCalled();
+    expect(infoSpy.mock.calls.some((call) => String(call[0]).includes('import_apply_candidate_success'))).toBe(
+      true
+    );
+    infoSpy.mockRestore();
   });
 
   it('cannot apply candidate before review is applied', async () => {
@@ -629,6 +635,7 @@ describe('importJobService', () => {
   });
 
   it('blocks apply on concurrency mismatch', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const created = await createImportJob(
       'p1',
       { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
@@ -664,6 +671,11 @@ describe('importJobService', () => {
         'u1'
       )
     ).rejects.toThrow(/версия проекта изменилась/);
+    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy.mock.calls.some((call) => String(call[0]).includes('import_apply_candidate_conflict'))).toBe(
+      true
+    );
+    warnSpy.mockRestore();
   });
 
   it('repeated apply returns previously applied summary', async () => {
@@ -758,6 +770,7 @@ describe('importJobService', () => {
   });
 
   it('marks incomplete legacy provenance safely with missingFields', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     store.set('sipEditor_projectVersions/v-legacy-ai', {
       projectId: 'p1',
       versionNumber: 5,
@@ -777,6 +790,11 @@ describe('importJobService', () => {
     expect(legacyItem?.isIncomplete).toBe(true);
     expect(legacyItem?.missingFields?.includes('reviewedSnapshotVersion')).toBe(true);
     expect(legacyItem?.missingFields?.includes('appliedAt')).toBe(true);
+    expect(warnSpy).toHaveBeenCalled();
+    expect(
+      warnSpy.mock.calls.some((call) => String(call[0]).includes('import_history_legacy_item_detected'))
+    ).toBe(true);
+    warnSpy.mockRestore();
   });
 
   it('integration happy-path: create -> review -> apply-review -> prepare -> apply-candidate -> history', async () => {
