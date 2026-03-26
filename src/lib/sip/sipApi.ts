@@ -20,6 +20,23 @@ export class SipApiError extends Error {
   }
 }
 
+async function parseJsonBody<T>(res: Response): Promise<T | null> {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    const snippet = text.slice(0, 120).trim();
+    throw new SipApiError(
+      snippet.startsWith('<')
+        ? 'API вернул HTML вместо JSON. Проверьте VITE_SIP_API_BASE_URL и Netlify redirects.'
+        : 'Некорректный ответ API (не JSON).',
+      res.status || 500,
+      'INVALID_API_RESPONSE'
+    );
+  }
+}
+
 async function sipFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const user = auth.currentUser;
   if (!user) {
@@ -36,26 +53,22 @@ async function sipFetch(path: string, init: RequestInit = {}): Promise<Response>
 
 export async function sipListProjects(limit = 60): Promise<SipProjectRow[]> {
   const res = await sipFetch(`/api/projects?limit=${limit}`);
+  const data = await parseJsonBody<{ projects?: SipProjectRow[]; message?: string; code?: string }>(res);
   if (!res.ok) {
     let msg = `Ошибка ${res.status}`;
     let code: string | undefined;
-    try {
-      const j = (await res.json()) as { message?: string; code?: string };
-      if (j.message) msg = j.message;
-      code = j.code;
-    } catch {
-      /* ignore */
-    }
+    if (data?.message) msg = data.message;
+    code = data?.code;
     throw new SipApiError(msg, res.status, code);
   }
-  const data = (await res.json()) as { projects?: SipProjectRow[] };
   return Array.isArray(data.projects) ? data.projects : [];
 }
 
 export async function sipGetProject(projectId: string): Promise<SipProjectRow> {
   const id = projectId.trim();
   const res = await sipFetch(`/api/projects/${encodeURIComponent(id)}`);
-  const data = (await res.json()) as { project?: SipProjectRow; message?: string; code?: string };
+  const data =
+    (await parseJsonBody<{ project?: SipProjectRow; message?: string; code?: string }>(res)) ?? {};
   if (!res.ok) {
     throw new SipApiError(data.message ?? `Ошибка ${res.status}`, res.status, data.code);
   }
@@ -74,7 +87,8 @@ export async function sipCreateProject(input: {
     method: 'POST',
     body: JSON.stringify(input),
   });
-  const data = (await res.json()) as { project?: SipProjectRow; message?: string; code?: string };
+  const data =
+    (await parseJsonBody<{ project?: SipProjectRow; message?: string; code?: string }>(res)) ?? {};
   if (!res.ok) {
     throw new SipApiError(data.message ?? `Ошибка ${res.status}`, res.status, data.code);
   }
