@@ -223,6 +223,12 @@
   force = true
 
 [[redirects]]
+  from = "/sip-editor-api/*"
+  to = "https://api.2wix.ru/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
