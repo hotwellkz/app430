@@ -94,6 +94,8 @@ describe('SpecPanel', () => {
     expect(screen.getAllByText(/Slabs/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Roof/i).length).toBeGreaterThan(0);
     fireEvent.change(screen.getAllByDisplayValue('all')[0]!, { target: { value: 'slab' } });
+    fireEvent.change(screen.getAllByDisplayValue('sort: code')[0]!, { target: { value: 'warnings' } });
+    fireEvent.change(screen.getAllByDisplayValue('group: aggregated')[0]!, { target: { value: 'bySourceType' } });
     fireEvent.click(screen.getAllByRole('button', { name: /Скачать\/сформировать выгрузку/i })[0]!);
   });
 });

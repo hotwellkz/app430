@@ -201,6 +201,21 @@
   - добавлены расширения (`slab/roof` summaries, totalsBySourceType), а не ломающие замены;
   - wall-сценарии и тесты не удалялись.
 
+### Commercial layer boundary (Sprint 15)
+
+- Введён отдельный `@2wix/commercial-engine`, а не смешивание логики в `spec-engine` или React.
+- Причины:
+  - `spec-engine` остаётся инженерным source-aware расчётом;
+  - `commercial-engine` отвечает за business-friendly presentation/grouping;
+  - `export-engine` выбирает mode (`technical`/`commercial`) и формирует файлы.
+- Cost-ready структура (`costKey`) добавлена без unitPrice/totalPrice:
+  - это hook для будущего pricing;
+  - исключает ложную “финансовую точность” до согласования pricing rules.
+- Backward compatibility:
+  - mode по умолчанию `technical`;
+  - existing export API/storage workflow сохранён;
+  - legacy artifacts без mode остаются читаемыми.
+
 ### Spec-engine boundary (Sprint 10)
 
 - BOM/spec aggregation вынесена в `@2wix/spec-engine`, а не в `panel-engine` и не в React-компоненты.

@@ -26,6 +26,7 @@ describe('export-engine', () => {
       projectTitle: 'Test project',
       version: { id: 'v1', versionNumber: 3 },
       createdBy: 'u1',
+      presentationMode: 'technical',
     });
     expect(snapshot.projectSummary.versionId).toBe('v1');
     expect(snapshot.specSummary.totalPanels).toBeGreaterThan(0);
@@ -39,10 +40,14 @@ describe('export-engine', () => {
       projectTitle: 'Empty',
       version: { id: 'v1', versionNumber: 1 },
       createdBy: null,
+      presentationMode: 'commercial',
     });
     const tables = buildExportTables(snapshot);
+    expect(tables.presentationMode).toBe('commercial');
     expect(Array.isArray(tables.summaryRows)).toBe(true);
     expect(Array.isArray(tables.bomRows)).toBe(true);
+    expect(Array.isArray(tables.commercialRows)).toBe(true);
+    expect(Array.isArray(tables.sectionRows)).toBe(true);
     expect(Array.isArray(tables.wallRows)).toBe(true);
     expect(Array.isArray(tables.slabRows)).toBe(true);
     expect(Array.isArray(tables.roofRows)).toBe(true);

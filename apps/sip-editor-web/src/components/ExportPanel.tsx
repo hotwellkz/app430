@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEditorStore } from '@2wix/editor-core';
-import type { ExportArtifactMeta, ExportFormat } from '@2wix/shared-types';
+import type { ExportArtifactMeta, ExportFormat, ExportPresentationMode } from '@2wix/shared-types';
 import { getSipUserId } from '../identity/sipUser';
 import { createProjectExport, useSipExports } from '../hooks/useSipProject';
 import { getProjectExportDownloadUrl } from '../api/projectsApi';
@@ -16,14 +16,16 @@ export function ExportPanel({ projectId, versionId, onSaveBeforeExport }: Export
   const queryClient = useQueryClient();
   const hasUnsaved = useEditorStore((s) => s.document.hasUnsavedChanges);
   const [pendingChoice, setPendingChoice] = useState<ExportFormat | null>(null);
+  const [mode, setMode] = useState<ExportPresentationMode>('technical');
   const exportsQuery = useSipExports(projectId, true);
   const doExport = useMutation({
-    mutationFn: async (input: { format: ExportFormat; retryOfExportId?: string }) => {
+    mutationFn: async (input: { format: ExportFormat; retryOfExportId?: string; presentationMode?: ExportPresentationMode }) => {
       const uid = getSipUserId();
       if (!uid) throw new Error('Нет sipUserId для экспорта');
       return createProjectExport(projectId, {
         createdBy: uid,
         format: input.format,
+        presentationMode: input.presentationMode ?? mode,
         retryOfExportId: input.retryOfExportId,
       });
     },
@@ -51,18 +53,18 @@ export function ExportPanel({ projectId, versionId, onSaveBeforeExport }: Export
       setPendingChoice(format);
       return;
     }
-    void doExport.mutate({ format });
+    void doExport.mutate({ format, presentationMode: mode });
   };
   const exportSavedVersion = () => {
     if (!pendingChoice) return;
-    void doExport.mutate({ format: pendingChoice });
+    void doExport.mutate({ format: pendingChoice, presentationMode: mode });
     setPendingChoice(null);
   };
   const saveAndExport = async () => {
     if (!pendingChoice) return;
     const ok = await onSaveBeforeExport();
     if (!ok) return;
-    void doExport.mutate({ format: pendingChoice });
+    void doExport.mutate({ format: pendingChoice, presentationMode: mode });
     setPendingChoice(null);
   };
 
@@ -72,6 +74,10 @@ export function ExportPanel({ projectId, versionId, onSaveBeforeExport }: Export
         Экспорт / Выгрузки
       </p>
       <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        <select value={mode} onChange={(e) => setMode(e.target.value as ExportPresentationMode)} style={{ fontSize: 11 }}>
+          <option value="technical">Technical</option>
+          <option value="commercial">Commercial</option>
+        </select>
         <button type="button" style={{ fontSize: 11 }} onClick={() => start('pdf')} disabled={doExport.isPending}>
           Скачать PDF
         </button>
@@ -100,6 +106,7 @@ export function ExportPanel({ projectId, versionId, onSaveBeforeExport }: Export
       ) : null}
       <p className="twix-muted" style={{ fontSize: 12 }}>
         Источник экспорта: текущая сохраненная версия {versionId ? versionId.slice(0, 8) : '—'}.
+        {' '}Mode: {mode}.
         {hasUnsaved ? ' Есть несохраненные изменения (в экспорт не попадут).' : ''}
       </p>
       {doExport.isError ? (
@@ -117,7 +124,7 @@ export function ExportPanel({ projectId, versionId, onSaveBeforeExport }: Export
         <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11 }}>
           {(exportsQuery.data?.exports ?? []).slice(0, 10).map((e) => (
             <li key={e.id}>
-              {e.format.toUpperCase()} · {e.status} · {new Date(e.createdAt).toLocaleString('ru-RU')} · v:{' '}
+              {e.format.toUpperCase()} · {e.presentationMode ?? 'technical'} · {e.status} · {new Date(e.createdAt).toLocaleString('ru-RU')} · v:{' '}
               {e.versionId.slice(0, 8)}… · by {e.createdBy ?? '—'}{' '}
               {e.status === 'ready' ? (
                 <button type="button" style={{ fontSize: 10 }} onClick={() => doDownload.mutate(e)}>
@@ -128,7 +135,14 @@ export function ExportPanel({ projectId, versionId, onSaveBeforeExport }: Export
                 <button
                   type="button"
                   style={{ fontSize: 10 }}
-                  onClick={() => doExport.mutate({ format: e.format, retryOfExportId: e.id })}
+                  onClick={() => {
+                    setMode(e.presentationMode ?? 'technical');
+                    doExport.mutate({
+                      format: e.format,
+                      retryOfExportId: e.id,
+                      presentationMode: e.presentationMode ?? 'technical',
+                    });
+                  }}
                 >
                   Retry
                 </button>

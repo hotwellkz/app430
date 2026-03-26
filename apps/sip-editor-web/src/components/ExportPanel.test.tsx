@@ -14,6 +14,7 @@ vi.mock('../hooks/useSipProject', () => ({
           projectId: 'p1',
           versionId: 'v1',
           format: 'pdf',
+          presentationMode: 'technical',
           title: 't',
           createdAt: new Date().toISOString(),
           createdBy: 'u1',
@@ -26,6 +27,7 @@ vi.mock('../hooks/useSipProject', () => ({
           projectId: 'p1',
           versionId: 'v1',
           format: 'xlsx',
+          presentationMode: 'commercial',
           title: 't2',
           createdAt: new Date().toISOString(),
           createdBy: 'u1',
@@ -38,6 +40,7 @@ vi.mock('../hooks/useSipProject', () => ({
           projectId: 'p1',
           versionId: 'v1',
           format: 'csv',
+          presentationMode: 'technical',
           title: 't3',
           createdAt: new Date().toISOString(),
           createdBy: 'u1',
@@ -53,6 +56,7 @@ vi.mock('../hooks/useSipProject', () => ({
       projectId: 'p1',
       versionId: 'v1',
       format: 'pdf',
+      presentationMode: 'technical',
       title: 't',
       createdAt: new Date().toISOString(),
       createdBy: 'u1',
@@ -102,6 +106,7 @@ describe('ExportPanel', () => {
       </QueryClientProvider>
     );
     expect(screen.getByRole('button', { name: /Скачать PDF/i })).toBeTruthy();
+    expect(screen.getAllByRole('combobox').length).toBeGreaterThan(0);
     expect(screen.getByText(/Последние выгрузки/i)).toBeTruthy();
     expect(screen.getAllByText(/Retry/i).length).toBeGreaterThan(0);
   });
@@ -113,6 +118,7 @@ describe('ExportPanel', () => {
         <ExportPanel projectId="p1" versionId="v1" onSaveBeforeExport={async () => true} />
       </QueryClientProvider>
     );
+    fireEvent.change(screen.getAllByRole('combobox')[0]!, { target: { value: 'commercial' } });
     fireEvent.click(screen.getAllByRole('button', { name: /Скачать CSV/i })[0]!);
     fireEvent.click(screen.getAllByRole('button', { name: /Скачать XLSX/i })[0]!);
   });

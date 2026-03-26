@@ -45,6 +45,7 @@ export const zCreateVersionBody = z.object({
 export const zCreateExportBody = z.object({
   createdBy: z.string().min(1).max(128),
   format: z.enum(['pdf', 'csv', 'xlsx']),
+  presentationMode: z.enum(['technical', 'commercial']).optional().default('technical'),
   title: z.string().max(200).optional(),
   retryOfExportId: z.string().min(1).optional(),
 });

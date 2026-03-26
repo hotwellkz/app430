@@ -3,6 +3,7 @@ import type {
   BuildingModel,
   ExportArtifactMeta,
   ExportFormat,
+  ExportPresentationMode,
   ExportStatus,
   Project,
   ProjectStatus,
@@ -95,11 +96,14 @@ export function mapExportDoc(id: string, data: DocumentData): ExportArtifactMeta
   const format = data.format as ExportFormat | undefined;
   const safeFormat: ExportFormat =
     format === 'pdf' || format === 'xlsx' ? format : 'csv';
+  const mode = data.presentationMode as ExportPresentationMode | undefined;
+  const safeMode: ExportPresentationMode = mode === 'commercial' ? 'commercial' : 'technical';
   return {
     id,
     projectId: typeof data.projectId === 'string' ? data.projectId : '',
     versionId: typeof data.versionId === 'string' ? data.versionId : '',
     format: safeFormat,
+    presentationMode: safeMode,
     title: typeof data.title === 'string' ? data.title : `Export ${safeFormat.toUpperCase()}`,
     createdAt: tsToIso(data.createdAt),
     createdBy: typeof data.createdBy === 'string' ? data.createdBy : null,

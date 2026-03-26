@@ -58,6 +58,7 @@ export async function createProjectExport(
     projectTitle: project.title,
     version: { id: version.id, versionNumber: version.versionNumber },
     createdBy: actorId,
+    presentationMode: parsed.data.presentationMode,
   });
 
   const db = getDb();
@@ -74,6 +75,7 @@ export async function createProjectExport(
     projectId,
     versionId: version.id,
     format: parsed.data.format,
+    presentationMode: parsed.data.presentationMode,
     title: parsed.data.title ?? `Export ${parsed.data.format.toUpperCase()} v${version.versionNumber}`,
     createdAt: now,
     createdBy: actorId,

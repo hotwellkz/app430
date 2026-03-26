@@ -432,6 +432,28 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@22.19.15)(jsdom@29.0.1)
 
+  packages/commercial-engine:
+    dependencies:
+      '@2wix/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+      '@2wix/spec-engine':
+        specifier: workspace:*
+        version: link:../spec-engine
+    devDependencies:
+      '@2wix/domain-model':
+        specifier: workspace:*
+        version: link:../domain-model
+      '@2wix/panel-engine':
+        specifier: workspace:*
+        version: link:../panel-engine
+      typescript:
+        specifier: ^5.5.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.19.15)(jsdom@29.0.1)
+
   packages/domain-model:
     dependencies:
       '@2wix/shared-types':
@@ -466,6 +488,9 @@ importers:
 
   packages/export-engine:
     dependencies:
+      '@2wix/commercial-engine':
+        specifier: workspace:*
+        version: link:../commercial-engine
       '@2wix/panel-engine':
         specifier: workspace:*
         version: link:../panel-engine

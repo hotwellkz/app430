@@ -1,6 +1,7 @@
 import type { BuildingModel } from '@2wix/shared-types';
 import type { PanelizationResult } from '@2wix/panel-engine';
 import type { SpecSnapshot } from '@2wix/spec-engine';
+import { buildCommercialSnapshot } from '@2wix/commercial-engine';
 import type { BuildExportPackageOptions, ExportPackageSnapshot, ExportTables } from './types.js';
 
 export function buildExportPackage(
@@ -9,6 +10,13 @@ export function buildExportPackage(
   spec: SpecSnapshot,
   options: BuildExportPackageOptions
 ): ExportPackageSnapshot {
+  const commercial =
+    options.presentationMode === 'commercial'
+      ? buildCommercialSnapshot(spec, {
+          basedOnVersionId: options.version.id,
+          presentationMode: 'commercial',
+        })
+      : null;
   const warningCountByWall = new Map<string, number>();
   for (const w of panelization.warnings) {
     for (const id of w.relatedObjectIds) {
@@ -16,6 +24,7 @@ export function buildExportPackage(
     }
   }
   return {
+    presentationMode: options.presentationMode ?? 'technical',
     projectSummary: {
       projectId: model.meta.projectId ?? '',
       projectTitle: options.projectTitle,
@@ -59,6 +68,32 @@ export function buildExportPackage(
       category: x.category,
       sourceIds: x.sourceIds,
     })),
+    commercialSections:
+      commercial?.sections.map((s) => ({
+            id: s.id,
+            code: s.code,
+            title: s.title,
+            sourceTypes: s.sourceTypes,
+            itemCount: s.itemCount,
+            totalQty: s.totalQty,
+            totalAreaM2: s.totalAreaM2,
+            warningCount: s.warningCount,
+          })),
+    commercialItems:
+      commercial?.groupedItems.map((x) => ({
+            id: x.id,
+            code: x.code,
+            name: x.name,
+            unit: x.unit,
+            qty: x.qty,
+            totalAreaM2: x.totalAreaM2,
+            sourceTypes: x.sourceTypes,
+            sourceIds: x.sourceIds,
+            panelTypeIds: x.panelTypeIds,
+            costKey: x.costKey,
+            category: x.category,
+            group: x.group,
+          })),
     warnings: panelization.warnings,
     panelSettings: model.panelSettings,
     generatedAt: new Date().toISOString(),
@@ -67,7 +102,9 @@ export function buildExportPackage(
 }
 
 export function buildExportTables(snapshot: ExportPackageSnapshot): ExportTables {
+  const mode = snapshot.presentationMode ?? 'technical';
   const summaryRows = [
+    { metric: 'presentationMode', value: mode },
     { metric: 'projectTitle', value: snapshot.projectSummary.projectTitle },
     { metric: 'versionNumber', value: snapshot.projectSummary.versionNumber },
     { metric: 'floorsCount', value: snapshot.projectSummary.floorsCount },
@@ -83,6 +120,26 @@ export function buildExportTables(snapshot: ExportPackageSnapshot): ExportTables
     qty: i.qty,
     category: i.category ?? '',
     sourceIds: i.sourceIds.join(';'),
+  }));
+  const commercialRows = (snapshot.commercialItems ?? []).map((i) => ({
+    code: i.code,
+    name: i.name,
+    unit: i.unit,
+    qty: i.qty,
+    totalAreaM2: i.totalAreaM2 ?? '',
+    sourceTypes: i.sourceTypes.join(';'),
+    costKey: i.costKey ?? '',
+    category: i.category ?? '',
+    group: i.group ?? '',
+  }));
+  const sectionRows = (snapshot.commercialSections ?? []).map((s) => ({
+    code: s.code,
+    title: s.title,
+    sourceTypes: s.sourceTypes.join(';'),
+    itemCount: s.itemCount,
+    totalQty: s.totalQty,
+    totalAreaM2: s.totalAreaM2,
+    warningCount: s.warningCount,
   }));
   const wallRows = snapshot.wallSummaries.map((w) => ({
     wallId: w.wallId,
@@ -114,5 +171,5 @@ export function buildExportTables(snapshot: ExportPackageSnapshot): ExportTables
     message: w.message,
     relatedObjectIds: w.relatedObjectIds.join(';'),
   }));
-  return { summaryRows, bomRows, wallRows, slabRows, roofRows, warningRows };
+  return { presentationMode: mode, summaryRows, bomRows, commercialRows, sectionRows, wallRows, slabRows, roofRows, warningRows };
 }

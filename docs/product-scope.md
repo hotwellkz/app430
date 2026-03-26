@@ -171,6 +171,19 @@
 - Инспекторы (wall/slab/roof) теперь показывают spec counters и быстрый переход в спецификацию.
 - `export-engine` подготовлен к расширенному spec snapshot без поломки текущего export workflow.
 
+## Завершено: commercial layer MVP + export presentation upgrade (Sprint 15)
+
+- Добавлен отдельный `@2wix/commercial-engine` для derived `CommercialSnapshot` поверх expanded spec.
+- Введены presentation modes:
+  - `technical`
+  - `commercial`
+- Экспортные контракты/API/UI расширены `presentationMode` с backward-compatible default (`technical`).
+- Улучшены PDF/CSV/XLSX layouts:
+  - technical: подробный инженерный формат;
+  - commercial: укрупненные business-friendly sections/items + warnings summary.
+- `SpecPanel` улучшен по UX: фильтрация, сортировка, grouping mode, более читаемый warnings/object breakdown.
+- Подготовлены future hooks для pricing (`costKey`) без реализации реального pricing runtime.
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).

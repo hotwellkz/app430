@@ -10,7 +10,8 @@ function bufferFromPdf(snapshot: ExportPackageSnapshot): Promise<Buffer> {
     doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
-    doc.fontSize(14).text(`SIP Export Report: ${snapshot.projectSummary.projectTitle}`);
+    const mode = snapshot.presentationMode ?? 'technical';
+    doc.fontSize(14).text(`SIP Export Report (${mode}): ${snapshot.projectSummary.projectTitle}`);
     doc.moveDown();
     doc.fontSize(10).text(`Project ID: ${snapshot.projectSummary.projectId}`);
     doc.text(`Version: v${snapshot.projectSummary.versionNumber} (${snapshot.projectSummary.versionId})`);
@@ -25,8 +26,27 @@ function bufferFromPdf(snapshot: ExportPackageSnapshot): Promise<Buffer> {
     doc.text(`Area m2: ${snapshot.specSummary.totalPanelAreaM2}`);
     doc.text(`Warnings: ${snapshot.warnings.length}`);
     doc.moveDown();
+    const tables = buildExportTables(snapshot);
+    if (mode === 'commercial') {
+      doc.fontSize(11).text('Commercial Sections');
+      for (const r of tables.sectionRows.slice(0, 20)) {
+        doc.fontSize(9).text(`${r.code} | ${r.title} | qty: ${r.totalQty} | area: ${r.totalAreaM2}`);
+      }
+      doc.moveDown();
+      doc.fontSize(11).text('Commercial Items');
+      for (const r of tables.commercialRows.slice(0, 25)) {
+        doc.fontSize(9).text(`${r.code} | ${r.name} | ${r.unit}: ${r.qty}`);
+      }
+      doc.moveDown();
+      doc.fontSize(11).text('Warnings Summary');
+      for (const r of tables.warningRows.slice(0, 10)) {
+        doc.fontSize(9).text(`${r.code}: ${r.message}`);
+      }
+      doc.end();
+      return;
+    }
     doc.fontSize(11).text('Aggregated BOM');
-    const rows = buildExportTables(snapshot).bomRows.slice(0, 25);
+    const rows = tables.bomRows.slice(0, 25);
     doc.fontSize(9);
     for (const r of rows) {
       doc.text(`${r.code} | ${r.name} | ${r.unit}: ${r.qty}`);
@@ -41,9 +61,10 @@ export async function renderExportBinary(
 ): Promise<{ buffer: Buffer; mimeType: string }> {
   const tables = buildExportTables(snapshot);
   if (format === 'csv') {
-    const headers = Object.keys(tables.bomRows[0] ?? { code: '', name: '', unit: '', qty: '' });
+    const baseRows = tables.presentationMode === 'commercial' ? tables.commercialRows : tables.bomRows;
+    const headers = Object.keys(baseRows[0] ?? { code: '', name: '', unit: '', qty: '' });
     const lines = [headers.join(',')];
-    for (const row of tables.bomRows) {
+    for (const row of baseRows) {
       lines.push(headers.map((h) => JSON.stringify(String(row[h] ?? ''))).join(','));
     }
     return {
@@ -54,10 +75,15 @@ export async function renderExportBinary(
   if (format === 'xlsx') {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.summaryRows), 'Summary');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.bomRows), 'BOM');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.wallRows), 'Walls');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.slabRows), 'Slabs');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.roofRows), 'Roof');
+    if (tables.presentationMode === 'commercial') {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.commercialRows), 'Commercial');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.sectionRows), 'Sections');
+    } else {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.bomRows), 'BOM');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.wallRows), 'Walls');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.slabRows), 'Slabs');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.roofRows), 'Roof');
+    }
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tables.warningRows), 'Warnings');
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
     return {

@@ -80,4 +80,14 @@ describe('zCreateExportBody', () => {
       zCreateExportBody.safeParse({ createdBy: 'u1', format: 'pdf', retryOfExportId: 'exp-1' }).success
     ).toBe(true);
   });
+
+  it('accepts presentationMode', () => {
+    expect(
+      zCreateExportBody.safeParse({
+        createdBy: 'u1',
+        format: 'pdf',
+        presentationMode: 'commercial',
+      }).success
+    ).toBe(true);
+  });
 });

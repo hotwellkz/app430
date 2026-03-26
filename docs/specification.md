@@ -88,6 +88,15 @@ Per object (`wallId` / `slabId` / `roofId`):
   - `export-engine` использует spec snapshot как источник для BOM/wall sections.
 - Warnings из panelization включаются в export package и попадают в PDF/XLSX секции.
 
+## Spec -> Commercial layer (Sprint 15)
+
+- Добавлен отдельный `@2wix/commercial-engine`:
+  - `ExpandedSpecSnapshot -> CommercialSnapshot`.
+- Commercial snapshot остаётся derived state и не становится persisted source of truth.
+- Цель слоя:
+  - business-friendly секции/агрегации для выгрузки;
+  - стабильные cost-ready keys (`costKey`) без расчёта цены.
+
 ## Current limitations
 
 - No persisted BOM object in Firestore.

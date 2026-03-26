@@ -4,12 +4,13 @@ import { registerRequestContext } from '../plugins/requestContext.js';
 import { registerProjectRoutes } from './projectsRoutes.js';
 
 vi.mock('../services/exportService.js', () => ({
-  createProjectExport: vi.fn(async (projectId: string, body: { format: string; createdBy: string }) => ({
+  createProjectExport: vi.fn(async (projectId: string, body: { format: string; createdBy: string; presentationMode?: string }) => ({
     artifact: {
       id: 'e1',
       projectId,
       versionId: 'v1',
       format: body.format,
+      presentationMode: body.presentationMode ?? 'technical',
       title: 't',
       createdAt: new Date().toISOString(),
       createdBy: body.createdBy,
@@ -45,8 +46,8 @@ vi.mock('../services/exportService.js', () => ({
       basedOnVersionId: 'v1',
     },
   })),
-  listProjectExports: vi.fn(async () => [{ id: 'e1', projectId: 'p1', versionId: 'v1', format: 'pdf', title: 't', createdAt: new Date().toISOString(), createdBy: 'u1', status: 'ready', fileName: 'x.pdf', storagePath: null, errorMessage: null }]),
-  getProjectExport: vi.fn(async () => ({ artifact: { id: 'e1', projectId: 'p1', versionId: 'v1', format: 'pdf', title: 't', createdAt: new Date().toISOString(), createdBy: 'u1', status: 'ready', fileName: 'x.pdf', storagePath: null, errorMessage: null }, snapshot: null })),
+  listProjectExports: vi.fn(async () => [{ id: 'e1', projectId: 'p1', versionId: 'v1', format: 'pdf', presentationMode: 'technical', title: 't', createdAt: new Date().toISOString(), createdBy: 'u1', status: 'ready', fileName: 'x.pdf', storagePath: null, errorMessage: null }]),
+  getProjectExport: vi.fn(async () => ({ artifact: { id: 'e1', projectId: 'p1', versionId: 'v1', format: 'pdf', presentationMode: 'technical', title: 't', createdAt: new Date().toISOString(), createdBy: 'u1', status: 'ready', fileName: 'x.pdf', storagePath: null, errorMessage: null }, snapshot: null })),
   getProjectExportDownloadUrl: vi.fn(async () => ({ url: 'https://example.com/x.pdf', fileName: 'x.pdf' })),
 }));
 
@@ -64,6 +65,13 @@ describe('project exports routes', () => {
       payload: { createdBy: 'u1', format: 'pdf' },
     });
     expect(createRes.statusCode).toBe(201);
+    const createCommercialRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/exports',
+      headers,
+      payload: { createdBy: 'u1', format: 'xlsx', presentationMode: 'commercial' },
+    });
+    expect(createCommercialRes.statusCode).toBe(201);
 
     const listRes = await app.inject({
       method: 'GET',

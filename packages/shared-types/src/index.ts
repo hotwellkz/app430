@@ -208,6 +208,7 @@ export interface ProjectWithCurrentVersion {
 }
 
 export type ExportFormat = 'pdf' | 'csv' | 'xlsx';
+export type ExportPresentationMode = 'technical' | 'commercial';
 
 export type ExportStatus = 'pending' | 'ready' | 'failed';
 
@@ -216,6 +217,7 @@ export interface ExportArtifactMeta {
   projectId: string;
   versionId: string;
   format: ExportFormat;
+  presentationMode?: ExportPresentationMode;
   title: string;
   createdAt: string;
   createdBy: string | null;
@@ -240,6 +242,7 @@ export interface ExportPackageProjectSummary {
 }
 
 export interface ExportPackageSnapshot {
+  presentationMode?: ExportPresentationMode;
   projectSummary: ExportPackageProjectSummary;
   wallSummaries: Array<{
     wallId: string;
@@ -303,6 +306,30 @@ export interface ExportPackageSnapshot {
     category?: string;
     sourceIds: string[];
   }>;
+  commercialSections?: Array<{
+    id: string;
+    code: string;
+    title: string;
+    sourceTypes: Array<'wall' | 'slab' | 'roof'>;
+    itemCount: number;
+    totalQty: number;
+    totalAreaM2: number;
+    warningCount: number;
+  }>;
+  commercialItems?: Array<{
+    id: string;
+    code: string;
+    name: string;
+    unit: 'pcs' | 'm2' | 'm3' | 'lm';
+    qty: number;
+    totalAreaM2?: number;
+    sourceTypes: Array<'wall' | 'slab' | 'roof'>;
+    sourceIds: string[];
+    panelTypeIds: string[];
+    costKey?: string;
+    category?: string;
+    group?: string;
+  }>;
   warnings: Array<{
     id: string;
     code: string;
@@ -318,6 +345,7 @@ export interface ExportPackageSnapshot {
 export interface CreateExportRequest {
   createdBy: string;
   format: ExportFormat;
+  presentationMode?: ExportPresentationMode;
   title?: string;
   retryOfExportId?: string;
 }
