@@ -23,6 +23,8 @@ const SECTIONS: { id: ActivePanel; label: string }[] = [
   { id: 'walls', label: 'Стены' },
   { id: 'openings', label: 'Проёмы' },
   { id: 'sip', label: 'SIP' },
+  { id: 'spec', label: 'Спецификация' },
+  { id: 'exports', label: 'Экспорт' },
   { id: 'roof', label: 'Кровля' },
   { id: 'slabs', label: 'Плиты' },
   { id: 'versions', label: 'Версии' },

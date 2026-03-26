@@ -52,11 +52,16 @@ function resolvePanelDirection(wall: Wall): PanelDirection | null {
   return null;
 }
 
-function resolvePanelType(model: BuildingModel): PanelType | null {
-  const id = model.panelSettings.defaultPanelTypeId;
+function resolvePanelTypeById(model: BuildingModel, id: string | null | undefined): PanelType | null {
   if (!id) return null;
   const found = model.panelLibrary.find((p) => p.id === id && p.active);
   return found ?? null;
+}
+
+function resolveEffectivePanelType(model: BuildingModel, wall: Wall): PanelType | null {
+  const local = resolvePanelTypeById(model, wall.panelTypeId);
+  if (local) return local;
+  return resolvePanelTypeById(model, model.panelSettings.defaultPanelTypeId);
 }
 
 function splitByOpenings(lengthMm: number, openings: Opening[]): Array<{ start: number; end: number }> {
@@ -216,8 +221,8 @@ export function buildPanelizationSnapshot(
     );
   }
 
-  const panelType = resolvePanelType(model);
-  if (!panelType) {
+  const defaultPanelType = resolvePanelTypeById(model, model.panelSettings.defaultPanelTypeId);
+  if (!defaultPanelType) {
     warnings.push(
       makeWarning('PANEL_TYPE_NOT_SET', 'error', 'Не задан defaultPanelTypeId или тип панели неактивен', [])
     );
@@ -253,10 +258,22 @@ export function buildPanelizationSnapshot(
           eligible: false,
           reason: eligibility.reason,
           direction,
+          effectivePanelTypeId: null,
           panelCount: 0,
           warningCount: warnings.length - wallWarningsStart,
         });
         continue;
+      }
+      const panelType = resolveEffectivePanelType(model, wall);
+      if (!panelType) {
+        warnings.push(
+          makeWarning(
+            'PANEL_TYPE_NOT_SET',
+            'error',
+            `Для стены ${wall.id} не найден effective panel type`,
+            [wall.id]
+          )
+        );
       }
       if (!direction) {
         warnings.push(
@@ -272,6 +289,7 @@ export function buildPanelizationSnapshot(
           floorId: wall.floorId,
           eligible: true,
           direction: null,
+          effectivePanelTypeId: panelType?.id ?? null,
           panelCount: 0,
           warningCount: warnings.length - wallWarningsStart,
         });
@@ -283,6 +301,7 @@ export function buildPanelizationSnapshot(
           floorId: wall.floorId,
           eligible: true,
           direction,
+          effectivePanelTypeId: null,
           panelCount: 0,
           warningCount: warnings.length - wallWarningsStart,
         });
@@ -341,6 +360,7 @@ export function buildPanelizationSnapshot(
         floorId: wall.floorId,
         eligible: true,
         direction,
+        effectivePanelTypeId: panelType.id,
         panelCount: generatedPanels.length - beforePanels,
         warningCount: warnings.length - wallWarningsStart,
       });

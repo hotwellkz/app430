@@ -45,6 +45,7 @@ export interface WallPanelizationSummary {
   eligible: boolean;
   reason?: string;
   direction: PanelDirection | null;
+  effectivePanelTypeId: string | null;
   panelCount: number;
   warningCount: number;
 }

@@ -214,12 +214,14 @@ export function normalizeBuildingModel(raw: unknown): BuildingModel {
         : undefined;
     const panelizationEnabled =
       typeof w.panelizationEnabled === 'boolean' ? w.panelizationEnabled : undefined;
+    const panelTypeId = typeof w.panelTypeId === 'string' && w.panelTypeId.trim() ? w.panelTypeId : undefined;
     return {
       ...base,
       ...(wallType !== undefined ? { wallType } : {}),
       ...(structuralRole !== undefined ? { structuralRole } : {}),
       ...(panelDirection !== undefined ? { panelDirection } : {}),
       ...(panelizationEnabled !== undefined ? { panelizationEnabled } : {}),
+      ...(panelTypeId !== undefined ? { panelTypeId } : {}),
       ...(heightMm !== undefined ? { heightMm } : {}),
     };
   });

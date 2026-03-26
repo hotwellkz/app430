@@ -63,6 +63,7 @@ export function createWall(input: {
   structuralRole?: Wall['structuralRole'];
   panelizationEnabled?: Wall['panelizationEnabled'];
   panelDirection?: Wall['panelDirection'];
+  panelTypeId?: Wall['panelTypeId'];
   heightMm?: number;
 }): Wall {
   const w: Wall = {
@@ -76,6 +77,7 @@ export function createWall(input: {
   if (input.structuralRole !== undefined) w.structuralRole = input.structuralRole;
   if (input.panelizationEnabled !== undefined) w.panelizationEnabled = input.panelizationEnabled;
   if (input.panelDirection !== undefined) w.panelDirection = input.panelDirection;
+  if (input.panelTypeId !== undefined) w.panelTypeId = input.panelTypeId;
   if (input.heightMm !== undefined) w.heightMm = input.heightMm;
   return w;
 }
@@ -109,6 +111,7 @@ export function updateWallInModel(
       | 'structuralRole'
       | 'panelizationEnabled'
       | 'panelDirection'
+      | 'panelTypeId'
       | 'heightMm'
     >
   >

@@ -120,6 +120,14 @@ describe('panel-engine wall-first', () => {
     expect(r.generatedPanels.length).toBeGreaterThan(0);
   });
 
+  it('applies wall-level panel type override', () => {
+    const model = baseModel();
+    model.walls = [wall({ panelTypeId: 'panel-std-174-600' })];
+    const r = buildPanelizationSnapshot(model);
+    expect(r.generatedPanels.every((p) => p.panelTypeId === 'panel-std-174-600')).toBe(true);
+    expect(r.wallSummaries[0]?.effectivePanelTypeId).toBe('panel-std-174-600');
+  });
+
   it('generates stable labels', () => {
     const model = baseModel();
     model.walls = [wall()];

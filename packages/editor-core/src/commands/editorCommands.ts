@@ -50,6 +50,7 @@ export type EditorCommand =
           | 'structuralRole'
           | 'panelizationEnabled'
           | 'panelDirection'
+          | 'panelTypeId'
           | 'heightMm'
         >
       >;

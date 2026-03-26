@@ -99,6 +99,39 @@
   - блок SIP в `WallInspector` (eligibility/panels/warnings/editable fields).
 - Generated panels остаются derived state и не становятся source of truth в Firestore.
 
+## Завершено: spec / BOM MVP (Sprint 10, wall panels first)
+
+- Добавлен отдельный `@2wix/spec-engine` для агрегации спецификации поверх `panelization snapshot`.
+- Реализована агрегированная BOM-выдача по SIP wall panels:
+  - группировка по типам панелей;
+  - summary totals (panels/trimmed/area/walls/warnings);
+  - wall-level breakdown.
+- Добавлен wall-level `panelTypeId` override с fallback на global `defaultPanelTypeId`.
+- В `sip-editor-web` добавлена панель `Спецификация / BOM`:
+  - summary block;
+  - aggregated table;
+  - wall breakdown с быстрым выбором стены.
+- Добавлен экспорт derived спецификации:
+  - CSV;
+  - XLSX (Summary/BOM/Walls).
+- Spec остаётся derived state: source of truth по-прежнему `BuildingModel`.
+
+## Завершено: export package MVP (Sprint 11)
+
+- Добавлен отдельный `@2wix/export-engine` как единый pipeline выгрузки.
+- Добавлены форматы выгрузки:
+  - PDF report;
+  - CSV;
+  - XLSX.
+- В `sip-editor-web` добавлена панель `Экспорт / Выгрузки`:
+  - кнопки формирования PDF/CSV/XLSX;
+  - список последних выгрузок со статусом и traceability по версии.
+- API расширен endpoints:
+  - `POST /api/projects/:projectId/exports`;
+  - `GET /api/projects/:projectId/exports`;
+  - `GET /api/projects/:projectId/exports/:exportId`.
+- Экспорт привязан к текущей сохраненной версии проекта (не к несохраненному draft).
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).

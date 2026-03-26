@@ -303,9 +303,18 @@ importers:
       '@2wix/domain-model':
         specifier: workspace:*
         version: link:../../packages/domain-model
+      '@2wix/export-engine':
+        specifier: workspace:*
+        version: link:../../packages/export-engine
+      '@2wix/panel-engine':
+        specifier: workspace:*
+        version: link:../../packages/panel-engine
       '@2wix/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      '@2wix/spec-engine':
+        specifier: workspace:*
+        version: link:../../packages/spec-engine
       '@fastify/cors':
         specifier: ^9.0.1
         version: 9.0.1
@@ -343,12 +352,18 @@ importers:
       '@2wix/editor-core':
         specifier: workspace:*
         version: link:../../packages/editor-core
+      '@2wix/export-engine':
+        specifier: workspace:*
+        version: link:../../packages/export-engine
       '@2wix/panel-engine':
         specifier: workspace:*
         version: link:../../packages/panel-engine
       '@2wix/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      '@2wix/spec-engine':
+        specifier: workspace:*
+        version: link:../../packages/spec-engine
       '@2wix/ui-kit':
         specifier: workspace:*
         version: link:../../packages/ui-kit
@@ -361,6 +376,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.59.0
         version: 5.95.2(react@18.3.1)
+      jspdf:
+        specifier: ^2.5.2
+        version: 2.5.2
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -373,6 +391,9 @@ importers:
       three:
         specifier: ^0.183.2
         version: 0.183.2
+      xlsx:
+        specifier: ^0.18.5
+        version: 0.18.5
       zustand:
         specifier: ^4.5.5
         version: 4.5.7(@types/react@18.3.28)(immer@11.1.4)(react@18.3.1)
@@ -437,6 +458,28 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@22.19.15)(jsdom@29.0.1)
 
+  packages/export-engine:
+    dependencies:
+      '@2wix/panel-engine':
+        specifier: workspace:*
+        version: link:../panel-engine
+      '@2wix/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+      '@2wix/spec-engine':
+        specifier: workspace:*
+        version: link:../spec-engine
+    devDependencies:
+      '@2wix/domain-model':
+        specifier: workspace:*
+        version: link:../domain-model
+      typescript:
+        specifier: ^5.5.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.19.15)(jsdom@29.0.1)
+
   packages/panel-engine:
     dependencies:
       '@2wix/domain-model':
@@ -454,6 +497,25 @@ importers:
         version: 3.2.4(@types/node@22.19.15)(jsdom@29.0.1)
 
   packages/shared-types: {}
+
+  packages/spec-engine:
+    dependencies:
+      '@2wix/panel-engine':
+        specifier: workspace:*
+        version: link:../panel-engine
+      '@2wix/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+    devDependencies:
+      '@2wix/domain-model':
+        specifier: workspace:*
+        version: link:../domain-model
+      typescript:
+        specifier: ^5.5.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.19.15)(jsdom@29.0.1)
 
   packages/ui-kit:
     dependencies:

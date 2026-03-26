@@ -2,12 +2,15 @@ import { computeWallLengthMm, findWallById, getEffectiveWallHeight, getFloorById
 import { useEditorStore } from '@2wix/editor-core';
 import type { WallType } from '@2wix/shared-types';
 import { usePanelizationSnapshot } from '../panelization/usePanelizationSnapshot';
+import { useSpecSnapshot } from '../spec/useSpecSnapshot';
 
 export function WallInspector() {
   const draft = useEditorStore((s) => s.document.draftModel);
   const selection = useEditorStore((s) => s.selection);
   const applyCommand = useEditorStore((s) => s.applyCommand);
+  const setActivePanel = useEditorStore((s) => s.setActivePanel);
   const panelization = usePanelizationSnapshot();
+  const spec = useSpecSnapshot();
 
   if (!draft || selection.selectedObjectType !== 'wall' || !selection.selectedObjectId) {
     return (
@@ -26,10 +29,12 @@ export function WallInspector() {
   const effectiveHeight = getEffectiveWallHeight(wall, floor);
   const heightMode = getWallHeightMode(wall);
   const summary = panelization?.wallSummaries.find((x) => x.wallId === wall.id);
+  const wallSpec = spec?.wallSummaries.find((x) => x.wallId === wall.id);
   const wallWarnings = panelization?.warnings.filter((w) => w.relatedObjectIds.includes(wall.id)) ?? [];
   const structuralRole = wall.structuralRole ?? 'bearing';
   const panelDirection = wall.panelDirection ?? 'vertical';
   const enabled = wall.panelizationEnabled ?? wallType === 'external';
+  const effectivePanelTypeId = wall.panelTypeId ?? draft.panelSettings.defaultPanelTypeId ?? '';
 
   return (
     <div style={{ fontSize: 13 }}>
@@ -170,11 +175,43 @@ export function WallInspector() {
             <option value="horizontal">horizontal</option>
           </select>
         </dd>
+        <dt className="twix-muted">SIP: panel type (override)</dt>
+        <dd style={{ margin: 0 }}>
+          <select
+            value={wall.panelTypeId ?? ''}
+            onChange={(e) =>
+              applyCommand({
+                type: 'updateWall',
+                wallId: wall.id,
+                patch: { panelTypeId: e.target.value || undefined },
+              })
+            }
+            style={{ width: '100%', padding: 4 }}
+          >
+            <option value="">global default ({draft.panelSettings.defaultPanelTypeId ?? '—'})</option>
+            {draft.panelLibrary.filter((p) => p.active).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.code}
+              </option>
+            ))}
+          </select>
+        </dd>
+        <dt className="twix-muted">SIP: effective panel type</dt>
+        <dd style={{ margin: 0 }}>{effectivePanelTypeId || '—'}</dd>
         <dt className="twix-muted">SIP eligibility</dt>
         <dd style={{ margin: 0 }}>{summary?.eligible ? 'eligible' : `skipped (${summary?.reason ?? '—'})`}</dd>
         <dt className="twix-muted">SIP panels / warnings</dt>
         <dd style={{ margin: 0 }}>
           {summary?.panelCount ?? 0} / {wallWarnings.length}
+        </dd>
+        <dt className="twix-muted">SPEC panels / trimmed / area</dt>
+        <dd style={{ margin: 0 }}>
+          {wallSpec?.panelCount ?? 0} / {wallSpec?.trimmedCount ?? 0} / {wallSpec?.totalAreaM2 ?? 0} m2
+          <div style={{ marginTop: 4 }}>
+            <button type="button" style={{ fontSize: 11 }} onClick={() => setActivePanel('spec')}>
+              Показать в спецификации
+            </button>
+          </div>
         </dd>
         {wallWarnings.length > 0 ? (
           <>

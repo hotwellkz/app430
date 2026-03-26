@@ -1,0 +1,23 @@
+{
+  "name": "@2wix/export-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@2wix/panel-engine": "workspace:*",
+    "@2wix/shared-types": "workspace:*",
+    "@2wix/spec-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@2wix/domain-model": "workspace:*",
+    "typescript": "^5.5.3",
+    "vitest": "^3.2.4"
+  }
+}

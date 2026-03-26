@@ -73,6 +73,15 @@
 - В `editor-core` добавлена только модельная команда `updatePanelSettings` для правки глобальных SIP-настроек в `draftModel.panelSettings`.
 - Любая команда, меняющая `draftModel` (стены, проёмы, этажи, wall SIP fields, panel settings), автоматически даёт новый snapshot при следующем пересчёте в UI-слое (`useMemo`).
 
+### Spec snapshot и связь с panelization (Sprint 10)
+
+- Спецификация считается в отдельном `@2wix/spec-engine` и зависит от:
+  - `draftModel`;
+  - `panelization snapshot`.
+- Поток: `draftModel` -> `buildPanelizationSnapshot` -> `buildSpecSnapshot`.
+- `editor-core` не хранит BOM как persisted source of truth и не ведёт отдельную историю для spec.
+- Любая модельная команда (включая `updatePanelSettings`, `updateWall.panelTypeId`, geometry/openings/floors) приводит к пересчёту spec через derived hooks в web-layer.
+
 ### Effective высота стен
 
 - Для стены введена логика **effective height**:

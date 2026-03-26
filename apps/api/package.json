@@ -13,6 +13,9 @@
   },
   "dependencies": {
     "@2wix/domain-model": "workspace:*",
+    "@2wix/export-engine": "workspace:*",
+    "@2wix/panel-engine": "workspace:*",
+    "@2wix/spec-engine": "workspace:*",
     "@2wix/shared-types": "workspace:*",
     "@fastify/cors": "^9.0.1",
     "dotenv": "^16.4.5",

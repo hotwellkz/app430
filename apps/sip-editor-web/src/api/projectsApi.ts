@@ -1,6 +1,10 @@
 import type {
+  CreateExportRequest,
+  CreateExportResponse,
   CreateProjectRequest,
   CreateVersionRequest,
+  ExportArtifactMeta,
+  ExportPackageSnapshot,
   PatchCurrentVersionRequestBody,
   Project,
   ProjectVersion,
@@ -56,4 +60,27 @@ export async function patchCurrentVersion(
       body: JSON.stringify(body),
     }
   );
+}
+
+export async function createProjectExport(
+  projectId: string,
+  body: CreateExportRequest
+): Promise<CreateExportResponse> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/exports`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function listProjectExports(
+  projectId: string
+): Promise<{ exports: ExportArtifactMeta[] }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/exports`);
+}
+
+export async function getProjectExport(
+  projectId: string,
+  exportId: string
+): Promise<{ artifact: ExportArtifactMeta; snapshot: ExportPackageSnapshot | null }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/exports/${encodeURIComponent(exportId)}`);
 }

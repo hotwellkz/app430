@@ -88,6 +88,7 @@ export interface Wall {
   structuralRole?: StructuralRole;
   panelizationEnabled?: boolean;
   panelDirection?: PanelDirection;
+  panelTypeId?: string;
   /** Высота стены в мм (опционально, для панелей и спецификации). */
   heightMm?: number;
 }
@@ -200,6 +201,89 @@ export interface VersionConflictDetails {
 export interface ProjectWithCurrentVersion {
   project: Project;
   currentVersion: ProjectVersion | null;
+}
+
+export type ExportFormat = 'pdf' | 'csv' | 'xlsx';
+
+export type ExportStatus = 'pending' | 'ready' | 'failed';
+
+export interface ExportArtifactMeta {
+  id: string;
+  projectId: string;
+  versionId: string;
+  format: ExportFormat;
+  title: string;
+  createdAt: string;
+  createdBy: string | null;
+  status: ExportStatus;
+  fileName: string;
+  storagePath?: string | null;
+  errorMessage?: string | null;
+}
+
+export interface ExportPackageProjectSummary {
+  projectId: string;
+  projectTitle: string;
+  versionId: string;
+  versionNumber: number;
+  generatedBy: string | null;
+  floorsCount: number;
+}
+
+export interface ExportPackageSnapshot {
+  projectSummary: ExportPackageProjectSummary;
+  wallSummaries: Array<{
+    wallId: string;
+    floorId: string;
+    panelCount: number;
+    trimmedCount: number;
+    totalAreaM2: number;
+    warningCount: number;
+  }>;
+  panelizationSummary: {
+    eligibleWalls: number;
+    panelizedWalls: number;
+    generatedPanels: number;
+    warnings: number;
+    errors: number;
+  };
+  specSummary: {
+    totalPanels: number;
+    totalTrimmedPanels: number;
+    totalPanelAreaM2: number;
+    wallCountIncluded: number;
+    warningCount: number;
+  };
+  aggregatedSpecItems: Array<{
+    id: string;
+    code: string;
+    name: string;
+    unit: 'pcs' | 'm2' | 'm3' | 'lm';
+    qty: number;
+    category?: string;
+    sourceIds: string[];
+  }>;
+  warnings: Array<{
+    id: string;
+    code: string;
+    severity: 'info' | 'warning' | 'error';
+    message: string;
+    relatedObjectIds: string[];
+  }>;
+  panelSettings: PanelSettings;
+  generatedAt: string;
+  basedOnVersionId: string;
+}
+
+export interface CreateExportRequest {
+  createdBy: string;
+  format: ExportFormat;
+  title?: string;
+}
+
+export interface CreateExportResponse {
+  artifact: ExportArtifactMeta;
+  snapshot: ExportPackageSnapshot;
 }
 
 /** Единый формат ошибок API. */

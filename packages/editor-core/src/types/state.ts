@@ -33,6 +33,8 @@ export type ActivePanel =
   | 'walls'
   | 'openings'
   | 'sip'
+  | 'spec'
+  | 'exports'
   | 'roof'
   | 'slabs'
   | 'versions';

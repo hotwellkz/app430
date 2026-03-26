@@ -13,7 +13,9 @@
   "dependencies": {
     "@2wix/domain-model": "workspace:*",
     "@2wix/editor-core": "workspace:*",
+    "@2wix/export-engine": "workspace:*",
     "@2wix/panel-engine": "workspace:*",
+    "@2wix/spec-engine": "workspace:*",
     "@2wix/shared-types": "workspace:*",
     "@2wix/ui-kit": "workspace:*",
     "@react-three/drei": "^9.108.3",
@@ -23,6 +25,8 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.22.3",
     "three": "^0.183.2",
+    "jspdf": "^2.5.2",
+    "xlsx": "^0.18.5",
     "zustand": "^4.5.5"
   },
   "devDependencies": {

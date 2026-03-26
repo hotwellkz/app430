@@ -1,5 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { getCurrentVersion, getProject, listVersions } from '@/api/projectsApi';
+import {
+  createProjectExport,
+  getCurrentVersion,
+  getProject,
+  listProjectExports,
+  listVersions,
+} from '@/api/projectsApi';
 
 export function useSipProject(projectId: string | undefined) {
   return useQuery({
@@ -33,3 +39,16 @@ export function useSipVersionsList(projectId: string | undefined, enabled: boole
     },
   });
 }
+
+export function useSipExports(projectId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ['sip-exports', projectId],
+    enabled: Boolean(projectId) && enabled,
+    queryFn: async () => {
+      if (!projectId) throw new Error('projectId обязателен');
+      return listProjectExports(projectId);
+    },
+  });
+}
+
+export { createProjectExport };

@@ -42,6 +42,12 @@ export const zCreateVersionBody = z.object({
   mode: z.enum(['clone-current', 'from-version']).optional().default('clone-current'),
 });
 
+export const zCreateExportBody = z.object({
+  createdBy: z.string().min(1).max(128),
+  format: z.enum(['pdf', 'csv', 'xlsx']),
+  title: z.string().max(200).optional(),
+});
+
 export function formatZodError(err: z.ZodError): unknown {
   return err.flatten();
 }

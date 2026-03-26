@@ -170,6 +170,41 @@
   - избежать преждевременной сложности (roof/slab geometry, cut optimization, nesting);
   - подготовить базу для Sprint 10+ (спецификация и экспорт), не вводя хрупкие полу-решения.
 
+### Spec-engine boundary (Sprint 10)
+
+- BOM/spec aggregation вынесена в `@2wix/spec-engine`, а не в `panel-engine` и не в React-компоненты.
+- `panel-engine` отвечает за геометрию/раскладку и warnings.
+- `spec-engine` отвечает за бизнес-агрегацию (`items`, `summary`, `wall breakdown`) и traceability (`sourceIds`).
+
+### Почему spec остаётся derived state
+
+- Persisted source of truth остаётся `BuildingModel`.
+- `generatedPanels` и `spec snapshot` строятся на лету из `draftModel`.
+- Это позволяет менять правила агрегации/экспорта без миграций Firestore и без риска рассинхронизации с моделью.
+
+### Почему BOM expansion отложен
+
+- В Sprint 10 intentionally включены только SIP wall panels.
+- Roof/slab/material-cost/ERP/PDF не включены, пока не стабилизированы wall rules и wall-level overrides.
+- Такой scope даёт быстрый и проверяемый бизнес-результат: first BOM + CSV/XLSX export.
+
+### Export-engine boundary (Sprint 11)
+
+- `@2wix/export-engine` выделен отдельно от React/UI и отдельно от `@2wix/spec-engine`.
+- `spec-engine` считает спецификацию, `export-engine` формирует export package и unified tables для PDF/CSV/XLSX.
+
+### Export consistency: current version vs draft
+
+- Для Sprint 11 выбран простой и однозначный контракт: экспорт строится из текущей сохраненной версии проекта.
+- Если в редакторе есть unsaved draft, UI явно предупреждает, что эти изменения в файл не попадут.
+- Это убирает двусмысленность в CRM и обеспечивает traceability по `versionId`.
+
+### Storage strategy (MVP fallback)
+
+- На MVP используется API-first workflow с хранением метаданных и snapshot в Firestore (`projectExports`).
+- Физический файл генерируется на клиенте при запросе (browser download fallback).
+- В metadata уже есть поля `storagePath/status/errorMessage`, что позволяет позже перейти на object storage без лома контракта.
+
 ## Коллекции Firestore
 
 | Коллекция | Назначение |

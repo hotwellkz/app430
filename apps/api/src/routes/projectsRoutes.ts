@@ -2,6 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import { requireSipUserId } from '../plugins/requestContext.js';
 import { sendRouteError } from './errorReply.js';
 import {
+  createProjectExport,
+  getProjectExport,
+  listProjectExports,
+} from '../services/exportService.js';
+import {
   createProject,
   createVersion,
   getCurrentVersion,
@@ -110,6 +115,45 @@ export async function registerProjectRoutes(app: FastifyInstance): Promise<void>
           actorId
         );
         return reply.send({ version });
+      } catch (e) {
+        return sendRouteError(reply, request, e);
+      }
+    }
+  );
+
+  app.post<{ Params: { projectId: string } }>(
+    '/api/projects/:projectId/exports',
+    async (request, reply) => {
+      try {
+        const actorId = requireSipUserId(request);
+        const result = await createProjectExport(request.params.projectId, request.body, actorId);
+        return reply.code(201).send(result);
+      } catch (e) {
+        return sendRouteError(reply, request, e);
+      }
+    }
+  );
+
+  app.get<{ Params: { projectId: string } }>(
+    '/api/projects/:projectId/exports',
+    async (request, reply) => {
+      try {
+        const actorId = requireSipUserId(request);
+        const exportsList = await listProjectExports(request.params.projectId, actorId);
+        return reply.send({ exports: exportsList });
+      } catch (e) {
+        return sendRouteError(reply, request, e);
+      }
+    }
+  );
+
+  app.get<{ Params: { projectId: string; exportId: string } }>(
+    '/api/projects/:projectId/exports/:exportId',
+    async (request, reply) => {
+      try {
+        const actorId = requireSipUserId(request);
+        const result = await getProjectExport(request.params.projectId, request.params.exportId, actorId);
+        return reply.send(result);
       } catch (e) {
         return sendRouteError(reply, request, e);
       }

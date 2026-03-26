@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  zCreateExportBody,
   zCreateProjectBody,
   zPatchCurrentBody,
   zCreateVersionBody,
@@ -14,7 +15,15 @@ const minimalModel = {
   slabs: [],
   roofs: [],
   panelLibrary: [],
-  panelSettings: { defaultSupplier: null, toleranceMm: 2 },
+  panelSettings: {
+    defaultPanelTypeId: null,
+    allowTrimmedPanels: true,
+    minTrimWidthMm: 250,
+    preferFullPanels: true,
+    labelPrefixWall: 'W',
+    labelPrefixRoof: 'R',
+    labelPrefixSlab: 'S',
+  },
 };
 
 describe('zCreateProjectBody', () => {
@@ -52,5 +61,17 @@ describe('zCreateVersionBody', () => {
   it('defaults mode', () => {
     const r = zCreateVersionBody.parse({ createdBy: 'u1' });
     expect(r.mode).toBe('clone-current');
+  });
+});
+
+describe('zCreateExportBody', () => {
+  it('accepts supported formats', () => {
+    expect(zCreateExportBody.safeParse({ createdBy: 'u1', format: 'pdf' }).success).toBe(true);
+    expect(zCreateExportBody.safeParse({ createdBy: 'u1', format: 'csv' }).success).toBe(true);
+    expect(zCreateExportBody.safeParse({ createdBy: 'u1', format: 'xlsx' }).success).toBe(true);
+  });
+
+  it('rejects unknown format', () => {
+    expect(zCreateExportBody.safeParse({ createdBy: 'u1', format: 'docx' }).success).toBe(false);
   });
 });

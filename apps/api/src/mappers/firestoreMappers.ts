@@ -1,6 +1,9 @@
 import type { DocumentData, Timestamp } from 'firebase-admin/firestore';
 import type {
   BuildingModel,
+  ExportArtifactMeta,
+  ExportFormat,
+  ExportStatus,
   Project,
   ProjectStatus,
   ProjectVersion,
@@ -82,5 +85,27 @@ export function mapVersionDoc(
     basedOnVersionId:
       typeof data.basedOnVersionId === 'string' ? data.basedOnVersionId : null,
     isSnapshot: data.isSnapshot === true,
+  };
+}
+
+export function mapExportDoc(id: string, data: DocumentData): ExportArtifactMeta {
+  const status = data.status as ExportStatus | undefined;
+  const safeStatus: ExportStatus =
+    status === 'pending' || status === 'failed' ? status : 'ready';
+  const format = data.format as ExportFormat | undefined;
+  const safeFormat: ExportFormat =
+    format === 'pdf' || format === 'xlsx' ? format : 'csv';
+  return {
+    id,
+    projectId: typeof data.projectId === 'string' ? data.projectId : '',
+    versionId: typeof data.versionId === 'string' ? data.versionId : '',
+    format: safeFormat,
+    title: typeof data.title === 'string' ? data.title : `Export ${safeFormat.toUpperCase()}`,
+    createdAt: tsToIso(data.createdAt),
+    createdBy: typeof data.createdBy === 'string' ? data.createdBy : null,
+    status: safeStatus,
+    fileName: typeof data.fileName === 'string' ? data.fileName : `export.${safeFormat}`,
+    storagePath: typeof data.storagePath === 'string' ? data.storagePath : null,
+    errorMessage: typeof data.errorMessage === 'string' ? data.errorMessage : null,
   };
 }

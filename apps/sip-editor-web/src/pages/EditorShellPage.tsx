@@ -18,6 +18,8 @@ import { EditorToolbar } from '@/components/EditorToolbar';
 import { BuildingSummaryPanel } from '@/components/BuildingSummaryPanel';
 import { BuildingWarningsPanel } from '@/components/BuildingWarningsPanel';
 import { PanelizationPanel } from '@/components/PanelizationPanel';
+import { SpecPanel } from '@/components/SpecPanel';
+import { ExportPanel } from '@/components/ExportPanel';
 import { FloorInspector } from '@/components/FloorInspector';
 import { OpeningInspector } from '@/components/OpeningInspector';
 import { RoofInspector } from '@/components/RoofInspector';
@@ -541,6 +543,8 @@ export function EditorShellPage() {
             <BuildingSummaryPanel />
             <BuildingWarningsPanel />
             <PanelizationPanel />
+            <SpecPanel />
+            <ExportPanel projectId={projectId} versionId={version?.id ?? null} />
             <div
               style={{
                 marginBottom: 12,
