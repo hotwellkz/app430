@@ -217,6 +217,35 @@ Optimistic concurrency. Тело:
 }
 ```
 
+### `POST /api/projects/:projectId/import-jobs/:jobId/prepare-editor-apply`
+
+Тело:
+
+```json
+{
+  "generatedBy": "== x-sip-user-id"
+}
+```
+
+Preconditions:
+
+- `ImportJob.status = needs_review`
+- `ImportJob.review.status = applied`
+- `ImportJob.review.reviewedSnapshot` существует
+
+Если preconditions не выполнены -> `409 CONFLICT`.
+
+Успешный ответ `200`:
+
+```json
+{
+  "job": { "...": "ImportJob with editorApply state" },
+  "candidate": { "...": "BuildingModelCandidate" }
+}
+```
+
+`BuildingModelCandidate` — отдельный backend result; он не применяет данные в текущую `ProjectVersion` автоматически.
+
 ## Доступ
 
 - Пустой `allowedEditorIds` в проекте: редактировать может только `createdBy`.

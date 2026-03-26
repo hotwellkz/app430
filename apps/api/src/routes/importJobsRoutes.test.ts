@@ -177,10 +177,104 @@ vi.mock('../services/importJobService.js', () => ({
       },
     };
   }),
+  prepareImportJobEditorApply: vi.fn(async (projectId: string, jobId: string, body: { generatedBy?: string }) => {
+    if (projectId === 'p2') {
+      throw new NotFoundError(`Import job не найден в проекте: ${jobId}`);
+    }
+    if (!body?.generatedBy) {
+      throw new ValidationAppError('Невалидное тело prepare-editor-apply запроса');
+    }
+    if (jobId === 'ij-not-ready') {
+      throw new AppHttpError(409, 'CONFLICT', 'Import job не готов к editor-apply stage');
+    }
+    return {
+      job: {
+        id: jobId,
+        projectId,
+        status: 'needs_review',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: 'u1',
+        importSchemaVersion: 1,
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+        snapshot: null,
+        review: {
+          status: 'applied',
+          applyStatus: 'applied',
+          decisions: {},
+          missingRequiredDecisions: [],
+          remainingBlockingIssueIds: [],
+          isReadyToApply: true,
+        },
+        editorApply: {
+          status: 'candidate_ready',
+          candidate: {
+            model: {
+              meta: { id: 'm1', name: 'Candidate' },
+              settings: { units: 'mm', defaultWallThicknessMm: 163, gridStepMm: 100 },
+              floors: [],
+              walls: [],
+              openings: [],
+              slabs: [],
+              roofs: [],
+              panelLibrary: [],
+              panelSettings: {
+                defaultPanelTypeId: null,
+                allowTrimmedPanels: true,
+                minTrimWidthMm: 250,
+                preferFullPanels: true,
+                labelPrefixWall: 'W',
+                labelPrefixRoof: 'R',
+                labelPrefixSlab: 'S',
+              },
+            },
+            warnings: [],
+            trace: [],
+            mapperVersion: 'import-candidate-v1',
+            generatedAt: new Date().toISOString(),
+            basedOnImportJobId: jobId,
+            basedOnReviewedSnapshotVersion: 'x',
+          },
+          errorMessage: null,
+          generatedAt: new Date().toISOString(),
+          generatedBy: body.generatedBy,
+          mapperVersion: 'import-candidate-v1',
+        },
+        errorMessage: null,
+      },
+      candidate: {
+        model: {
+          meta: { id: 'm1', name: 'Candidate' },
+          settings: { units: 'mm', defaultWallThicknessMm: 163, gridStepMm: 100 },
+          floors: [],
+          walls: [],
+          openings: [],
+          slabs: [],
+          roofs: [],
+          panelLibrary: [],
+          panelSettings: {
+            defaultPanelTypeId: null,
+            allowTrimmedPanels: true,
+            minTrimWidthMm: 250,
+            preferFullPanels: true,
+            labelPrefixWall: 'W',
+            labelPrefixRoof: 'R',
+            labelPrefixSlab: 'S',
+          },
+        },
+        warnings: [],
+        trace: [],
+        mapperVersion: 'import-candidate-v1',
+        generatedAt: new Date().toISOString(),
+        basedOnImportJobId: jobId,
+        basedOnReviewedSnapshotVersion: 'x',
+      },
+    };
+  }),
 }));
 
 describe('import jobs routes', () => {
-  it('create/get/list/review/apply and validation scenarios', async () => {
+  it('create/get/list/review/apply/prepare and validation scenarios', async () => {
     const app = Fastify();
     registerRequestContext(app);
     await registerProjectRoutes(app);
@@ -265,6 +359,38 @@ describe('import jobs routes', () => {
       payload: { appliedBy: 'u1' },
     });
     expect(applyRes.statusCode).toBe(200);
+
+    const prepareNotReadyRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/import-jobs/ij-not-ready/prepare-editor-apply',
+      headers,
+      payload: { generatedBy: 'u1' },
+    });
+    expect(prepareNotReadyRes.statusCode).toBe(409);
+
+    const prepareRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/import-jobs/ij-1/prepare-editor-apply',
+      headers,
+      payload: { generatedBy: 'u1' },
+    });
+    expect(prepareRes.statusCode).toBe(200);
+
+    const prepareInvalidRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/import-jobs/ij-1/prepare-editor-apply',
+      headers,
+      payload: {},
+    });
+    expect(prepareInvalidRes.statusCode).toBe(400);
+
+    const prepareForeignRes = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p2/import-jobs/ij-1/prepare-editor-apply',
+      headers,
+      payload: { generatedBy: 'u1' },
+    });
+    expect(prepareForeignRes.statusCode).toBe(404);
 
     await app.close();
     process.env.IMPORT_JOB_EXECUTION_MODE = undefined;

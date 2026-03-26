@@ -2,14 +2,17 @@ import { FieldValue } from 'firebase-admin/firestore';
 import type {
   ArchitecturalImportSnapshot,
   ApplyImportReviewResponse,
+  BuildingModelCandidate,
   CreateImportJobRequest,
   CreateImportJobResponse,
+  ImportEditorApplyState,
   ImportJob,
   ImportRequiredDecision,
   ImportReviewState,
   ImportJobStatus,
   ImportUserDecisionSet,
   ListImportJobsResponse,
+  PrepareEditorApplyResponse,
   ReviewedArchitecturalSnapshot,
   SaveImportReviewResponse,
 } from '@2wix/shared-types';
@@ -22,6 +25,7 @@ import {
   zApplyImportReviewBody,
   zArchitecturalImportSnapshot,
   zCreateImportJobBody,
+  zPrepareEditorApplyBody,
   zReviewedArchitecturalSnapshot,
   zSaveImportReviewBody,
 } from '../validation/schemas.js';
@@ -30,6 +34,10 @@ import type { ArchitecturalExtractorAdapter } from './import/extractorAdapter.js
 import { resolveExtractorAdapter } from './import/resolveExtractorAdapter.js';
 import type { ImportJobRunner } from './import/importJobRunner.js';
 import { resolveImportJobRunner } from './import/resolveImportJobRunner.js';
+import {
+  buildBuildingModelCandidateFromReviewedSnapshot,
+  IMPORT_CANDIDATE_MAPPER_VERSION,
+} from './import/buildBuildingModelCandidate.js';
 
 export const IMPORT_SCHEMA_VERSION = 1;
 
@@ -172,6 +180,17 @@ function buildReviewState(
   };
 }
 
+function createInitialEditorApplyState(): ImportEditorApplyState {
+  return {
+    status: 'draft',
+    candidate: undefined,
+    errorMessage: null,
+    generatedAt: null,
+    generatedBy: null,
+    mapperVersion: null,
+  };
+}
+
 function applyReviewDecisions(
   snapshot: ArchitecturalImportSnapshot,
   decisions: ImportUserDecisionSet
@@ -291,6 +310,7 @@ export async function completeImportJobWithSnapshot(
     status: 'needs_review',
     snapshot: snapshotValid.data,
     review: buildReviewState(snapshotValid.data, {}, current.createdBy, current.review),
+    editorApply: createInitialEditorApplyState(),
     errorMessage: null,
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -397,6 +417,7 @@ export async function saveImportJobReview(
   const db = getDb();
   await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).update({
     review: nextReview,
+    editorApply: createInitialEditorApplyState(),
     updatedAt: FieldValue.serverTimestamp(),
   });
   return { job: await getImportJobById(jobId) };
@@ -474,4 +495,73 @@ export async function listImportJobs(
   const items = qs.docs.map((d) => mapImportJobDoc(d.id, d.data() ?? {}));
   items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   return { items };
+}
+
+export async function prepareImportJobEditorApply(
+  projectId: string,
+  jobId: string,
+  body: unknown,
+  actorId: string
+): Promise<PrepareEditorApplyResponse> {
+  const parsed = zPrepareEditorApplyBody.safeParse(body);
+  if (!parsed.success) {
+    throw new ValidationAppError(
+      'Невалидное тело prepare-editor-apply запроса',
+      formatZodError(parsed.error)
+    );
+  }
+  if (parsed.data.generatedBy !== actorId) {
+    throw new ValidationAppError('generatedBy должен совпадать с x-sip-user-id');
+  }
+  await getProject(projectId, actorId);
+  const job = await getImportJobById(jobId);
+  if (job.projectId !== projectId) {
+    throw new NotFoundError(`Import job не найден в проекте: ${jobId}`);
+  }
+  if (job.status !== 'needs_review') {
+    throw new AppHttpError(409, 'CONFLICT', 'Import job не готов к editor-apply stage');
+  }
+  if (!job.review || job.review.status !== 'applied' || !job.review.reviewedSnapshot) {
+    throw new AppHttpError(
+      409,
+      'CONFLICT',
+      'Review должен быть applied и содержать reviewedSnapshot'
+    );
+  }
+
+  let candidate: BuildingModelCandidate;
+  try {
+    candidate = buildBuildingModelCandidateFromReviewedSnapshot(job.review.reviewedSnapshot, {
+      importJobId: job.id,
+    });
+  } catch (error) {
+    const db = getDb();
+    await db.collection(COLLECTIONS.IMPORT_JOBS).doc(job.id).update({
+      editorApply: {
+        status: 'failed',
+        candidate: null,
+        errorMessage: error instanceof Error ? error.message : 'Candidate generation failed',
+        generatedAt: nowIso(),
+        generatedBy: actorId,
+        mapperVersion: IMPORT_CANDIDATE_MAPPER_VERSION,
+      },
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    throw new AppHttpError(409, 'CONFLICT', 'Не удалось построить editor candidate');
+  }
+
+  const db = getDb();
+  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(job.id).update({
+    editorApply: {
+      status: 'candidate_ready',
+      candidate,
+      errorMessage: null,
+      generatedAt: nowIso(),
+      generatedBy: actorId,
+      mapperVersion: candidate.mapperVersion,
+    },
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  const updated = await getImportJobById(job.id);
+  return { job: updated, candidate };
 }

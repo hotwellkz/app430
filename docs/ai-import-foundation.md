@@ -13,6 +13,10 @@
 - Добавлен review/apply backend слой:
   - decisions сохраняются отдельно от extractor snapshot;
   - apply-review создаёт отдельный `ReviewedArchitecturalSnapshot` (без BuildingModel mapping).
+- Добавлен explicit editor-apply backend stage:
+  - из `review.reviewedSnapshot` строится `BuildingModelCandidate`;
+  - candidate сохраняется в `importJob.editorApply`;
+  - реальный apply в editor/version пока не выполняется.
 
 ## Endpoints
 
@@ -31,6 +35,10 @@
 - `POST /api/projects/:projectId/import-jobs/:jobId/apply-review`
   - Проверяет completeness review.
   - Создаёт и сохраняет `ReviewedArchitecturalSnapshot`.
+- `POST /api/projects/:projectId/import-jobs/:jobId/prepare-editor-apply`
+  - Проверяет preconditions (`review.status=applied`, есть `reviewedSnapshot`).
+  - Строит `BuildingModelCandidate` через deterministic mapper.
+  - Сохраняет candidate в `editorApply`.
 
 ## Mock import snapshot
 
@@ -64,12 +72,13 @@
 - `review.decisions` — явные пользовательские решения (partial-save поддерживается).
 - `review.isReadyToApply` + `review.missingRequiredDecisions` + `review.remainingBlockingIssueIds` — централизованная оценка готовности.
 - `review.reviewedSnapshot` — отдельный результат apply-review; исходный `snapshot` при этом не мутируется.
+- `editorApply.candidate` — отдельный editor-compatible кандидат, не равный `BuildingModel` проекта.
 
 ## Что пока не сделано
 
 - Реальный extractor (OCR/vision/LLM).
 - Wizard/review/apply flow.
-- Преобразование reviewed snapshot в `BuildingModel`.
+- Применение editor candidate в реальный project version/editor store.
 - Construction profile engine.
 - Upload pipeline бинарников изображений (храним только refs/metadata).
 

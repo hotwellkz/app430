@@ -3,6 +3,7 @@ import type {
   ArchitecturalImportSnapshot,
   BuildingModel,
   ImportJob,
+  ImportEditorApplyState,
   ImportJobStatus,
   ImportReviewState,
   ExportArtifactMeta,
@@ -16,6 +17,7 @@ import type {
 import { BUILDING_MODEL_SCHEMA_VERSION } from '@2wix/shared-types';
 import {
   zArchitecturalImportSnapshot,
+  zImportEditorApplyState,
   zImportReviewState,
 } from '../validation/schemas.js';
 
@@ -139,6 +141,10 @@ export function mapImportJobDoc(id: string, data: DocumentData): ImportJob {
   const review: ImportReviewState | undefined = reviewParsed.success
     ? reviewParsed.data
     : undefined;
+  const editorApplyParsed = zImportEditorApplyState.safeParse(data.editorApply);
+  const editorApply: ImportEditorApplyState | undefined = editorApplyParsed.success
+    ? (editorApplyParsed.data as unknown as ImportEditorApplyState)
+    : undefined;
   return {
     id,
     projectId: typeof data.projectId === 'string' ? data.projectId : '',
@@ -161,6 +167,7 @@ export function mapImportJobDoc(id: string, data: DocumentData): ImportJob {
       : [],
     snapshot,
     review,
+    editorApply,
     errorMessage: typeof data.errorMessage === 'string' ? data.errorMessage : null,
   };
 }

@@ -95,6 +95,7 @@ import {
   getImportJobById,
   listImportJobs,
   runImportJobPipeline,
+  prepareImportJobEditorApply,
   saveImportJobReview,
   updateImportJobStatus,
 } from './importJobService.js';
@@ -331,5 +332,91 @@ describe('importJobService', () => {
     const first = await applyImportJobReview('p1', created.job.id, { appliedBy: 'u1' }, 'u1');
     const second = await applyImportJobReview('p1', created.job.id, { appliedBy: 'u1' }, 'u1');
     expect(second.reviewedSnapshot.generatedAt).toBe(first.reviewedSnapshot.generatedAt);
+  });
+
+  it('cannot prepare candidate before review.apply', async () => {
+    const created = await createImportJob(
+      'p1',
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      'u1'
+    );
+    await expect(
+      prepareImportJobEditorApply(
+        'p1',
+        created.job.id,
+        { generatedBy: 'u1' },
+        'u1'
+      )
+    ).rejects.toThrow(/Review должен быть applied/);
+  });
+
+  it('builds and stores candidate from reviewed snapshot', async () => {
+    const created = await createImportJob(
+      'p1',
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      'u1'
+    );
+    await saveImportJobReview(
+      'p1',
+      created.job.id,
+      {
+        updatedBy: 'u1',
+        decisions: {
+          floorHeightsMmByFloorId: { 'floor-1': 2800 },
+          roofTypeConfirmed: 'gabled',
+          internalBearingWalls: { confirmed: true, wallIds: [] },
+          scale: { mode: 'confirmed' },
+          issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
+        },
+      },
+      'u1'
+    );
+    await applyImportJobReview('p1', created.job.id, { appliedBy: 'u1' }, 'u1');
+    const prepared = await prepareImportJobEditorApply(
+      'p1',
+      created.job.id,
+      { generatedBy: 'u1' },
+      'u1'
+    );
+    expect(prepared.candidate.model.meta.name.length).toBeGreaterThan(0);
+    expect(prepared.job.editorApply?.status).toBe('candidate_ready');
+  });
+
+  it('repeat prepare recalculates candidate predictably', async () => {
+    const created = await createImportJob(
+      'p1',
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      'u1'
+    );
+    await saveImportJobReview(
+      'p1',
+      created.job.id,
+      {
+        updatedBy: 'u1',
+        decisions: {
+          floorHeightsMmByFloorId: { 'floor-1': 2800 },
+          roofTypeConfirmed: 'gabled',
+          internalBearingWalls: { confirmed: true, wallIds: [] },
+          scale: { mode: 'confirmed' },
+          issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
+        },
+      },
+      'u1'
+    );
+    await applyImportJobReview('p1', created.job.id, { appliedBy: 'u1' }, 'u1');
+    const one = await prepareImportJobEditorApply(
+      'p1',
+      created.job.id,
+      { generatedBy: 'u1' },
+      'u1'
+    );
+    const two = await prepareImportJobEditorApply(
+      'p1',
+      created.job.id,
+      { generatedBy: 'u1' },
+      'u1'
+    );
+    expect(two.candidate.mapperVersion).toBe(one.candidate.mapperVersion);
+    expect(two.candidate.basedOnImportJobId).toBe(one.candidate.basedOnImportJobId);
   });
 });

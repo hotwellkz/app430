@@ -270,6 +270,19 @@
   - не делает editor/apply integration;
   - не выполняет structural generation/profile rules.
 
+### AI import editor-apply candidate stage (Sprint 16, этап 5)
+
+- Введён отдельный explicit stage после review.apply:
+  - `ReviewedArchitecturalSnapshot -> BuildingModelCandidate`.
+- Mapping вынесен в отдельный pure/deterministic слой:
+  - без side-effects;
+  - versioned (`mapperVersion`);
+  - с `warnings` и `trace` для audit/traceability.
+- Почему отдельный stage:
+  - можно проверять candidate до записи в реальные версии проекта;
+  - проще контролировать unsupported-кейсы через warnings;
+  - editor integration становится независимым следующим этапом.
+
 ### Spec-engine boundary (Sprint 10)
 
 - BOM/spec aggregation вынесена в `@2wix/spec-engine`, а не в `panel-engine` и не в React-компоненты.

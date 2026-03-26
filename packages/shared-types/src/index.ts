@@ -444,6 +444,60 @@ export interface ImportReviewState {
   lastUpdatedBy?: string | null;
 }
 
+export interface CandidateWarning {
+  code: string;
+  severity: 'info' | 'warning' | 'error';
+  message: string;
+  sourceType:
+    | 'floor'
+    | 'wall'
+    | 'opening'
+    | 'stair'
+    | 'roof'
+    | 'outer_contour'
+    | 'dimension'
+    | 'issue';
+  sourceId?: string | null;
+  details?: Record<string, unknown>;
+}
+
+export interface CandidateTrace {
+  sourceType:
+    | 'floor'
+    | 'wall'
+    | 'opening'
+    | 'stair'
+    | 'roof'
+    | 'outer_contour'
+    | 'dimension'
+    | 'issue';
+  sourceId: string;
+  targetType: 'floor' | 'wall' | 'opening' | 'slab' | 'roof' | 'meta';
+  targetId: string;
+  rule: string;
+  notes?: string[];
+}
+
+export interface BuildingModelCandidate {
+  model: BuildingModel;
+  warnings: CandidateWarning[];
+  trace: CandidateTrace[];
+  mapperVersion: string;
+  generatedAt: string;
+  basedOnImportJobId: string;
+  basedOnReviewedSnapshotVersion: string;
+  status?: 'partial' | 'ready';
+}
+
+export interface ImportEditorApplyState {
+  status: 'draft' | 'candidate_ready' | 'failed';
+  candidate?: BuildingModelCandidate;
+  errorMessage?: string | null;
+  generatedAt?: string | null;
+  generatedBy?: string | null;
+  mapperVersion?: string | null;
+}
+
 export interface ArchitecturalImportSnapshot {
   projectMeta: {
     name?: string;
@@ -514,6 +568,7 @@ export interface ImportJob {
   sourceImages: ImportAssetRef[];
   snapshot: ArchitecturalImportSnapshot | null;
   review?: ImportReviewState;
+  editorApply?: ImportEditorApplyState;
   errorMessage?: string | null;
 }
 
@@ -550,6 +605,15 @@ export interface ApplyImportReviewRequest {
 export interface ApplyImportReviewResponse {
   job: ImportJob;
   reviewedSnapshot: ReviewedArchitecturalSnapshot;
+}
+
+export interface PrepareEditorApplyRequest {
+  generatedBy: string;
+}
+
+export interface PrepareEditorApplyResponse {
+  job: ImportJob;
+  candidate: BuildingModelCandidate;
 }
 
 /** Единый формат ошибок API. */

@@ -225,6 +225,15 @@
 - Apply-review теперь строит `ReviewedArchitecturalSnapshot` как отдельный intermediate результат.
 - Интеграция в editor `BuildingModel` намеренно отложена в следующий этап.
 
+## Завершено: AI import editor-apply candidate stage (Sprint 16, этап 5)
+
+- Добавлен endpoint:
+  - `POST /api/projects/:projectId/import-jobs/:jobId/prepare-editor-apply`
+- Добавлен versioned mapping layer:
+  - `ReviewedArchitecturalSnapshot -> BuildingModelCandidate`
+  - с warnings + traceability.
+- Candidate сохраняется в `importJob.editorApply`, но не применяется в реальный проект/version на этом этапе.
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).

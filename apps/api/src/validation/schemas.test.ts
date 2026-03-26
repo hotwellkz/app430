@@ -4,6 +4,7 @@ import {
   zApplyImportReviewBody,
   zCreateExportBody,
   zCreateImportJobBody,
+  zPrepareEditorApplyBody,
   zCreateProjectBody,
   zPatchCurrentBody,
   zImportAssetRef,
@@ -179,5 +180,18 @@ describe('import schemas', () => {
         appliedBy: 'u1',
       }).success
     ).toBe(true);
+  });
+
+  it('accepts valid and rejects invalid prepare-editor-apply request', () => {
+    expect(
+      zPrepareEditorApplyBody.safeParse({
+        generatedBy: 'u1',
+      }).success
+    ).toBe(true);
+    expect(
+      zPrepareEditorApplyBody.safeParse({
+        generatedBy: '',
+      }).success
+    ).toBe(false);
   });
 });
