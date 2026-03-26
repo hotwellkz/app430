@@ -9,6 +9,13 @@ export function apiUrl(path: string): string {
   return `${base}${p}`;
 }
 
+function fallbackApiUrl(path: string): string | null {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  if (!p.startsWith('/api/')) return null;
+  if (!base || base.startsWith('/')) return null;
+  return `/sip-editor-api${p}`;
+}
+
 export class SipApiError extends Error {
   readonly status: number;
   readonly apiBody: ApiErrorBody;
@@ -34,34 +41,60 @@ export async function fetchJson<T>(
   init?: RequestInit
 ): Promise<T> {
   const sip = sipUserHeaders();
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  const headers = {
+    'Content-Type': 'application/json',
+    ...sip,
+    ...(init?.headers ?? {}),
+  };
+  async function doFetch(url: string): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    try {
+      return await fetch(url, {
+        ...init,
+        signal: controller.signal,
+        headers,
+      });
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+
   let r: Response;
   try {
-    r = await fetch(apiUrl(path), {
-      ...init,
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...sip,
-        ...(init?.headers ?? {}),
-      },
-    });
+    r = await doFetch(apiUrl(path));
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    const fallback = fallbackApiUrl(path);
+    if (fallback) {
+      try {
+        r = await doFetch(fallback);
+      } catch {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          throw new SipApiError(504, {
+            code: 'INTERNAL_ERROR',
+            message: 'SIP API не ответил вовремя (timeout). Проверьте backend/proxy.',
+            status: 504,
+          });
+        }
+        throw new SipApiError(503, {
+          code: 'INTERNAL_ERROR',
+          message: 'SIP API недоступен. Проверьте backend/proxy.',
+          status: 503,
+        });
+      }
+    } else if (error instanceof DOMException && error.name === 'AbortError') {
       throw new SipApiError(504, {
         code: 'INTERNAL_ERROR',
         message: 'SIP API не ответил вовремя (timeout). Проверьте backend/proxy.',
         status: 504,
       });
+    } else {
+      throw new SipApiError(503, {
+        code: 'INTERNAL_ERROR',
+        message: 'SIP API недоступен. Проверьте backend/proxy.',
+        status: 503,
+      });
     }
-    throw new SipApiError(503, {
-      code: 'INTERNAL_ERROR',
-      message: 'SIP API недоступен. Проверьте backend/proxy.',
-      status: 503,
-    });
-  } finally {
-    window.clearTimeout(timeout);
   }
   const text = await r.text();
   let body: unknown = null;
