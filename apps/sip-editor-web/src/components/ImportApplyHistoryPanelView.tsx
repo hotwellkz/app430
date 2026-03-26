@@ -2,6 +2,8 @@ import type { CSSProperties } from 'react';
 import { EmptyState, LoadingState } from '@2wix/ui-kit';
 import type { ImportApplyHistoryViewItem } from '../import-history/importApplyHistoryViewModel';
 import type { ImportHistoryFilter } from '../import-history/importHistoryFilters';
+import type { ImportHistoryCounters } from '../import-history/importHistoryCounts';
+import type { ImportHistorySortMode } from '../import-history/importHistorySort';
 
 function badgeStyle(kind: ImportApplyHistoryViewItem['badgeKind']): CSSProperties {
   if (kind === 'danger') {
@@ -91,8 +93,13 @@ export interface ImportApplyHistoryPanelViewProps {
   errorMessage: string | null;
   items: ImportApplyHistoryViewItem[];
   totalCount: number;
+  counters: ImportHistoryCounters;
   activeFilter: ImportHistoryFilter;
   onFilterChange: (next: ImportHistoryFilter) => void;
+  searchQuery: string;
+  onSearchChange: (next: string) => void;
+  sortMode: ImportHistorySortMode;
+  onSortModeChange: (next: ImportHistorySortMode) => void;
   onRetry: () => void;
 }
 
@@ -103,10 +110,28 @@ export function ImportApplyHistoryPanelView(props: ImportApplyHistoryPanelViewPr
     errorMessage,
     items,
     totalCount,
+    counters,
     activeFilter,
     onFilterChange,
+    searchQuery,
+    onSearchChange,
+    sortMode,
+    onSortModeChange,
     onRetry,
   } = props;
+  const isSearchEmpty = !isLoading && !isError && searchQuery.trim().length > 0 && items.length === 0;
+  const isFilterEmpty =
+    !isLoading &&
+    !isError &&
+    searchQuery.trim().length === 0 &&
+    activeFilter !== 'all' &&
+    items.length === 0;
+  const isAllEmpty =
+    !isLoading &&
+    !isError &&
+    searchQuery.trim().length === 0 &&
+    activeFilter === 'all' &&
+    items.length === 0;
   return (
     <div style={{ marginBottom: 12, padding: 10, border: '1px solid var(--twix-border)', borderRadius: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
@@ -119,17 +144,34 @@ export function ImportApplyHistoryPanelView(props: ImportApplyHistoryPanelViewPr
       </div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
         <button type="button" style={{ fontSize: 11 }} onClick={() => onFilterChange('all')} disabled={activeFilter === 'all'}>
-          all
+          all ({counters.all})
         </button>
         <button type="button" style={{ fontSize: 11 }} onClick={() => onFilterChange('normal')} disabled={activeFilter === 'normal'}>
-          normal
+          normal ({counters.normal})
         </button>
         <button type="button" style={{ fontSize: 11 }} onClick={() => onFilterChange('legacy')} disabled={activeFilter === 'legacy'}>
-          legacy
+          legacy ({counters.legacy})
         </button>
         <button type="button" style={{ fontSize: 11 }} onClick={() => onFilterChange('incomplete')} disabled={activeFilter === 'incomplete'}>
-          incomplete
+          incomplete ({counters.incomplete})
         </button>
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        <input
+          type="text"
+          placeholder="Поиск: importJobId или appliedBy"
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          style={{ flex: 1, fontSize: 12, padding: '4px 6px' }}
+        />
+        <select
+          value={sortMode}
+          onChange={(e) => onSortModeChange(e.target.value as ImportHistorySortMode)}
+          style={{ fontSize: 12 }}
+        >
+          <option value="newest">newest</option>
+          <option value="oldest">oldest</option>
+        </select>
       </div>
       {isLoading ? <LoadingState message="Загрузка истории AI-import…" /> : null}
       {!isLoading && isError ? (
@@ -143,10 +185,16 @@ export function ImportApplyHistoryPanelView(props: ImportApplyHistoryPanelViewPr
           </button>
         </div>
       ) : null}
-      {!isLoading && !isError && items.length === 0 ? (
+      {isAllEmpty ? (
+        <EmptyState title="История AI-import пока пуста" description="Записи появятся после apply-candidate." />
+      ) : null}
+      {isFilterEmpty ? (
+        <EmptyState title="Для выбранного фильтра записей нет" description="Смените фильтр, чтобы увидеть другие записи." />
+      ) : null}
+      {isSearchEmpty ? (
         <EmptyState
-          title={activeFilter === 'all' ? 'История AI-import пока пуста' : 'Для выбранного фильтра записей нет'}
-          description="Записи появятся после apply-candidate."
+          title="По вашему запросу ничего не найдено"
+          description="Проверьте importJobId или appliedBy и попробуйте другой запрос."
         />
       ) : null}
       {!isLoading && !isError && items.length > 0 ? (

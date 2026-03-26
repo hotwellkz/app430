@@ -60,6 +60,7 @@
   - Legacy classification выполняется pure helper-слоем (deterministic mapping, unit-testable).
   - Первый frontend slice использует отдельный UI adapter/view-model (см. `docs/ui-ai-import-history.md`).
   - Frontend polishing: human-readable `missingFields`, компактное отображение incomplete item, frontend-only фильтры.
+  - Дополнительно в panel: counters по фильтрам, client-side search (`importJobId`/`appliedBy`) и sort (`newest`/`oldest`).
 
 ## Mock import snapshot
 

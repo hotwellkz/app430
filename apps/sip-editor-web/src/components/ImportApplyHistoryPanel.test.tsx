@@ -37,8 +37,13 @@ describe('ImportApplyHistoryPanelView', () => {
         errorMessage={null}
         items={[]}
         totalCount={0}
+        counters={{ all: 0, normal: 0, legacy: 0, incomplete: 0 }}
         activeFilter="all"
         onFilterChange={() => {}}
+        searchQuery=""
+        onSearchChange={() => {}}
+        sortMode="newest"
+        onSortModeChange={() => {}}
         onRetry={() => {}}
       />
     );
@@ -53,8 +58,13 @@ describe('ImportApplyHistoryPanelView', () => {
         errorMessage={null}
         items={[]}
         totalCount={0}
+        counters={{ all: 0, normal: 0, legacy: 0, incomplete: 0 }}
         activeFilter="all"
         onFilterChange={() => {}}
+        searchQuery=""
+        onSearchChange={() => {}}
+        sortMode="newest"
+        onSortModeChange={() => {}}
         onRetry={() => {}}
       />
     );
@@ -69,13 +79,19 @@ describe('ImportApplyHistoryPanelView', () => {
         errorMessage={null}
         items={[item()]}
         totalCount={1}
+        counters={{ all: 1, normal: 1, legacy: 0, incomplete: 0 }}
         activeFilter="all"
         onFilterChange={() => {}}
+        searchQuery=""
+        onSearchChange={() => {}}
+        sortMode="newest"
+        onSortModeChange={() => {}}
         onRetry={() => {}}
       />
     );
     expect(screen.getByText(/AI import/i)).toBeTruthy();
     expect(screen.getByText(/mapper: import-candidate-v1/i)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'all (1)' })).toBeTruthy();
   });
 
   it('renders incomplete legacy marker and missing fields', () => {
@@ -101,8 +117,13 @@ describe('ImportApplyHistoryPanelView', () => {
           }),
         ]}
         totalCount={1}
+        counters={{ all: 1, normal: 0, legacy: 1, incomplete: 1 }}
         activeFilter="all"
         onFilterChange={() => {}}
+        searchQuery=""
+        onSearchChange={() => {}}
+        sortMode="newest"
+        onSortModeChange={() => {}}
         onRetry={() => {}}
       />
     );
@@ -121,8 +142,13 @@ describe('ImportApplyHistoryPanelView', () => {
         errorMessage="network"
         items={[]}
         totalCount={0}
+        counters={{ all: 0, normal: 0, legacy: 0, incomplete: 0 }}
         activeFilter="all"
         onFilterChange={() => {}}
+        searchQuery=""
+        onSearchChange={() => {}}
+        sortMode="newest"
+        onSortModeChange={() => {}}
         onRetry={onRetry}
       />
     );
@@ -140,13 +166,39 @@ describe('ImportApplyHistoryPanelView', () => {
         errorMessage={null}
         items={[]}
         totalCount={2}
+        counters={{ all: 2, normal: 1, legacy: 1, incomplete: 0 }}
         activeFilter="incomplete"
         onFilterChange={onFilterChange}
+        searchQuery=""
+        onSearchChange={() => {}}
+        sortMode="newest"
+        onSortModeChange={() => {}}
         onRetry={() => {}}
       />
     );
     expect(screen.getByText(/Для выбранного фильтра записей нет/i)).toBeTruthy();
-    fireEvent.click(within(view.container).getByRole('button', { name: 'legacy' }));
+    fireEvent.click(within(view.container).getByRole('button', { name: 'legacy (1)' }));
     expect(onFilterChange).toHaveBeenCalledWith('legacy');
+  });
+
+  it('shows search empty state when query has no matches', () => {
+    render(
+      <ImportApplyHistoryPanelView
+        isLoading={false}
+        isError={false}
+        errorMessage={null}
+        items={[]}
+        totalCount={3}
+        counters={{ all: 3, normal: 1, legacy: 2, incomplete: 1 }}
+        activeFilter="all"
+        onFilterChange={() => {}}
+        searchQuery="zzzzz"
+        onSearchChange={() => {}}
+        sortMode="newest"
+        onSortModeChange={() => {}}
+        onRetry={() => {}}
+      />
+    );
+    expect(screen.getByText(/По вашему запросу ничего не найдено/i)).toBeTruthy();
   });
 });

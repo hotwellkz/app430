@@ -309,6 +309,7 @@ Frontend mapping note:
 - Для read-only history UI backend item маппится в UI view-model (`badgeKind`, `badgeLabel`, `subtitle`, `isInspectable`), см. `docs/ui-ai-import-history.md`.
 - `missingFields` в UI всегда показывается через human-readable mapping слой с fallback для неизвестных ключей.
 - Фильтры `all/normal/legacy/incomplete` работают на frontend без изменений backend контракта.
+- Search (`importJobId`/`appliedBy`) и sort (`newest`/`oldest`) также frontend-only и не влияют на API контракт.
 
 Успешный ответ `200`:
 

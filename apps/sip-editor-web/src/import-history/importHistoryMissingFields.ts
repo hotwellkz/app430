@@ -3,36 +3,32 @@ export interface MissingFieldUiItem {
   label: string;
   hint?: string;
 }
+import {
+  resolveMissingFieldEntry,
+  type ImportHistoryLocale,
+} from './importHistoryMissingFieldDictionary';
 
-const FIELD_LABELS: Record<string, { label: string; hint?: string }> = {
-  importJobId: { label: 'ID import-job', hint: 'Связь с import-job источником' },
-  mapperVersion: { label: 'Версия mapper', hint: 'Версия преобразования reviewed snapshot -> candidate' },
-  reviewedSnapshotVersion: { label: 'Версия reviewed snapshot' },
-  appliedBy: { label: 'Пользователь применения' },
-  appliedAt: { label: 'Время применения' },
-  warningsCount: { label: 'Количество warnings' },
-  traceCount: { label: 'Количество trace-записей' },
-  floorHeights: { label: 'Высоты этажей' },
-  roofType: { label: 'Тип крыши' },
-  internalBearingWalls: { label: 'Внутренние несущие стены' },
-  scale: { label: 'Масштаб' },
-};
-
-export function mapMissingFieldLabel(key: string): string {
-  const known = FIELD_LABELS[key];
+export function mapMissingFieldLabel(key: string, locale: ImportHistoryLocale = 'ru'): string {
+  const known = resolveMissingFieldEntry(key, locale);
   if (known) return known.label;
   return `Неизвестное поле (${key})`;
 }
 
-export function mapMissingFieldTooltip(key: string): string | undefined {
-  return FIELD_LABELS[key]?.hint;
+export function mapMissingFieldTooltip(
+  key: string,
+  locale: ImportHistoryLocale = 'ru'
+): string | undefined {
+  return resolveMissingFieldEntry(key, locale)?.hint;
 }
 
-export function mapMissingFieldsToUiItems(keys: string[]): MissingFieldUiItem[] {
+export function mapMissingFieldsToUiItems(
+  keys: string[],
+  locale: ImportHistoryLocale = 'ru'
+): MissingFieldUiItem[] {
   return keys.map((key) => ({
     key,
-    label: mapMissingFieldLabel(key),
-    hint: mapMissingFieldTooltip(key),
+    label: mapMissingFieldLabel(key, locale),
+    hint: mapMissingFieldTooltip(key, locale),
   }));
 }
 

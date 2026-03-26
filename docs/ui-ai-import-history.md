@@ -37,6 +37,7 @@ Backend item маппится в `ImportApplyHistoryViewItem`:
 ## Missing fields mapping
 
 - `missingFields` из backend всегда проходят через UI mapping helper (`importHistoryMissingFields.ts`).
+- Labels/hints берутся из централизованного dictionary registry (`importHistoryMissingFieldDictionary.ts`) — структура готова к будущим locale-веткам.
 - Известные ключи показываются человеко-понятными labels (например: `appliedAt` -> `Время применения`).
 - Неизвестный ключ не ломает UI: fallback `Неизвестное поле (<key>)`.
 - В карточке incomplete item:
@@ -52,6 +53,15 @@ Backend item маппится в `ImportApplyHistoryViewItem`:
 - `incomplete`
 
 Фильтрация выполняется только на клиенте по уже загруженному списку.
+Рядом с фильтрами показываются badge counters (`all/normal/legacy/incomplete`).
+
+## Search and sort
+
+- Search input: поиск по `importJobId` и `appliedBy` (case-insensitive).
+- Sort modes (frontend-only):
+  - `newest` (default)
+  - `oldest`
+- Поиск/сортировка работают поверх уже загруженного списка без backend параметров.
 
 ## Subtitle policy
 
@@ -65,3 +75,4 @@ Backend item маппится в `ImportApplyHistoryViewItem`:
 - Если в ответе mixed список normal + legacy, фронт просто рендерит все элементы в `newest-first` порядке backend.
 - Если истории нет, показывается empty state.
 - Если выбран фильтр и записей для него нет, показывается отдельный empty state для фильтра.
+- Если search не находит совпадений, показывается отдельный search-empty state.

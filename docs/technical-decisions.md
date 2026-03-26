@@ -322,6 +322,8 @@
 - Для первого UI среза зафиксирован mini-contract badge/subtitle для `normal`, `legacy`, `incomplete legacy`.
 - Missing fields отображаются через отдельный frontend mapping helper (human labels + fallback), чтобы исключить raw technical keys в UI.
 - Фильтры истории (`all/normal/legacy/incomplete`) реализованы строго на клиенте по уже загруженным данным.
+- Для labels/hints использован dictionary registry, готовый к будущему расширению локалей без внедрения тяжелого i18n фреймворка.
+- Поиск/сортировка history реализованы как чистые frontend selectors (`importJobId`/`appliedBy`, `newest`/`oldest`).
 
 ### Spec-engine boundary (Sprint 10)
 
