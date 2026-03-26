@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ProjectVersion } from '@2wix/shared-types';
 import {
+  createRoof,
+  createSlab,
   compareBuildingModelsForDirtyCheck,
   createEmptyBuildingModel,
   createFloor,
@@ -440,5 +442,35 @@ describe('editor-core', () => {
     const res = executeCommand({ type: 'setZoom', zoom: 2 }, state);
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.state.view.zoom).toBe(2);
+  });
+
+  it('addSlab marks dirty and supports undo/redo', () => {
+    const floor = createFloor({ id: 'f1', label: '1', sortIndex: 0 });
+    const wall = createWall({ id: 'w1', floorId: 'f1', start: { x: 0, y: 0 }, end: { x: 2000, y: 0 }, thicknessMm: 200 });
+    const model = { ...createEmptyBuildingModel(), floors: [floor], walls: [wall] };
+    useEditorStore.getState().loadDocumentFromServer({ projectId: 'p1', projectTitle: null, version: sampleVersion(model) });
+    const slab = createSlab({ id: 's1', floorId: 'f1', contourWallIds: ['w1'] });
+    const r = useEditorStore.getState().applyCommand({ type: 'addSlab', slab });
+    expect(r.ok).toBe(true);
+    expect(useEditorStore.getState().document.hasUnsavedChanges).toBe(true);
+    expect(useEditorStore.getState().document.draftModel!.slabs).toHaveLength(1);
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().document.draftModel!.slabs).toHaveLength(0);
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().document.draftModel!.slabs).toHaveLength(1);
+  });
+
+  it('updateRoof marks dirty and supports undo/redo', () => {
+    const floor = createFloor({ id: 'f1', sortIndex: 0 });
+    const roof = createRoof({ id: 'r1', floorId: 'f1', baseElevationMm: 2800 });
+    const model = { ...createEmptyBuildingModel(), floors: [floor], roofs: [roof] };
+    useEditorStore.getState().loadDocumentFromServer({ projectId: 'p1', projectTitle: null, version: sampleVersion(model) });
+    const r = useEditorStore.getState().applyCommand({ type: 'updateRoof', roofId: 'r1', patch: { slopeDegrees: 35 } });
+    expect(r.ok).toBe(true);
+    expect(useEditorStore.getState().document.draftModel!.roofs[0]!.slopeDegrees).toBe(35);
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().document.draftModel!.roofs[0]!.slopeDegrees).toBe(roof.slopeDegrees);
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().document.draftModel!.roofs[0]!.slopeDegrees).toBe(35);
   });
 });

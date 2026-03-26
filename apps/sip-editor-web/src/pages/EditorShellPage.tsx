@@ -16,8 +16,11 @@ import { VersionsPanel } from '@/components/VersionsPanel';
 import { EditorLeftSidebar } from '@/components/EditorLeftSidebar';
 import { EditorToolbar } from '@/components/EditorToolbar';
 import { BuildingSummaryPanel } from '@/components/BuildingSummaryPanel';
+import { BuildingWarningsPanel } from '@/components/BuildingWarningsPanel';
 import { FloorInspector } from '@/components/FloorInspector';
 import { OpeningInspector } from '@/components/OpeningInspector';
+import { RoofInspector } from '@/components/RoofInspector';
+import { SlabInspector } from '@/components/SlabInspector';
 import { WallInspector } from '@/components/WallInspector';
 import { getSipUserId } from '@/identity/sipUser';
 import {
@@ -465,6 +468,7 @@ export function EditorShellPage() {
         rightPanel={
           <RightPanel>
             <BuildingSummaryPanel />
+            <BuildingWarningsPanel />
             <div
               style={{
                 marginBottom: 12,
@@ -559,8 +563,16 @@ export function EditorShellPage() {
 
             {selection.selectedObjectType === 'opening' ? (
               <OpeningInspector />
+            ) : selection.selectedObjectType === 'roof' ? (
+              <RoofInspector />
+            ) : selection.selectedObjectType === 'slab' ? (
+              <SlabInspector />
             ) : selection.selectedObjectType === 'wall' ? (
               <WallInspector />
+            ) : activePanel === 'roof' ? (
+              <RoofInspector />
+            ) : activePanel === 'slabs' ? (
+              <SlabInspector />
             ) : (
               <FloorInspector />
             )}

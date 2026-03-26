@@ -3,6 +3,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import type { ProjectVersion } from '@2wix/shared-types';
 import {
   addFloorToModel,
+  createWall,
   createEmptyBuildingModel,
   createFloor,
 } from '@2wix/domain-model';
@@ -83,5 +84,29 @@ describe('EditorLeftSidebar floors', () => {
     expect(useEditorStore.getState().document.draftModel!.floors.length).toBe(1);
 
     confirmSpy.mockRestore();
+  });
+
+  it('creates slab and roof from quick actions', () => {
+    const f1 = createFloor({ id: 'f1', label: '1', sortIndex: 0, level: 1 });
+    const f2 = createFloor({ id: 'f2', label: '2', sortIndex: 1, level: 2 });
+    let m = addFloorToModel(createEmptyBuildingModel(), f1);
+    m = addFloorToModel(m, f2);
+    m = {
+      ...m,
+      walls: [createWall({ id: 'w1', floorId: 'f2', start: { x: 0, y: 0 }, end: { x: 1000, y: 0 }, thicknessMm: 200 })],
+    };
+    useEditorStore.getState().loadDocumentFromServer({
+      projectId: 'p1',
+      projectTitle: null,
+      version: sampleVersion(m),
+    });
+    useEditorStore.getState().setActiveFloor('f2');
+    render(<EditorLeftSidebar />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Создать перекрытие/i })[0]!);
+    expect(useEditorStore.getState().document.draftModel!.slabs.length).toBe(1);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Создать крышу/i })[0]!);
+    expect(useEditorStore.getState().document.draftModel!.roofs.length).toBe(1);
   });
 });

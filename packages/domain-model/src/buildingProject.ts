@@ -10,6 +10,7 @@ import type {
   Project,
   ProjectStatus,
   Roof,
+  Slab,
   WallType,
 } from '@2wix/shared-types';
 import { BUILDING_MODEL_SCHEMA_VERSION } from '@2wix/shared-types';
@@ -92,6 +93,9 @@ function parseFloorType(v: unknown): FloorType {
 }
 
 const DEFAULT_FLOOR_HEIGHT_MM = 2800;
+const DEFAULT_SLAB_THICKNESS_MM = 220;
+const DEFAULT_ROOF_OVERHANG_MM = 400;
+const DEFAULT_ROOF_SLOPE_DEG = 28;
 
 /** Приводит сырой JSON к BuildingModel с дефолтами (миграции — в следующих спринтах). */
 export function normalizeBuildingModel(raw: unknown): BuildingModel {
@@ -158,6 +162,7 @@ export function normalizeBuildingModel(raw: unknown): BuildingModel {
       floorType: parseFloorType(f.floorType),
     };
   });
+  const topFloorId = floorsIn.length > 0 ? floorsIn[floorsIn.length - 1]!.id : '';
 
   const wallsIn = mapFloors(r.walls).map((w, i) => {
     const wt = w.wallType;
@@ -216,24 +221,47 @@ export function normalizeBuildingModel(raw: unknown): BuildingModel {
     };
   });
 
-  const slabsIn = mapFloors(r.slabs).map((s, i) => ({
-    id: asString(s.id, `slab_${i}`),
-    floorId: asString(s.floorId, ''),
-    polygon: Array.isArray(s.polygon)
-      ? s.polygon.filter(isPoint2D)
-      : [],
-    thicknessMm: asNumber(s.thicknessMm, 200),
-  }));
+  const slabsIn: Slab[] = mapFloors(r.slabs).map((s, i) => {
+    const dir = s.direction === 'y' ? 'y' : 'x';
+    const st = s.slabType;
+    const slabType: Slab['slabType'] =
+      st === 'ground' || st === 'interfloor' || st === 'attic' ? st : 'interfloor';
+    const gmRaw = s.generationMode;
+    const generationMode: Slab['generationMode'] = gmRaw === 'manual' ? 'manual' : 'auto';
+    const contourWallIds = Array.isArray(s.contourWallIds)
+      ? s.contourWallIds.filter((x): x is string => typeof x === 'string')
+      : [];
+    return {
+      id: asString(s.id, `slab_${i}`),
+      floorId: asString(s.floorId, floorsIn[0]?.id ?? ''),
+      slabType,
+      contourWallIds,
+      direction: dir,
+      thicknessMm: asNumber(s.thicknessMm, DEFAULT_SLAB_THICKNESS_MM),
+      generationMode,
+    };
+  });
 
   const roofsIn: Roof[] = mapFloors(r.roofs).map((ro, i) => {
-    const k = ro.kind;
-    const kind: Roof['kind'] =
-      k === 'gable' || k === 'other' || k === 'flat' ? k : 'flat';
+    const roofTypeRaw = ro.roofType ?? ro.kind;
+    const roofType: Roof['roofType'] =
+      roofTypeRaw === 'single_slope' || roofTypeRaw === 'gable'
+        ? roofTypeRaw
+        : roofTypeRaw === 'flat'
+          ? 'single_slope'
+          : 'gable';
+    const slopeDegrees = asNumber(ro.slopeDegrees ?? ro.pitchDeg, DEFAULT_ROOF_SLOPE_DEG);
+    const ridgeDirection: Roof['ridgeDirection'] =
+      ro.ridgeDirection === 'y' || ro.ridgeDirection === 'x' ? ro.ridgeDirection : 'x';
     return {
       id: asString(ro.id, `roof_${i}`),
-      kind,
-      pitchDeg: typeof ro.pitchDeg === 'number' ? ro.pitchDeg : undefined,
-      notes: typeof ro.notes === 'string' ? ro.notes : undefined,
+      floorId: asString(ro.floorId, topFloorId),
+      roofType,
+      slopeDegrees,
+      ridgeDirection,
+      overhangMm: asNumber(ro.overhangMm, DEFAULT_ROOF_OVERHANG_MM),
+      baseElevationMm: asNumber(ro.baseElevationMm, 0),
+      generationMode: 'auto',
     };
   });
 

@@ -55,6 +55,16 @@
 - Тесты: `domain-model/floorOps.test.ts`, расширен `editorCore.test.ts`, RTL `EditorSidebarFloors.test.tsx`.
 - Документация: `docs/floors.md`, обновлены `editor-core.md`, `technical-decisions.md`.
 
+## Завершено: vertical coherence + slabs/roof MVP (Sprint 7)
+
+- **Vertical coherence**: effective height стены = `wall.heightMm` (override) или `floor.heightMm` (inherit), мягкие warning-и при несогласованных отметках этажей.
+- **Slab MVP**: параметрическая сущность перекрытия (`slabType`, `direction`, `contourWallIds`, `thicknessMm`, `generationMode`), базовый режим **одно перекрытие на этаж**.
+- **Roof MVP**: параметрическая сущность крыши (`roofType`, `slopeDegrees`, `ridgeDirection`, `overhangMm`, `baseElevationMm`), базовый режим **одна основная крыша на проект** (верхний этаж).
+- **Команды editor-core**: `add/update/delete` для slab и roof с полноценным dirty/save/undo/redo/discard.
+- **UI**: quick actions в левом меню (создать перекрытие/крышу), инспекторы slab/roof, warnings panel, расширенный summary, 2D overlays для направления перекрытия и параметров крыши.
+- Тесты: доменные (`vertical/roof/slab`), editor-core команды, web-компоненты sidebar/warnings.
+- Документация: `docs/vertical-model.md`, `docs/roof-and-slabs.md`, обновлены `editor-core.md`, `technical-decisions.md`.
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).

@@ -1,6 +1,9 @@
 import {
+  getFloorsSorted,
   getFloorById,
   getOpeningsByFloor,
+  getRoofForTopFloor,
+  getSlabsByFloor,
   getWallsByFloor,
 } from '@2wix/domain-model';
 import { useEditorStore } from '@2wix/editor-core';
@@ -25,6 +28,10 @@ export function BuildingSummaryPanel() {
   const activeFloor = fid ? getFloorById(draft, fid) : undefined;
   const walls = fid ? getWallsByFloor(draft, fid).length : 0;
   const openings = fid ? getOpeningsByFloor(draft, fid).length : 0;
+  const slabsOnFloor = fid ? getSlabsByFloor(draft, fid).length : 0;
+  const totalSlabs = draft.slabs.length;
+  const roof = getRoofForTopFloor(draft);
+  const floorsSorted = getFloorsSorted(draft);
 
   return (
     <div
@@ -45,10 +52,20 @@ export function BuildingSummaryPanel() {
         <dd style={{ margin: 0 }}>{draft.floors.length}</dd>
         <dt className="twix-muted">Активный этаж</dt>
         <dd style={{ margin: 0 }}>{activeFloor ? activeFloor.label : '—'}</dd>
+        <dt className="twix-muted">Отметка активного этажа</dt>
+        <dd style={{ margin: 0 }}>{activeFloor ? `${activeFloor.elevationMm} мм` : '—'}</dd>
+        <dt className="twix-muted">Высота активного этажа</dt>
+        <dd style={{ margin: 0 }}>{activeFloor ? `${activeFloor.heightMm} мм` : '—'}</dd>
         <dt className="twix-muted">Стен на этаже</dt>
         <dd style={{ margin: 0 }}>{walls}</dd>
         <dt className="twix-muted">Проёмов на этаже</dt>
         <dd style={{ margin: 0 }}>{openings}</dd>
+        <dt className="twix-muted">Перекрытий (этаж / всего)</dt>
+        <dd style={{ margin: 0 }}>{slabsOnFloor} / {totalSlabs}</dd>
+        <dt className="twix-muted">Крыша</dt>
+        <dd style={{ margin: 0 }}>{roof ? `${roof.roofType} (${roof.slopeDegrees}°)` : 'нет'}</dd>
+        <dt className="twix-muted">Верхний этаж</dt>
+        <dd style={{ margin: 0 }}>{floorsSorted[floorsSorted.length - 1]?.label ?? '—'}</dd>
         <dt className="twix-muted">Версия модели</dt>
         <dd style={{ margin: 0 }}>{document.currentVersionNumber ?? '—'}</dd>
         <dt className="twix-muted">Сохранение</dt>

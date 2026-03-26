@@ -1,9 +1,15 @@
 import { useState } from 'react';
 import {
+  createRoof,
+  getDefaultSlabForFloor,
   createFloor,
   getFloorsSorted,
   getOpeningsByFloor,
+  getRoofForTopFloor,
+  getSlabsByFloor,
+  getTopFloor,
   getWallsByFloor,
+  suggestRoofBaseElevation,
   suggestNextFloor,
 } from '@2wix/domain-model';
 import type { ActivePanel } from '@2wix/editor-core';
@@ -44,6 +50,9 @@ export function EditorLeftSidebar() {
     draft && floorId ? getWallsByFloor(draft, floorId) : [];
   const openingsOnFloor =
     draft && floorId ? getOpeningsByFloor(draft, floorId) : [];
+  const slabsOnFloor = draft && floorId ? getSlabsByFloor(draft, floorId) : [];
+  const topFloor = draft ? getTopFloor(draft) : null;
+  const roof = draft ? getRoofForTopFloor(draft) : null;
 
   const wallShort = (wallId: string) => {
     const w = wallsOnFloor.find((x) => x.id === wallId);
@@ -82,6 +91,27 @@ export function EditorLeftSidebar() {
   };
 
   const sortedFloors = draft ? getFloorsSorted(draft) : [];
+  const createSlab = () => {
+    if (!draft || !floorId) return;
+    const slab = getDefaultSlabForFloor(draft, floorId);
+    const r = applyCommand({ type: 'addSlab', slab });
+    if (r.ok) {
+      selectObject(slab.id, 'slab');
+      setActivePanel('slabs');
+    }
+  };
+  const createRoofAction = () => {
+    if (!draft || !topFloor) return;
+    const roofDraft = createRoof({
+      floorId: topFloor.id,
+      baseElevationMm: suggestRoofBaseElevation(draft, topFloor.id),
+    });
+    const r = applyCommand({ type: 'addRoof', roof: roofDraft });
+    if (r.ok) {
+      selectObject(roofDraft.id, 'roof');
+      setActivePanel('roof');
+    }
+  };
 
   return (
     <Sidebar>
@@ -282,6 +312,62 @@ export function EditorLeftSidebar() {
               </li>
             ) : null}
           </ul>
+          <p className="twix-panelTitle" style={{ fontSize: 11, marginTop: 10 }}>
+            Перекрытия (активный этаж)
+          </p>
+          <button
+            type="button"
+            style={{ fontSize: 10, marginBottom: 6 }}
+            onClick={createSlab}
+            disabled={!floorId || slabsOnFloor.length > 0}
+            title={slabsOnFloor.length > 0 ? 'В MVP одно перекрытие на этаж' : undefined}
+          >
+            + Создать перекрытие
+          </button>
+          <ul style={{ margin: '4px 0', paddingLeft: 16, listStyle: 'disc' }}>
+            {slabsOnFloor.map((s) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', fontSize: 11 }}
+                  onClick={() => {
+                    selectObject(s.id, 'slab');
+                    setActivePanel('slabs');
+                  }}
+                >
+                  {s.slabType} · {s.direction} · {s.thicknessMm ?? '—'} мм
+                </button>
+              </li>
+            ))}
+            {floorId && slabsOnFloor.length === 0 ? (
+              <li className="twix-muted" style={{ fontSize: 11 }}>Нет перекрытий</li>
+            ) : null}
+          </ul>
+          <p className="twix-panelTitle" style={{ fontSize: 11, marginTop: 10 }}>
+            Крыша
+          </p>
+          <button
+            type="button"
+            style={{ fontSize: 10, marginBottom: 6 }}
+            onClick={createRoofAction}
+            disabled={!topFloor || Boolean(roof)}
+          >
+            + Создать крышу
+          </button>
+          {roof ? (
+            <button
+              type="button"
+              style={{ display: 'block', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', fontSize: 11 }}
+              onClick={() => {
+                selectObject(roof.id, 'roof');
+                setActivePanel('roof');
+              }}
+            >
+              {roof.roofType} · {roof.slopeDegrees}° · {roof.ridgeDirection ?? 'x'}
+            </button>
+          ) : (
+            <p className="twix-muted" style={{ fontSize: 11, margin: 0 }}>Крыша не создана</p>
+          )}
         </div>
       ) : null}
     </Sidebar>

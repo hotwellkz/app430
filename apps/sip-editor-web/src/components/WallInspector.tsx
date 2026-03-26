@@ -1,4 +1,4 @@
-import { computeWallLengthMm, findWallById } from '@2wix/domain-model';
+import { computeWallLengthMm, findWallById, getEffectiveWallHeight, getFloorById, getWallHeightMode } from '@2wix/domain-model';
 import { useEditorStore } from '@2wix/editor-core';
 import type { WallType } from '@2wix/shared-types';
 
@@ -20,6 +20,9 @@ export function WallInspector() {
 
   const len = computeWallLengthMm(wall);
   const wallType: WallType = wall.wallType ?? 'external';
+  const floor = getFloorById(draft, wall.floorId);
+  const effectiveHeight = getEffectiveWallHeight(wall, floor);
+  const heightMode = getWallHeightMode(wall);
 
   return (
     <div style={{ fontSize: 13 }}>
@@ -105,6 +108,10 @@ export function WallInspector() {
             style={{ width: '100%', padding: 4 }}
           />
         </dd>
+        <dt className="twix-muted">Режим высоты</dt>
+        <dd style={{ margin: 0 }}>{heightMode === 'inherited' ? 'inherited (из этажа)' : 'overridden (у стены)'}</dd>
+        <dt className="twix-muted">Effective height (мм)</dt>
+        <dd style={{ margin: 0 }}>{effectiveHeight}</dd>
       </dl>
     </div>
   );

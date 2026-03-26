@@ -1,4 +1,4 @@
-import type { BuildingModel, Floor, Opening, Wall } from '@2wix/shared-types';
+import type { BuildingModel, Floor, Opening, Roof, Slab, Wall } from '@2wix/shared-types';
 import type { ActivePanel, CanvasToolMode, EditorObjectType } from '../types/state.js';
 
 /** Команды редактора: исполняются чистым reducer/store, без React и без HTTP. */
@@ -51,7 +51,21 @@ export type EditorCommand =
         >
       >;
     }
-  | { type: 'deleteOpening'; openingId: string };
+  | { type: 'deleteOpening'; openingId: string }
+  | { type: 'addSlab'; slab: Slab }
+  | {
+      type: 'updateSlab';
+      slabId: string;
+      patch: Partial<Pick<Slab, 'floorId' | 'slabType' | 'contourWallIds' | 'direction' | 'thicknessMm' | 'generationMode'>>;
+    }
+  | { type: 'deleteSlab'; slabId: string }
+  | { type: 'addRoof'; roof: Roof }
+  | {
+      type: 'updateRoof';
+      roofId: string;
+      patch: Partial<Pick<Roof, 'floorId' | 'roofType' | 'slopeDegrees' | 'ridgeDirection' | 'overhangMm' | 'baseElevationMm'>>;
+    }
+  | { type: 'deleteRoof'; roofId: string };
 
 export function isModelMutationCommand(cmd: EditorCommand): boolean {
   switch (cmd.type) {
@@ -69,6 +83,12 @@ export function isModelMutationCommand(cmd: EditorCommand): boolean {
     case 'addOpening':
     case 'updateOpening':
     case 'deleteOpening':
+    case 'addSlab':
+    case 'updateSlab':
+    case 'deleteSlab':
+    case 'addRoof':
+    case 'updateRoof':
+    case 'deleteRoof':
       return true;
     default:
       return false;

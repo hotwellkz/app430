@@ -17,6 +17,9 @@ import {
   findWallById,
   getOpeningById,
   getOpeningsByFloor,
+  getRoofForTopFloor,
+  getSlabsByFloor,
+  getTopFloor,
   getWallsByFloor,
 } from '@2wix/domain-model';
 import type { Opening, OpeningType, Point2D, Wall } from '@2wix/shared-types';
@@ -107,6 +110,12 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
     if (!draft || !activeFloorId) return [];
     return getOpeningsByFloor(draft, activeFloorId);
   }, [draft, activeFloorId]);
+  const floorSlabs = useMemo(() => {
+    if (!draft || !activeFloorId) return [];
+    return getSlabsByFloor(draft, activeFloorId);
+  }, [draft, activeFloorId]);
+  const topFloor = useMemo(() => (draft ? getTopFloor(draft) : null), [draft]);
+  const roof = useMemo(() => (draft ? getRoofForTopFloor(draft) : null), [draft]);
 
   const wallById = useMemo(() => {
     if (!draft) return new Map<string, Wall>();
@@ -578,6 +587,107 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
               }
               hoveredWallId={hoveredWallId}
             />
+            {floorSlabs.map((slab) => {
+              const bb = computeWallsBoundingBoxMm(floorWalls);
+              if (!bb) return null;
+              const cx = (bb.minX + bb.maxX) / 2;
+              const cy = (bb.minY + bb.maxY) / 2;
+              const arrow = slab.direction === 'x'
+                ? { x1: bb.minX, y1: cy, x2: bb.maxX, y2: cy }
+                : { x1: cx, y1: bb.minY, x2: cx, y2: bb.maxY };
+              return (
+                <g key={slab.id}>
+                  <rect
+                    x={bb.minX}
+                    y={bb.minY}
+                    width={bb.maxX - bb.minX}
+                    height={bb.maxY - bb.minY}
+                    fill="rgba(2,132,199,0.08)"
+                    stroke="rgba(2,132,199,0.8)"
+                    strokeDasharray={`${500 / view.zoom} ${250 / view.zoom}`}
+                    strokeWidth={Math.max(2, 60 / view.zoom)}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <line
+                    x1={arrow.x1}
+                    y1={arrow.y1}
+                    x2={arrow.x2}
+                    y2={arrow.y2}
+                    stroke="rgba(2,132,199,0.95)"
+                    strokeWidth={Math.max(2, 80 / view.zoom)}
+                    markerEnd="url(#slabArrow)"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <text
+                    x={cx}
+                    y={cy - 200 / view.zoom}
+                    textAnchor="middle"
+                    fontSize={Math.max(120, 240 / view.zoom)}
+                    fill="#0369a1"
+                  >
+                    slab: {slab.slabType}
+                  </text>
+                </g>
+              );
+            })}
+            {roof && topFloor?.id === activeFloorId ? (() => {
+              const bb = computeWallsBoundingBoxMm(floorWalls);
+              if (!bb) return null;
+              const cx = (bb.minX + bb.maxX) / 2;
+              const cy = (bb.minY + bb.maxY) / 2;
+              const horizontal = (roof.ridgeDirection ?? 'x') === 'x';
+              const ridge = horizontal
+                ? { x1: bb.minX, y1: cy, x2: bb.maxX, y2: cy }
+                : { x1: cx, y1: bb.minY, x2: cx, y2: bb.maxY };
+              const slopeArrow = horizontal
+                ? { x1: cx, y1: cy, x2: cx, y2: bb.maxY }
+                : { x1: cx, y1: cy, x2: bb.maxX, y2: cy };
+              return (
+                <g>
+                  <rect
+                    x={bb.minX - roof.overhangMm}
+                    y={bb.minY - roof.overhangMm}
+                    width={bb.maxX - bb.minX + roof.overhangMm * 2}
+                    height={bb.maxY - bb.minY + roof.overhangMm * 2}
+                    fill="rgba(185,28,28,0.05)"
+                    stroke="rgba(185,28,28,0.75)"
+                    strokeWidth={Math.max(2, 60 / view.zoom)}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <line
+                    x1={ridge.x1}
+                    y1={ridge.y1}
+                    x2={ridge.x2}
+                    y2={ridge.y2}
+                    stroke="rgba(153,27,27,0.95)"
+                    strokeWidth={Math.max(2, 90 / view.zoom)}
+                    strokeDasharray={roof.roofType === 'gable' ? undefined : `${350 / view.zoom} ${200 / view.zoom}`}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  {roof.roofType === 'single_slope' ? (
+                    <line
+                      x1={slopeArrow.x1}
+                      y1={slopeArrow.y1}
+                      x2={slopeArrow.x2}
+                      y2={slopeArrow.y2}
+                      stroke="rgba(220,38,38,0.95)"
+                      strokeWidth={Math.max(2, 80 / view.zoom)}
+                      markerEnd="url(#roofArrow)"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ) : null}
+                  <text
+                    x={cx}
+                    y={bb.minY - 250 / view.zoom}
+                    textAnchor="middle"
+                    fontSize={Math.max(120, 240 / view.zoom)}
+                    fill="#991b1b"
+                  >
+                    roof: {roof.roofType} {roof.slopeDegrees}°
+                  </text>
+                </g>
+              );
+            })() : null}
             <OpeningsLayer
               openings={displayOpenings}
               wallById={wallById}
@@ -607,6 +717,14 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
                 />
               </>
             ) : null}
+            <defs>
+              <marker id="slabArrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="rgba(2,132,199,0.95)" />
+              </marker>
+              <marker id="roofArrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="rgba(220,38,38,0.95)" />
+              </marker>
+            </defs>
           </g>
         </svg>
         </>

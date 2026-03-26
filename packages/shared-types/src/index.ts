@@ -108,15 +108,22 @@ export interface Opening {
 export interface Slab {
   id: string;
   floorId: string;
-  polygon: Point2D[];
-  thicknessMm: number;
+  slabType: 'ground' | 'interfloor' | 'attic';
+  contourWallIds: string[];
+  direction: 'x' | 'y';
+  thicknessMm?: number;
+  generationMode: 'auto' | 'manual';
 }
 
 export interface Roof {
   id: string;
-  kind: 'flat' | 'gable' | 'other';
-  pitchDeg?: number;
-  notes?: string;
+  floorId: string;
+  roofType: 'single_slope' | 'gable';
+  slopeDegrees: number;
+  ridgeDirection?: 'x' | 'y';
+  overhangMm: number;
+  baseElevationMm: number;
+  generationMode: 'auto';
 }
 
 export interface PanelLibraryEntry {

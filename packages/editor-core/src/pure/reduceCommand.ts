@@ -11,6 +11,12 @@ import {
   getFloorsSorted,
   tryDeleteFloorFromModel,
   updateFloorInModel,
+  addSlabToModel,
+  addRoofToModel,
+  deleteSlabFromModel,
+  deleteRoofFromModel,
+  updateSlabInModel,
+  updateRoofInModel,
   updateOpeningInModel,
   updateWallInModel,
   validateFloorShape,
@@ -289,6 +295,56 @@ export function reduceCommand(state: EditorState, command: EditorCommand): Reduc
         history: meta,
         state: withDraft({ ...state, selection: sel }, next),
       };
+    }
+    case 'addSlab': {
+      const draft = state.document.draftModel;
+      if (!draft) return { ok: false, error: 'Нет черновика модели' };
+      const result = addSlabToModel(draft, command.slab);
+      if (!result.ok) return { ok: false, error: result.reason };
+      return { ok: true, draftChanged: true, history: meta, state: withDraft(state, result.model) };
+    }
+    case 'updateSlab': {
+      const draft = state.document.draftModel;
+      if (!draft) return { ok: false, error: 'Нет черновика модели' };
+      const result = updateSlabInModel(draft, command.slabId, command.patch);
+      if (!result.ok) return { ok: false, error: result.reason };
+      return { ok: true, draftChanged: true, history: meta, state: withDraft(state, result.model) };
+    }
+    case 'deleteSlab': {
+      const draft = state.document.draftModel;
+      if (!draft) return { ok: false, error: 'Нет черновика модели' };
+      const next = deleteSlabFromModel(draft, command.slabId);
+      const sel =
+        state.selection.selectedObjectType === 'slab' &&
+        state.selection.selectedObjectId === command.slabId
+          ? { ...state.selection, selectedObjectId: null, selectedObjectType: null, multiSelectIds: [] }
+          : state.selection;
+      return { ok: true, draftChanged: true, history: meta, state: withDraft({ ...state, selection: sel }, next) };
+    }
+    case 'addRoof': {
+      const draft = state.document.draftModel;
+      if (!draft) return { ok: false, error: 'Нет черновика модели' };
+      const result = addRoofToModel(draft, command.roof);
+      if (!result.ok) return { ok: false, error: result.reason };
+      return { ok: true, draftChanged: true, history: meta, state: withDraft(state, result.model) };
+    }
+    case 'updateRoof': {
+      const draft = state.document.draftModel;
+      if (!draft) return { ok: false, error: 'Нет черновика модели' };
+      const result = updateRoofInModel(draft, command.roofId, command.patch);
+      if (!result.ok) return { ok: false, error: result.reason };
+      return { ok: true, draftChanged: true, history: meta, state: withDraft(state, result.model) };
+    }
+    case 'deleteRoof': {
+      const draft = state.document.draftModel;
+      if (!draft) return { ok: false, error: 'Нет черновика модели' };
+      const next = deleteRoofFromModel(draft, command.roofId);
+      const sel =
+        state.selection.selectedObjectType === 'roof' &&
+        state.selection.selectedObjectId === command.roofId
+          ? { ...state.selection, selectedObjectId: null, selectedObjectType: null, multiSelectIds: [] }
+          : state.selection;
+      return { ok: true, draftChanged: true, history: meta, state: withDraft({ ...state, selection: sel }, next) };
     }
     case 'selectObject':
       return {

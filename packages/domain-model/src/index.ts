@@ -83,3 +83,38 @@ export {
   detectOpeningTooCloseToWallEdge,
   detectOpeningOverlap,
 } from './openingGeometry.js';
+export {
+  DEFAULT_SLAB_DIRECTION,
+  DEFAULT_SLAB_THICKNESS_MM,
+  addSlabToModel,
+  createSlab,
+  deleteSlabFromModel,
+  getDefaultSlabForFloor,
+  getSlabsByFloor,
+  inferSlabTypeForFloor,
+  updateSlabInModel,
+  validateSlab,
+} from './slabOps.js';
+export {
+  DEFAULT_ROOF_OVERHANG_MM,
+  DEFAULT_ROOF_RIDGE_DIRECTION,
+  DEFAULT_ROOF_SLOPE_DEG,
+  DEFAULT_ROOF_TYPE,
+  addRoofToModel,
+  createRoof,
+  deleteRoofFromModel,
+  getRoofForTopFloor,
+  getRoofsByFloor,
+  getTopFloor,
+  isTopFloor,
+  suggestRoofBaseElevation,
+  updateRoofInModel,
+  validateRoof,
+} from './roofOps.js';
+export {
+  collectVerticalWarnings,
+  getEffectiveWallHeight,
+  getWallEffectiveHeightFromModel,
+  getWallHeightMode,
+} from './verticalModel.js';
+export type { VerticalWarning } from './verticalModel.js';
