@@ -1,6 +1,8 @@
 import { auth } from '../firebase/auth';
 import type { SipProjectRow } from './sipTypes';
 
+const SIP_API_TIMEOUT_MS = 15000;
+
 function sipApiBase(): string {
   const env = import.meta.env.VITE_SIP_API_BASE_URL as string | undefined;
   if (typeof env === 'string' && env.trim()) {
@@ -48,7 +50,22 @@ async function sipFetch(path: string, init: RequestInit = {}): Promise<Response>
   }
   headers.set('x-sip-user-id', user.uid);
   const url = `${sipApiBase()}${path.startsWith('/') ? path : `/${path}`}`;
-  return fetch(url, { ...init, headers });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), SIP_API_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, headers, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new SipApiError(
+        'SIP API не ответил вовремя. Повторите позже или проверьте доступность api.2wix.ru.',
+        504,
+        'GATEWAY_TIMEOUT'
+      );
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 export async function sipListProjects(limit = 60): Promise<SipProjectRow[]> {
@@ -90,6 +107,13 @@ export async function sipCreateProject(input: {
   const data =
     (await parseJsonBody<{ project?: SipProjectRow; message?: string; code?: string }>(res)) ?? {};
   if (!res.ok) {
+    if (res.status === 504) {
+      throw new SipApiError(
+        'SIP API временно недоступен (504). Проект не создан, попробуйте позже.',
+        504,
+        data.code ?? 'GATEWAY_TIMEOUT'
+      );
+    }
     throw new SipApiError(data.message ?? `Ошибка ${res.status}`, res.status, data.code);
   }
   if (!data.project?.id) {
