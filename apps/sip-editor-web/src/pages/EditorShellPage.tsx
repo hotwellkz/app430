@@ -273,6 +273,15 @@ export function EditorShellPage() {
     setSyncToken((n) => n + 1);
   }, [versionQuery, projectQuery, versionsQuery]);
 
+  const saveBeforeExport = useCallback(async () => {
+    try {
+      await saveMutation.mutateAsync();
+      return true;
+    } catch {
+      return false;
+    }
+  }, [saveMutation]);
+
   const updateMetaName = useCallback(
     (name: string) => {
       applyCommand({ type: 'setMetaName', name });
@@ -544,7 +553,11 @@ export function EditorShellPage() {
             <BuildingWarningsPanel />
             <PanelizationPanel />
             <SpecPanel />
-            <ExportPanel projectId={projectId} versionId={version?.id ?? null} />
+            <ExportPanel
+              projectId={projectId}
+              versionId={version?.id ?? null}
+              onSaveBeforeExport={saveBeforeExport}
+            />
             <div
               style={{
                 marginBottom: 12,

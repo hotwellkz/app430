@@ -84,3 +84,12 @@ export async function getProjectExport(
 ): Promise<{ artifact: ExportArtifactMeta; snapshot: ExportPackageSnapshot | null }> {
   return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/exports/${encodeURIComponent(exportId)}`);
 }
+
+export async function getProjectExportDownloadUrl(
+  projectId: string,
+  exportId: string
+): Promise<{ url: string; fileName: string }> {
+  return fetchJson(
+    `/api/projects/${encodeURIComponent(projectId)}/exports/${encodeURIComponent(exportId)}/download`
+  );
+}

@@ -106,6 +106,11 @@ export function mapExportDoc(id: string, data: DocumentData): ExportArtifactMeta
     status: safeStatus,
     fileName: typeof data.fileName === 'string' ? data.fileName : `export.${safeFormat}`,
     storagePath: typeof data.storagePath === 'string' ? data.storagePath : null,
+    fileUrl: typeof data.fileUrl === 'string' ? data.fileUrl : null,
+    sizeBytes: typeof data.sizeBytes === 'number' ? data.sizeBytes : null,
+    mimeType: typeof data.mimeType === 'string' ? data.mimeType : null,
     errorMessage: typeof data.errorMessage === 'string' ? data.errorMessage : null,
+    retryCount: typeof data.retryCount === 'number' ? data.retryCount : 0,
+    completedAt: data.completedAt ? tsToIso(data.completedAt as Timestamp) : null,
   };
 }

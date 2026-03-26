@@ -1,5 +1,6 @@
 import { cert, getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 
 let app: App | null = null;
 
@@ -43,4 +44,12 @@ export function getFirebaseApp(): App {
 
 export function getDb() {
   return getFirestore(getFirebaseApp());
+}
+
+export function getStorageBucket() {
+  const appInstance = getFirebaseApp();
+  const explicit = process.env.FIREBASE_STORAGE_BUCKET?.trim();
+  const fromProject = process.env.FIREBASE_PROJECT_ID?.trim();
+  const bucketName = explicit || (fromProject ? `${fromProject}.appspot.com` : undefined);
+  return getStorage(appInstance).bucket(bucketName);
 }

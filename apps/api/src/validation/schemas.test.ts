@@ -74,4 +74,10 @@ describe('zCreateExportBody', () => {
   it('rejects unknown format', () => {
     expect(zCreateExportBody.safeParse({ createdBy: 'u1', format: 'docx' }).success).toBe(false);
   });
+
+  it('accepts retryOfExportId', () => {
+    expect(
+      zCreateExportBody.safeParse({ createdBy: 'u1', format: 'pdf', retryOfExportId: 'exp-1' }).success
+    ).toBe(true);
+  });
 });

@@ -132,6 +132,17 @@
   - `GET /api/projects/:projectId/exports/:exportId`.
 - Экспорт привязан к текущей сохраненной версии проекта (не к несохраненному draft).
 
+## Завершено: export storage + async-like workflow (Sprint 12)
+
+- Реализовано сохранение export binaries в object storage (Firebase Storage через backend).
+- Export artifact lifecycle: `pending -> ready|failed` с `retryCount`, `completedAt`, `errorMessage`.
+- Добавлен повторный download прошлых `ready` экспортов (через signed URL / download endpoint).
+- Добавлен retry flow для `failed` экспортов.
+- В UI добавлен выбор при dirty draft:
+  - сохранить и экспортировать;
+  - экспортировать текущую сохранённую версию.
+- Сохранена backward compatibility для legacy export rows без `storagePath/fileUrl`.
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).

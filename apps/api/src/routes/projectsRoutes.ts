@@ -3,6 +3,7 @@ import { requireSipUserId } from '../plugins/requestContext.js';
 import { sendRouteError } from './errorReply.js';
 import {
   createProjectExport,
+  getProjectExportDownloadUrl,
   getProjectExport,
   listProjectExports,
 } from '../services/exportService.js';
@@ -153,6 +154,23 @@ export async function registerProjectRoutes(app: FastifyInstance): Promise<void>
       try {
         const actorId = requireSipUserId(request);
         const result = await getProjectExport(request.params.projectId, request.params.exportId, actorId);
+        return reply.send(result);
+      } catch (e) {
+        return sendRouteError(reply, request, e);
+      }
+    }
+  );
+
+  app.get<{ Params: { projectId: string; exportId: string } }>(
+    '/api/projects/:projectId/exports/:exportId/download',
+    async (request, reply) => {
+      try {
+        const actorId = requireSipUserId(request);
+        const result = await getProjectExportDownloadUrl(
+          request.params.projectId,
+          request.params.exportId,
+          actorId
+        );
         return reply.send(result);
       } catch (e) {
         return sendRouteError(reply, request, e);

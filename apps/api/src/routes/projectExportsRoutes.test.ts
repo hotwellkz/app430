@@ -47,6 +47,7 @@ vi.mock('../services/exportService.js', () => ({
   })),
   listProjectExports: vi.fn(async () => [{ id: 'e1', projectId: 'p1', versionId: 'v1', format: 'pdf', title: 't', createdAt: new Date().toISOString(), createdBy: 'u1', status: 'ready', fileName: 'x.pdf', storagePath: null, errorMessage: null }]),
   getProjectExport: vi.fn(async () => ({ artifact: { id: 'e1', projectId: 'p1', versionId: 'v1', format: 'pdf', title: 't', createdAt: new Date().toISOString(), createdBy: 'u1', status: 'ready', fileName: 'x.pdf', storagePath: null, errorMessage: null }, snapshot: null })),
+  getProjectExportDownloadUrl: vi.fn(async () => ({ url: 'https://example.com/x.pdf', fileName: 'x.pdf' })),
 }));
 
 describe('project exports routes', () => {
@@ -77,6 +78,12 @@ describe('project exports routes', () => {
       headers,
     });
     expect(getRes.statusCode).toBe(200);
+    const dlRes = await app.inject({
+      method: 'GET',
+      url: '/api/projects/p1/exports/e1/download',
+      headers,
+    });
+    expect(dlRes.statusCode).toBe(200);
     await app.close();
   });
 });

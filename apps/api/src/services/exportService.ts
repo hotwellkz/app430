@@ -11,13 +11,31 @@ import type {
 import { assertActorMatchesHeader, assertCanAccessProject } from '../access/projectAccess.js';
 import { COLLECTIONS } from '../config/collections.js';
 import { NotFoundError, ValidationAppError } from '../errors/httpErrors.js';
-import { getDb } from '../firestore/admin.js';
+import { getDb, getStorageBucket } from '../firestore/admin.js';
 import { mapExportDoc, mapProjectDoc } from '../mappers/firestoreMappers.js';
 import { formatZodError, zCreateExportBody } from '../validation/schemas.js';
 import { getCurrentVersion, getProject } from './sipProjectService.js';
+import { renderExportBinary } from './exportBinaryRenderer.js';
 
 function makeFileName(projectId: string, versionNumber: number, format: ExportFormat): string {
   return `sip-${projectId.slice(0, 8)}-v${versionNumber}.${format}`;
+}
+
+const EXPORT_TIMEOUT_MS = 45_000;
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('Export timeout exceeded')), timeoutMs);
+    promise
+      .then((v) => {
+        clearTimeout(t);
+        resolve(v);
+      })
+      .catch((e) => {
+        clearTimeout(t);
+        reject(e);
+      });
+  });
 }
 
 export async function createProjectExport(
@@ -46,6 +64,12 @@ export async function createProjectExport(
   const ref = db.collection(COLLECTIONS.PROJECT_EXPORTS).doc();
   const now = FieldValue.serverTimestamp();
   const fileName = makeFileName(projectId, version.versionNumber, parsed.data.format);
+  let retryCount = 0;
+  if (parsed.data.retryOfExportId) {
+    const prev = await db.collection(COLLECTIONS.PROJECT_EXPORTS).doc(parsed.data.retryOfExportId).get();
+    const prevRetry = typeof prev.data()?.retryCount === 'number' ? prev.data()?.retryCount : 0;
+    retryCount = prevRetry + 1;
+  }
   await ref.set({
     projectId,
     versionId: version.id,
@@ -53,17 +77,56 @@ export async function createProjectExport(
     title: parsed.data.title ?? `Export ${parsed.data.format.toUpperCase()} v${version.versionNumber}`,
     createdAt: now,
     createdBy: actorId,
-    status: 'ready',
+    status: 'pending',
     fileName,
     storagePath: null,
+    fileUrl: null,
+    sizeBytes: null,
+    mimeType: null,
     errorMessage: null,
+    retryCount,
+    completedAt: null,
     snapshot,
   });
+  try {
+    const { rendered, storagePath, url } = await withTimeout(
+      (async () => {
+        const rendered = await renderExportBinary(snapshot, parsed.data.format);
+        const storagePath = `sip-exports/${projectId}/${version.id}/${ref.id}/${fileName}`;
+        const bucket = getStorageBucket();
+        const file = bucket.file(storagePath);
+        await file.save(rendered.buffer, {
+          resumable: false,
+          metadata: {
+            contentType: rendered.mimeType,
+          },
+        });
+        const [url] = await file.getSignedUrl({
+          action: 'read',
+          expires: Date.now() + 1000 * 60 * 60 * 24,
+        });
+        return { rendered, storagePath, url };
+      })(),
+      EXPORT_TIMEOUT_MS
+    );
+    await ref.update({
+      status: 'ready',
+      storagePath,
+      fileUrl: url,
+      sizeBytes: rendered.buffer.byteLength,
+      mimeType: rendered.mimeType,
+      completedAt: FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    await ref.update({
+      status: 'failed',
+      errorMessage: error instanceof Error ? error.message.slice(0, 500) : 'export failed',
+      completedAt: FieldValue.serverTimestamp(),
+    });
+  }
   const created = await ref.get();
-  return {
-    artifact: mapExportDoc(ref.id, created.data() ?? {}),
-    snapshot: (created.data()?.snapshot as ExportPackageSnapshot) ?? snapshot,
-  };
+  const artifact = mapExportDoc(ref.id, created.data() ?? {});
+  return { artifact, snapshot };
 }
 
 export async function listProjectExports(
@@ -79,6 +142,19 @@ export async function listProjectExports(
     .limit(Math.max(1, Math.min(100, limitCount)))
     .get();
   const rows = qs.docs.map((d) => mapExportDoc(d.id, d.data() ?? {}));
+  for (const row of rows) {
+    if (row.status === 'ready' && row.storagePath) {
+      try {
+        const [url] = await getStorageBucket().file(row.storagePath).getSignedUrl({
+          action: 'read',
+          expires: Date.now() + 1000 * 60 * 30,
+        });
+        row.fileUrl = url;
+      } catch {
+        row.fileUrl = null;
+      }
+    }
+  }
   rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   return rows;
 }
@@ -99,8 +175,36 @@ export async function getProjectExport(
   if (data.projectId !== projectId) {
     throw new NotFoundError(`Экспорт не найден в проекте: ${exportId}`);
   }
+  const artifact = mapExportDoc(exportId, data);
+  if (artifact.status === 'ready' && artifact.storagePath) {
+    try {
+      const [url] = await getStorageBucket().file(artifact.storagePath).getSignedUrl({
+        action: 'read',
+        expires: Date.now() + 1000 * 60 * 30,
+      });
+      artifact.fileUrl = url;
+    } catch {
+      artifact.fileUrl = null;
+    }
+  }
   return {
-    artifact: mapExportDoc(exportId, data),
+    artifact,
     snapshot: (data.snapshot as ExportPackageSnapshot | undefined) ?? null,
   };
+}
+
+export async function getProjectExportDownloadUrl(
+  projectId: string,
+  exportId: string,
+  actorId: string
+): Promise<{ url: string; fileName: string }> {
+  const result = await getProjectExport(projectId, exportId, actorId);
+  if (result.artifact.status !== 'ready' || !result.artifact.storagePath) {
+    throw new ValidationAppError('Экспорт ещё не готов или отсутствует в storage');
+  }
+  const [url] = await getStorageBucket().file(result.artifact.storagePath).getSignedUrl({
+    action: 'read',
+    expires: Date.now() + 1000 * 60 * 30,
+  });
+  return { url, fileName: result.artifact.fileName };
 }

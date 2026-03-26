@@ -23,6 +23,7 @@ async function main() {
       firebaseProjectId: env.firebaseProjectId,
       hasFirebaseJson: env.hasFirebaseJson,
       hasGoogleApplicationCredentials: Boolean(env.googleApplicationCredentials),
+      storageBucket: env.storageBucket,
     },
     'SIP API startup config'
   );

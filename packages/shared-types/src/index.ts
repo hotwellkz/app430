@@ -218,7 +218,12 @@ export interface ExportArtifactMeta {
   status: ExportStatus;
   fileName: string;
   storagePath?: string | null;
+  fileUrl?: string | null;
+  sizeBytes?: number | null;
+  mimeType?: string | null;
   errorMessage?: string | null;
+  retryCount?: number;
+  completedAt?: string | null;
 }
 
 export interface ExportPackageProjectSummary {
@@ -279,6 +284,7 @@ export interface CreateExportRequest {
   createdBy: string;
   format: ExportFormat;
   title?: string;
+  retryOfExportId?: string;
 }
 
 export interface CreateExportResponse {

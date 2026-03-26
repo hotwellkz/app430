@@ -5,6 +5,7 @@ interface ApiEnv {
   hasFirebaseJson: boolean;
   firebaseProjectId: string | null;
   googleApplicationCredentials: string | null;
+  storageBucket: string | null;
 }
 
 function parsePort(raw: string | undefined): number {
@@ -55,6 +56,7 @@ export function loadApiEnv(src: NodeJS.ProcessEnv = process.env): ApiEnv {
     hasFirebaseJson: Boolean(src.FIREBASE_SERVICE_ACCOUNT_JSON?.trim()),
     firebaseProjectId: src.FIREBASE_PROJECT_ID?.trim() || null,
     googleApplicationCredentials: src.GOOGLE_APPLICATION_CREDENTIALS?.trim() || null,
+    storageBucket: src.FIREBASE_STORAGE_BUCKET?.trim() || null,
   };
 }
 

@@ -205,6 +205,30 @@
 - Физический файл генерируется на клиенте при запросе (browser download fallback).
 - В metadata уже есть поля `storagePath/status/errorMessage`, что позволяет позже перейти на object storage без лома контракта.
 
+### Storage strategy update (Sprint 12)
+
+- Выбран Firebase Storage (через `firebase-admin`) как нативный вариант к текущему стеку Firestore/Firebase Admin.
+- Причины:
+  - уже есть service account и backend auth context;
+  - минимальный инфраструктурный overhead;
+  - простой и безопасный выдаваемый download через signed URLs.
+
+### Почему pending/ready/failed реализованы так
+
+- Export record создаётся со статусом `pending` сразу.
+- Затем backend выполняет рендер + upload:
+  - success -> `ready`;
+  - error -> `failed`.
+- Это даёт production-like UX без тяжёлой очереди задач и остаётся расширяемым для future background workers.
+
+### Version traceability in export flow
+
+- Экспорт всегда привязан к `versionId`.
+- Для dirty draft UX даёт явный выбор:
+  - save-and-export;
+  - export-saved-version.
+- В metadata фиксируются `projectId/versionId/createdAt/createdBy/format/status`.
+
 ## Коллекции Firestore
 
 | Коллекция | Назначение |

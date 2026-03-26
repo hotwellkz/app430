@@ -46,6 +46,7 @@ export const zCreateExportBody = z.object({
   createdBy: z.string().min(1).max(128),
   format: z.enum(['pdf', 'csv', 'xlsx']),
   title: z.string().max(200).optional(),
+  retryOfExportId: z.string().min(1).optional(),
 });
 
 export function formatZodError(err: z.ZodError): unknown {

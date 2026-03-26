@@ -7,6 +7,7 @@ describe('loadApiEnv', () => {
     expect(env.port).toBe(3001);
     expect(env.nodeEnv).toBe('development');
     expect(env.corsOrigins.length).toBeGreaterThan(0);
+    expect(env.storageBucket).toBeNull();
   });
 
   it('валидирует порт', () => {

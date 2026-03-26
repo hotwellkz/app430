@@ -19,6 +19,30 @@ vi.mock('../hooks/useSipProject', () => ({
           createdBy: 'u1',
           status: 'ready',
           fileName: 'a.pdf',
+          storagePath: 'sip-exports/p1/v1/e1/a.pdf',
+        },
+        {
+          id: 'e2',
+          projectId: 'p1',
+          versionId: 'v1',
+          format: 'xlsx',
+          title: 't2',
+          createdAt: new Date().toISOString(),
+          createdBy: 'u1',
+          status: 'failed',
+          fileName: 'b.xlsx',
+          errorMessage: 'boom',
+        },
+        {
+          id: 'e3',
+          projectId: 'p1',
+          versionId: 'v1',
+          format: 'csv',
+          title: 't3',
+          createdAt: new Date().toISOString(),
+          createdBy: 'u1',
+          status: 'pending',
+          fileName: 'c.csv',
         },
       ],
     },
@@ -61,8 +85,8 @@ vi.mock('../identity/sipUser', () => ({
   getSipUserId: () => 'u1',
 }));
 
-vi.mock('../export/renderExportFiles', () => ({
-  downloadExportSnapshot: vi.fn(),
+vi.mock('../api/projectsApi', () => ({
+  getProjectExportDownloadUrl: vi.fn(async () => ({ url: 'https://example.com/a.pdf', fileName: 'a.pdf' })),
 }));
 
 describe('ExportPanel', () => {
@@ -74,21 +98,38 @@ describe('ExportPanel', () => {
     const qc = new QueryClient();
     render(
       <QueryClientProvider client={qc}>
-        <ExportPanel projectId="p1" versionId="v1" />
+        <ExportPanel projectId="p1" versionId="v1" onSaveBeforeExport={async () => true} />
       </QueryClientProvider>
     );
     expect(screen.getByRole('button', { name: /Скачать PDF/i })).toBeTruthy();
     expect(screen.getByText(/Последние выгрузки/i)).toBeTruthy();
+    expect(screen.getAllByText(/Retry/i).length).toBeGreaterThan(0);
   });
 
   it('starts export actions', () => {
     const qc = new QueryClient();
     render(
       <QueryClientProvider client={qc}>
-        <ExportPanel projectId="p1" versionId="v1" />
+        <ExportPanel projectId="p1" versionId="v1" onSaveBeforeExport={async () => true} />
       </QueryClientProvider>
     );
     fireEvent.click(screen.getAllByRole('button', { name: /Скачать CSV/i })[0]!);
     fireEvent.click(screen.getAllByRole('button', { name: /Скачать XLSX/i })[0]!);
+  });
+
+  it('shows unsaved draft export choice', () => {
+    useEditorStore.setState((s) => ({
+      ...s,
+      document: { ...s.document, hasUnsavedChanges: true },
+    }));
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <ExportPanel projectId="p1" versionId="v1" onSaveBeforeExport={async () => true} />
+      </QueryClientProvider>
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: /Скачать PDF/i })[0]!);
+    expect(screen.getByText(/Сохранить и экспортировать/i)).toBeTruthy();
+    expect(screen.getByText(/Экспортировать текущую сохраненную версию/i)).toBeTruthy();
   });
 });
