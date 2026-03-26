@@ -61,12 +61,34 @@ async function sipFetch(path: string, init: RequestInit = {}): Promise<Response>
   }
   headers.set('x-request-id', makeRequestId());
   headers.set('x-sip-user-id', user.uid);
-  const url = `${getSipApiBase()}${path.startsWith('/') ? path : `/${path}`}`;
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), SIP_API_TIMEOUT_MS);
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const base = getSipApiBase();
+  const url = `${base}${normalizedPath}`;
+  const fallbackUrl =
+    !base.startsWith('/') && normalizedPath.startsWith('/api/')
+      ? `/sip-editor-api${normalizedPath}`
+      : null;
+
+  async function doFetch(requestUrl: string): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), SIP_API_TIMEOUT_MS);
+    try {
+      return await fetch(requestUrl, { ...init, headers, signal: controller.signal });
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+
   try {
-    return await fetch(url, { ...init, headers, signal: controller.signal });
+    return await doFetch(url);
   } catch (error) {
+    if (fallbackUrl) {
+      try {
+        return await doFetch(fallbackUrl);
+      } catch {
+        // keep original error semantics below
+      }
+    }
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw new SipApiError(
         'SIP API не ответил вовремя. Повторите позже или проверьте доступность api.2wix.ru.',
@@ -82,8 +104,6 @@ async function sipFetch(path: string, init: RequestInit = {}): Promise<Response>
       );
     }
     throw new SipApiError('Неизвестная ошибка сети при обращении к SIP API.', 503, 'NETWORK_ERROR');
-  } finally {
-    window.clearTimeout(timeout);
   }
 }
 
