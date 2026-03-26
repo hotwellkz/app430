@@ -318,6 +318,8 @@
   - `import_apply_candidate_success`,
   - `import_apply_candidate_conflict`,
   - `import_history_legacy_item_detected`.
+- Frontend history read-model вынесен в отдельный adapter/view-model слой, чтобы backend response shape не использовался напрямую в компонентах.
+- Для первого UI среза зафиксирован mini-contract badge/subtitle для `normal`, `legacy`, `incomplete legacy`.
 
 ### Spec-engine boundary (Sprint 10)
 

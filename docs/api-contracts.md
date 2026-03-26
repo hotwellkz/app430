@@ -304,6 +304,10 @@ Observability markers (backend logs, без внешних SDK):
 - `import_apply_candidate_conflict` — conflict при `apply-candidate` (code + version context).
 - `import_history_legacy_item_detected` — обнаружен legacy/incomplete item в history mapping.
 
+Frontend mapping note:
+
+- Для read-only history UI backend item маппится в UI view-model (`badgeKind`, `badgeLabel`, `subtitle`, `isInspectable`), см. `docs/ui-ai-import-history.md`.
+
 Успешный ответ `200`:
 
 ```json

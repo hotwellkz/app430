@@ -4,6 +4,7 @@ import type {
   CreateProjectRequest,
   CreateVersionRequest,
   ExportArtifactMeta,
+  GetImportApplyHistoryResponse,
   ExportPackageSnapshot,
   PatchCurrentVersionRequestBody,
   Project,
@@ -92,4 +93,10 @@ export async function getProjectExportDownloadUrl(
   return fetchJson(
     `/api/projects/${encodeURIComponent(projectId)}/exports/${encodeURIComponent(exportId)}/download`
   );
+}
+
+export async function getImportApplyHistory(
+  projectId: string
+): Promise<GetImportApplyHistoryResponse> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/import-apply-history`);
 }

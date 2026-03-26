@@ -20,6 +20,7 @@ import { BuildingWarningsPanel } from '@/components/BuildingWarningsPanel';
 import { PanelizationPanel } from '@/components/PanelizationPanel';
 import { SpecPanel } from '@/components/SpecPanel';
 import { ExportPanel } from '@/components/ExportPanel';
+import { ImportApplyHistoryPanel } from '@/components/ImportApplyHistoryPanel';
 import { FloorInspector } from '@/components/FloorInspector';
 import { OpeningInspector } from '@/components/OpeningInspector';
 import { RoofInspector } from '@/components/RoofInspector';
@@ -558,6 +559,7 @@ export function EditorShellPage() {
               versionId={version?.id ?? null}
               onSaveBeforeExport={saveBeforeExport}
             />
+            <ImportApplyHistoryPanel projectId={projectId} />
             <div
               style={{
                 marginBottom: 12,
