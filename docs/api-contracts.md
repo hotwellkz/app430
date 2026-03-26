@@ -122,6 +122,42 @@ Optimistic concurrency. Тело:
 
 Ответ `200`: `{ "version": ProjectVersion }`.
 
+### `POST /api/projects/:projectId/import-jobs`
+
+Тело:
+
+```json
+{
+  "sourceImages": [
+    {
+      "id": "img-1",
+      "kind": "plan | facade | other",
+      "fileName": "plan.png",
+      "mimeType": "image/png",
+      "widthPx": 1920,
+      "heightPx": 1080,
+      "storagePath": "optional/future",
+      "fileUrl": "optional/future"
+    }
+  ],
+  "projectName": "опционально"
+}
+```
+
+Ответ `201`: `{ "job": ImportJob }`.
+
+На foundation-этапе сервер создаёт mock snapshot и ставит статус `needs_review`.
+
+### `GET /api/projects/:projectId/import-jobs`
+
+Ответ: `{ "items": ImportJob[] }` (новые сверху по `createdAt`).
+
+### `GET /api/projects/:projectId/import-jobs/:jobId`
+
+Ответ: `{ "job": ImportJob }`.
+
+Если `jobId` не найден или не принадлежит проекту — `404 NOT_FOUND`.
+
 ## Доступ
 
 - Пустой `allowedEditorIds` в проекте: редактировать может только `createdBy`.

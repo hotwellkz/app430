@@ -355,6 +355,122 @@ export interface CreateExportResponse {
   snapshot: ExportPackageSnapshot;
 }
 
+export type ImportJobStatus = 'queued' | 'running' | 'needs_review' | 'failed';
+
+export interface ImportAssetRef {
+  id: string;
+  kind: 'plan' | 'facade' | 'other';
+  fileName: string;
+  mimeType?: string;
+  widthPx?: number;
+  heightPx?: number;
+  storagePath?: string;
+  fileUrl?: string;
+}
+
+export interface ImportConfidence {
+  score: number;
+  level: 'high' | 'medium' | 'low';
+}
+
+export interface ImportUnresolvedIssue {
+  id: string;
+  code: string;
+  severity: 'warning' | 'blocking';
+  message: string;
+  requiredAction?: string;
+  relatedIds?: string[];
+}
+
+export interface ArchitecturalImportSnapshot {
+  projectMeta: {
+    name?: string;
+    detectedScaleHints?: string[];
+    notes?: string[];
+  };
+  floors: Array<{
+    id: string;
+    label?: string;
+    elevationHintMm?: number | null;
+    confidence?: ImportConfidence;
+  }>;
+  outerContour?:
+    | {
+        kind: 'polygon' | 'polyline';
+        points: Array<{ x: number; y: number }>;
+        confidence?: ImportConfidence;
+      }
+    | null;
+  walls: Array<{
+    id: string;
+    floorId: string;
+    points: Array<{ x: number; y: number }>;
+    typeHint?: 'external' | 'internal';
+    thicknessHintMm?: number | null;
+    confidence?: ImportConfidence;
+  }>;
+  openings: Array<{
+    id: string;
+    floorId: string;
+    wallId?: string | null;
+    type?: 'window' | 'door' | 'unknown';
+    positionAlongWallMm?: number | null;
+    widthMm?: number | null;
+    heightMm?: number | null;
+    confidence?: ImportConfidence;
+  }>;
+  stairs: Array<{
+    id: string;
+    floorId: string;
+    polygon?: Array<{ x: number; y: number }>;
+    directionHint?: 'up' | 'down' | 'unknown';
+    confidence?: ImportConfidence;
+  }>;
+  roofHints?: {
+    likelyType?: 'gabled' | 'single-slope' | 'unknown';
+    confidence?: ImportConfidence;
+    notes?: string[];
+  } | null;
+  dimensions?: Array<{
+    id: string;
+    label?: string;
+    valueMm?: number | null;
+    confidence?: ImportConfidence;
+  }>;
+  unresolved: ImportUnresolvedIssue[];
+  notes: string[];
+}
+
+export interface ImportJob {
+  id: string;
+  projectId: string;
+  status: ImportJobStatus;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  importSchemaVersion: number;
+  sourceImages: ImportAssetRef[];
+  snapshot: ArchitecturalImportSnapshot | null;
+  errorMessage?: string | null;
+}
+
+export interface CreateImportJobRequest {
+  sourceImages: ImportAssetRef[];
+  projectName?: string;
+}
+
+export interface CreateImportJobResponse {
+  job: ImportJob;
+}
+
+export interface GetImportJobResponse {
+  job: ImportJob;
+}
+
+export interface ListImportJobsResponse {
+  items: ImportJob[];
+}
+
 /** Единый формат ошибок API. */
 export type ApiErrorCode =
   | 'VALIDATION_ERROR'

@@ -6,4 +6,5 @@ export const COLLECTIONS = {
   PROJECTS: 'sipEditor_projects',
   PROJECT_VERSIONS: 'sipEditor_projectVersions',
   PROJECT_EXPORTS: 'sipEditor_projectExports',
+  IMPORT_JOBS: 'sipEditor_importJobs',
 } as const;

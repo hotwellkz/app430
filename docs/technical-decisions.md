@@ -216,6 +216,20 @@
   - existing export API/storage workflow сохранён;
   - legacy artifacts без mode остаются читаемыми.
 
+### AI import foundation boundary (Sprint 16, этап 1)
+
+- Добавлен отдельный backend lifecycle `import-job`, который не вмешивается в существующий flow `BuildingModel/current-version`.
+- Введён промежуточный канонический контракт `ArchitecturalImportSnapshot`:
+  - это отдельная import-domain модель;
+  - она не смешивается с редакторной моделью и не сохраняется как project version.
+- На текущем этапе используется только mock factory:
+  - структурная валидность snapshot обязательна;
+  - запрещено выдавать "готовый дом" без extractor;
+  - блокирующие unresolved issues явно сигнализируют human-in-the-loop шаг.
+- Apply endpoint намеренно отложен:
+  - чтобы не нарушать optimistic concurrency и versioning semantics текущего редактора;
+  - чтобы сначала стабилизировать contracts, persistence и review lifecycle.
+
 ### Spec-engine boundary (Sprint 10)
 
 - BOM/spec aggregation вынесена в `@2wix/spec-engine`, а не в `panel-engine` и не в React-компоненты.
@@ -281,6 +295,7 @@
 |-----------|------------|
 | `sipEditor_projects` | Метаданные, current*, `versionCounter`, `allowedEditorIds`, audit |
 | `sipEditor_projectVersions` | `buildingModel`, `basedOnVersionId`, `isSnapshot`, `versionNumber`, … |
+| `sipEditor_importJobs` | Lifecycle import-job (`status`, `sourceImages`, `ArchitecturalImportSnapshot`, audit timestamps) |
 
 ## Валидация
 

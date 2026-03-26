@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  zArchitecturalImportSnapshot,
   zCreateExportBody,
+  zCreateImportJobBody,
   zCreateProjectBody,
   zPatchCurrentBody,
+  zImportAssetRef,
   zCreateVersionBody,
 } from './schemas.js';
 
@@ -87,6 +90,52 @@ describe('zCreateExportBody', () => {
         createdBy: 'u1',
         format: 'pdf',
         presentationMode: 'commercial',
+      }).success
+    ).toBe(true);
+  });
+});
+
+describe('import schemas', () => {
+  it('accepts valid ImportAssetRef', () => {
+    expect(
+      zImportAssetRef.safeParse({
+        id: 'img-1',
+        kind: 'plan',
+        fileName: 'plan.png',
+        widthPx: 1920,
+        heightPx: 1080,
+      }).success
+    ).toBe(true);
+  });
+
+  it('rejects invalid ImportAssetRef kind', () => {
+    expect(
+      zImportAssetRef.safeParse({
+        id: 'img-1',
+        kind: 'photo',
+        fileName: 'plan.png',
+      }).success
+    ).toBe(false);
+  });
+
+  it('rejects invalid snapshot shape', () => {
+    expect(
+      zArchitecturalImportSnapshot.safeParse({
+        projectMeta: {},
+        floors: [{ id: 'f1' }],
+        walls: [],
+        openings: [],
+        stairs: [],
+        unresolved: [{ id: 'u1', code: 'X', severity: 'bad', message: 'oops' }],
+        notes: [],
+      }).success
+    ).toBe(false);
+  });
+
+  it('accepts create import body', () => {
+    expect(
+      zCreateImportJobBody.safeParse({
+        sourceImages: [{ id: 'img-1', kind: 'facade', fileName: 'f.png' }],
       }).success
     ).toBe(true);
   });

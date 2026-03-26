@@ -184,6 +184,18 @@
 - `SpecPanel` улучшен по UX: фильтрация, сортировка, grouping mode, более читаемый warnings/object breakdown.
 - Подготовлены future hooks для pricing (`costKey`) без реализации реального pricing runtime.
 
+## Завершено: AI import foundation (Sprint 16, этап 1)
+
+- Добавлен backend/domain foundation для import-job без OCR/vision/LLM extraction.
+- Введена canonical intermediate schema `ArchitecturalImportSnapshot` и стабильные shared API contracts.
+- Реализованы endpoints:
+  - `POST /api/projects/:projectId/import-jobs`
+  - `GET /api/projects/:projectId/import-jobs`
+  - `GET /api/projects/:projectId/import-jobs/:jobId`
+- Добавлена persistence коллекция `sipEditor_importJobs` для source image refs + snapshot.
+- Добавлен честный mock snapshot factory (без выдуманной геометрии, с явными unresolved/notes).
+- Подготовлена база для следующего этапа: wizard/review/apply и подключение extractor.
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).

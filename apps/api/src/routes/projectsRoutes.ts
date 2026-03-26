@@ -8,6 +8,11 @@ import {
   listProjectExports,
 } from '../services/exportService.js';
 import {
+  createImportJob,
+  getImportJob,
+  listImportJobs,
+} from '../services/importJobService.js';
+import {
   createProject,
   createVersion,
   getCurrentVersion,
@@ -169,6 +174,49 @@ export async function registerProjectRoutes(app: FastifyInstance): Promise<void>
         const result = await getProjectExportDownloadUrl(
           request.params.projectId,
           request.params.exportId,
+          actorId
+        );
+        return reply.send(result);
+      } catch (e) {
+        return sendRouteError(reply, request, e);
+      }
+    }
+  );
+
+  app.post<{ Params: { projectId: string } }>(
+    '/api/projects/:projectId/import-jobs',
+    async (request, reply) => {
+      try {
+        const actorId = requireSipUserId(request);
+        const result = await createImportJob(request.params.projectId, request.body, actorId);
+        return reply.code(201).send(result);
+      } catch (e) {
+        return sendRouteError(reply, request, e);
+      }
+    }
+  );
+
+  app.get<{ Params: { projectId: string } }>(
+    '/api/projects/:projectId/import-jobs',
+    async (request, reply) => {
+      try {
+        const actorId = requireSipUserId(request);
+        const result = await listImportJobs(request.params.projectId, actorId);
+        return reply.send(result);
+      } catch (e) {
+        return sendRouteError(reply, request, e);
+      }
+    }
+  );
+
+  app.get<{ Params: { projectId: string; jobId: string } }>(
+    '/api/projects/:projectId/import-jobs/:jobId',
+    async (request, reply) => {
+      try {
+        const actorId = requireSipUserId(request);
+        const result = await getImportJob(
+          request.params.projectId,
+          request.params.jobId,
           actorId
         );
         return reply.send(result);

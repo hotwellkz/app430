@@ -1,6 +1,9 @@
 import type { DocumentData, Timestamp } from 'firebase-admin/firestore';
 import type {
+  ArchitecturalImportSnapshot,
   BuildingModel,
+  ImportJob,
+  ImportJobStatus,
   ExportArtifactMeta,
   ExportFormat,
   ExportPresentationMode,
@@ -10,6 +13,7 @@ import type {
   ProjectVersion,
 } from '@2wix/shared-types';
 import { BUILDING_MODEL_SCHEMA_VERSION } from '@2wix/shared-types';
+import { zArchitecturalImportSnapshot } from '../validation/schemas.js';
 
 function tsToIso(v: Timestamp | { toDate?: () => Date } | Date | string | undefined): string {
   if (v === undefined || v === null) {
@@ -116,5 +120,38 @@ export function mapExportDoc(id: string, data: DocumentData): ExportArtifactMeta
     errorMessage: typeof data.errorMessage === 'string' ? data.errorMessage : null,
     retryCount: typeof data.retryCount === 'number' ? data.retryCount : 0,
     completedAt: data.completedAt ? tsToIso(data.completedAt as Timestamp) : null,
+  };
+}
+
+export function mapImportJobDoc(id: string, data: DocumentData): ImportJob {
+  const status = data.status as ImportJobStatus | undefined;
+  const safeStatus: ImportJobStatus =
+    status === 'queued' || status === 'running' || status === 'failed' ? status : 'needs_review';
+  const snapshotParsed = zArchitecturalImportSnapshot.safeParse(data.snapshot);
+  const snapshot: ArchitecturalImportSnapshot | null = snapshotParsed.success
+    ? snapshotParsed.data
+    : null;
+  return {
+    id,
+    projectId: typeof data.projectId === 'string' ? data.projectId : '',
+    status: safeStatus,
+    createdAt: tsToIso(data.createdAt),
+    updatedAt: tsToIso(data.updatedAt),
+    createdBy: typeof data.createdBy === 'string' ? data.createdBy : '',
+    importSchemaVersion:
+      typeof data.importSchemaVersion === 'number' ? data.importSchemaVersion : 1,
+    sourceImages: Array.isArray(data.sourceImages)
+      ? data.sourceImages.filter((x): x is ImportJob['sourceImages'][number] => {
+          return (
+            typeof x === 'object' &&
+            x !== null &&
+            typeof (x as { id?: unknown }).id === 'string' &&
+            typeof (x as { kind?: unknown }).kind === 'string' &&
+            typeof (x as { fileName?: unknown }).fileName === 'string'
+          );
+        })
+      : [],
+    snapshot,
+    errorMessage: typeof data.errorMessage === 'string' ? data.errorMessage : null,
   };
 }
