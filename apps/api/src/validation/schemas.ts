@@ -422,7 +422,9 @@ export const zImportApplyHistoryItem = z.object({
   warningsCount: z.number().int().min(0),
   traceCount: z.number().int().min(0),
   note: z.string().nullable().optional(),
-  legacy: z.boolean().optional(),
+  isLegacy: z.boolean().optional(),
+  isIncomplete: z.boolean().optional(),
+  missingFields: z.array(z.string().min(1)).optional(),
 });
 
 export const zGetImportApplyHistoryResponse = z.object({

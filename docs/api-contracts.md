@@ -293,6 +293,9 @@ Read-only history AI-import apply событий для проекта.
 - читает provenance из metadata `ProjectVersion.importProvenance`;
 - возвращает newest-first;
 - если истории нет, возвращает пустой `items: []`.
+- soft legacy policy:
+  - версия без `importProvenance` не попадает в историю;
+  - неполный legacy provenance возвращается безопасно с `isLegacy=true`, `isIncomplete=true`, `missingFields`.
 
 Успешный ответ `200`:
 
@@ -311,7 +314,9 @@ Read-only history AI-import apply событий для проекта.
       "warningsCount": 1,
       "traceCount": 17,
       "note": "optional",
-      "legacy": false
+      "isLegacy": true,
+      "isIncomplete": true,
+      "missingFields": ["reviewedSnapshotVersion"]
     }
   ]
 }

@@ -689,7 +689,9 @@ export interface ImportApplyHistoryItem {
   warningsCount: number;
   traceCount: number;
   note?: string | null;
-  legacy?: boolean;
+  isLegacy?: boolean;
+  isIncomplete?: boolean;
+  missingFields?: string[];
 }
 
 export interface GetImportApplyHistoryResponse {

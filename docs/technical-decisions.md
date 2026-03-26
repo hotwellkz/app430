@@ -309,6 +309,10 @@
   - `appliedBy`, `appliedAt`,
   - `warningsCount`, `traceCount`, `note`.
 - История читается отдельным read endpoint из version metadata (`/import-apply-history`), без обязательного сканирования import jobs.
+- Soft legacy handling policy:
+  - версии без `importProvenance` игнорируются в истории;
+  - неполные legacy provenance не валят endpoint;
+  - такие записи возвращаются с `isLegacy/isIncomplete/missingFields`.
 
 ### Spec-engine boundary (Sprint 10)
 

@@ -56,6 +56,7 @@
 - `GET /api/projects/:projectId/import-apply-history`
   - Возвращает историю AI-import apply по проекту (newest first) из `ProjectVersion.importProvenance`.
   - Если истории нет, возвращает пустой список.
+  - Legacy/incomplete provenance обрабатывается мягко (`isLegacy`, `isIncomplete`, `missingFields`).
 
 ## Mock import snapshot
 

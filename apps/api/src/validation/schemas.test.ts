@@ -233,6 +233,9 @@ describe('import schemas', () => {
             warningsCount: 0,
             traceCount: 10,
             note: null,
+            isLegacy: true,
+            isIncomplete: true,
+            missingFields: ['reviewedSnapshotVersion'],
           },
         ],
       }).success

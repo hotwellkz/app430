@@ -248,6 +248,16 @@ function buildVersionImportProvenance(
   };
 }
 
+const REQUIRED_PROVENANCE_FIELDS = [
+  'importJobId',
+  'mapperVersion',
+  'reviewedSnapshotVersion',
+  'appliedBy',
+  'appliedAt',
+  'warningsCount',
+  'traceCount',
+] as const;
+
 function applyReviewDecisions(
   snapshot: ArchitecturalImportSnapshot,
   decisions: ImportUserDecisionSet
@@ -822,6 +832,13 @@ export async function listImportApplyHistory(
     }
     const maybeLegacy = raw.importProvenance as Record<string, unknown> | undefined;
     if (maybeLegacy && maybeLegacy.sourceKind === 'ai_import') {
+      const missingFields: string[] = [];
+      for (const field of REQUIRED_PROVENANCE_FIELDS) {
+        const value = maybeLegacy[field];
+        if (value === undefined || value === null || value === '') {
+          missingFields.push(field);
+        }
+      }
       items.push({
         versionId: doc.id,
         versionNumber:
@@ -846,7 +863,9 @@ export async function listImportApplyHistory(
             ? maybeLegacy.traceCount
             : 0,
         note: typeof maybeLegacy.note === 'string' ? maybeLegacy.note : null,
-        legacy: true,
+        isLegacy: true,
+        isIncomplete: missingFields.length > 0,
+        missingFields,
       });
     }
   }

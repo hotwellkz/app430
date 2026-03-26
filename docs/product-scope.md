@@ -253,6 +253,7 @@
   - `GET /api/projects/:projectId/import-apply-history`
 - Endpoint возвращает newest-first AI-import apply историю по проекту из version metadata.
 - Старые версии без provenance поддержаны (не ломают выдачу истории).
+- Добавлен soft legacy policy для неполных записей (`isLegacy`, `isIncomplete`, `missingFields`).
 
 ## Не входит сейчас
 

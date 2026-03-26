@@ -756,4 +756,89 @@ describe('importJobService', () => {
     expect(result.items[1]?.versionId).toBe('v-old-ai');
     expect(result.items.some((x) => x.versionId === 'v-legacy')).toBe(false);
   });
+
+  it('marks incomplete legacy provenance safely with missingFields', async () => {
+    store.set('sipEditor_projectVersions/v-legacy-ai', {
+      projectId: 'p1',
+      versionNumber: 5,
+      schemaVersion: 2,
+      buildingModel: store.get('sipEditor_projectVersions/v-current')?.buildingModel,
+      createdAt: '2026-03-26T09:00:00.000Z',
+      createdBy: 'u1',
+      importProvenance: {
+        sourceKind: 'ai_import',
+        importJobId: 'ij-legacy',
+        mapperVersion: 'import-candidate-v1',
+      },
+    });
+    const result = await listImportApplyHistory('p1', 'u1');
+    const legacyItem = result.items.find((x) => x.versionId === 'v-legacy-ai');
+    expect(legacyItem?.isLegacy).toBe(true);
+    expect(legacyItem?.isIncomplete).toBe(true);
+    expect(legacyItem?.missingFields?.includes('reviewedSnapshotVersion')).toBe(true);
+    expect(legacyItem?.missingFields?.includes('appliedAt')).toBe(true);
+  });
+
+  it('integration happy-path: create -> review -> apply-review -> prepare -> apply-candidate -> history', async () => {
+    const created = await createImportJob(
+      'p1',
+      { sourceImages: [{ id: 'img-100', kind: 'plan', fileName: 'plan.png' }] },
+      'u1'
+    );
+    const jobId = created.job.id;
+
+    await saveImportJobReview(
+      'p1',
+      jobId,
+      {
+        updatedBy: 'u1',
+        decisions: {
+          floorHeightsMmByFloorId: { 'floor-1': 2800 },
+        },
+      },
+      'u1'
+    );
+    await saveImportJobReview(
+      'p1',
+      jobId,
+      {
+        updatedBy: 'u1',
+        decisions: {
+          roofTypeConfirmed: 'gabled',
+          internalBearingWalls: { confirmed: true, wallIds: [] },
+          scale: { mode: 'confirmed' },
+          issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
+        },
+      },
+      'u1'
+    );
+    await applyImportJobReview('p1', jobId, { appliedBy: 'u1' }, 'u1');
+    await prepareImportJobEditorApply('p1', jobId, { generatedBy: 'u1' }, 'u1');
+    await applyImportJobCandidateToProject(
+      'p1',
+      jobId,
+      {
+        appliedBy: 'u1',
+        expectedCurrentVersionId: 'v-current',
+        expectedVersionNumber: 1,
+        expectedSchemaVersion: 2,
+        note: 'integration-e2e',
+      },
+      'u1'
+    );
+
+    const versionDoc = store.get('sipEditor_projectVersions/v-current');
+    expect(versionDoc?.importProvenance?.importJobId).toBe(jobId);
+    expect(versionDoc?.importProvenance?.mapperVersion).toBe('import-candidate-v1');
+    expect(versionDoc?.importProvenance?.reviewedSnapshotVersion).toBeTruthy();
+    expect(versionDoc?.importProvenance?.appliedBy).toBe('u1');
+    expect(versionDoc?.importProvenance?.appliedAt).toBeTruthy();
+
+    const history = await listImportApplyHistory('p1', 'u1');
+    const applied = history.items.find((x) => x.importJobId === jobId);
+    expect(applied?.mapperVersion).toBe('import-candidate-v1');
+    expect(applied?.reviewedSnapshotVersion).toBeTruthy();
+    expect(applied?.appliedBy).toBe('u1');
+    expect(applied?.appliedAt).toBeTruthy();
+  });
 });
