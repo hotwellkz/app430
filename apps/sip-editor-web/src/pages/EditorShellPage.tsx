@@ -22,6 +22,7 @@ import { OpeningInspector } from '@/components/OpeningInspector';
 import { RoofInspector } from '@/components/RoofInspector';
 import { SlabInspector } from '@/components/SlabInspector';
 import { WallInspector } from '@/components/WallInspector';
+import { Preview3DPanel } from '@/components/Preview3DPanel';
 import { getSipUserId } from '@/identity/sipUser';
 import {
   useSipCurrentVersion,
@@ -135,6 +136,7 @@ export function EditorShellPage() {
   const [conflictDetails, setConflictDetails] = useState<VersionConflictDetails | null>(null);
   const [debugOpen, setDebugOpen] = useState(true);
   const [syncToken, setSyncToken] = useState(0);
+  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
 
   const versionsQuery = useSipVersionsList(
     projectId,
@@ -374,6 +376,36 @@ export function EditorShellPage() {
           gap: 8,
         }}
       >
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            type="button"
+            style={{
+              fontSize: 12,
+              padding: '4px 10px',
+              borderRadius: 6,
+              border: '1px solid var(--twix-border)',
+              background: viewMode === '2d' ? '#0f172a' : '#fff',
+              color: viewMode === '2d' ? '#fff' : '#0f172a',
+            }}
+            onClick={() => setViewMode('2d')}
+          >
+            2D
+          </button>
+          <button
+            type="button"
+            style={{
+              fontSize: 12,
+              padding: '4px 10px',
+              borderRadius: 6,
+              border: '1px solid var(--twix-border)',
+              background: viewMode === '3d' ? '#0f172a' : '#fff',
+              color: viewMode === '3d' ? '#fff' : '#0f172a',
+            }}
+            onClick={() => setViewMode('3d')}
+          >
+            3D
+          </button>
+        </div>
         {modelEmpty ? (
           <div style={{ flex: 'none' }}>
             <EmptyState
@@ -434,7 +466,15 @@ export function EditorShellPage() {
             />
           </div>
         ) : null}
-        <EditorCanvas2D onRegisterFitView={(fn) => { fitViewRef.current = fn; }} />
+        {viewMode === '2d' ? (
+          <EditorCanvas2D
+            onRegisterFitView={(fn) => {
+              fitViewRef.current = fn;
+            }}
+          />
+        ) : (
+          <Preview3DPanel model={draft} activeFloorId={view.activeFloorId} />
+        )}
       </div>
     );
 

@@ -65,15 +65,26 @@
 - Тесты: доменные (`vertical/roof/slab`), editor-core команды, web-компоненты sidebar/warnings.
 - Документация: `docs/vertical-model.md`, `docs/roof-and-slabs.md`, обновлены `editor-core.md`, `technical-decisions.md`.
 
+## Завершено: 3D preview MVP (Sprint 8)
+
+- В `sip-editor-web` добавлен режим **2D / 3D** в editor shell без изменения текущего save/discard/undo flow.
+- Реализован отдельный adapter-слой `preview3d`: `buildPreviewSceneModel(buildingModel, options)` преобразует `draftModel` в устойчивый snapshot для рендера.
+- Стены строятся как объёмные сегменты с учётом проёмов через **сегментацию**, а не fragile boolean CSG.
+- Добавлены 3D-слои: walls, openings, slabs, roof; фильтр этажей: `all floors` / `active floor only`.
+- Viewer поддерживает orbit-камеру (rotate/pan/zoom), fit/reset, empty-state и debug-инфо по построенной сцене.
+- Подсветка выделения из editor-core синхронизирована в 3D для wall/opening/slab/roof; базовый click-select в 3D отправляет `selectObject`.
+- Тесты: adapter + sync с draft/discard/floor filter + UI smoke для 3D-панели.
+- Документация: `docs/3d-preview.md`, обновлены `product-scope.md`, `editor-core.md`, `technical-decisions.md`.
+
 ## Не входит сейчас
 
 - Размерные линии «как в CAD», ручки resize проёмов на canvas (только инспектор и drag вдоль стены).
-- 3D, кровля/плиты как редактор, SIP-панели, BOM, экспорт.
+- SIP-панели, BOM/spec/export, CAD-grade булевы операции, freeform 3D-моделирование.
 - Полноценная RBAC/проверка Firebase token на API (см. bridge в technical-decisions).
 
 ## Следующие этапы
 
 | Этап | Фокус |
 |------|--------|
-| Sprint 6+ | Кровля, плиты, 3D, панелизация |
+| Sprint 9+ | Панелизация, спецификация, экспорт и расчётные модули |
 | Hardening | JWT/Firebase Admin verify, company-scoped projects, Firestore security rules под SIP |

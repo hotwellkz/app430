@@ -51,6 +51,19 @@
 - `selection` очищается при удалении выбранного slab/roof.
 - Проверки валидности выполняются в domain-layer (`validateSlab`, `validateRoof`), reducer возвращает понятную ошибку и не портит draft.
 
+### 3D preview и draftModel (Sprint 8)
+
+- 3D-режим в `sip-editor-web` строится **только из `document.draftModel`**.
+- Сам `editor-core` не содержит three.js-логики и не знает про рендерер: граница остаётся прежней — команды/состояние в ядре, визуализация в приложении.
+- В `sip-editor-web/src/preview3d` добавлен adapter `buildPreviewSceneModel`:
+  - вход: `BuildingModel` + view options (layers, floor mode, activeFloorId);
+  - выход: snapshot примитивов (box meshes) + stats/warnings/bounds для viewer.
+- Это даёт корректную синхронизацию:
+  - `applyCommand` в 2D -> меняется `draftModel` -> пересчёт preview snapshot;
+  - `discardDraft` -> snapshot возвращается к server-состоянию;
+  - `applySaveSuccess` не ломает 3D, так как draft/server снова синхронны.
+- Floor filtering (`all`/`active-only`) выполняется в adapter-слое по `activeFloorId`, без мутации доменной модели.
+
 ### Effective высота стен
 
 - Для стены введена логика **effective height**:
