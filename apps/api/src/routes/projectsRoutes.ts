@@ -20,6 +20,7 @@ import {
 import {
   createProject,
   createVersion,
+  deleteProject,
   getCurrentVersion,
   getProject,
   listProjectsForUser,
@@ -58,6 +59,19 @@ export async function registerProjectRoutes(app: FastifyInstance): Promise<void>
         const actorId = requireSipUserId(request);
         const project = await getProject(request.params.projectId, actorId);
         return reply.send({ project });
+      } catch (e) {
+        return sendRouteError(reply, request, e);
+      }
+    }
+  );
+
+  app.delete<{ Params: { projectId: string } }>(
+    '/api/projects/:projectId',
+    async (request, reply) => {
+      try {
+        const actorId = requireSipUserId(request);
+        const result = await deleteProject(request.params.projectId, actorId);
+        return reply.send(result);
       } catch (e) {
         return sendRouteError(reply, request, e);
       }

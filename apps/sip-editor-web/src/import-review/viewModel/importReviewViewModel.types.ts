@@ -4,7 +4,15 @@ export type RequiredDecisionControlType =
   | 'boolean'
   | 'scaleMode'
   | 'number'
-  | 'issueResolution';
+  | 'issueResolution'
+  | 'internalBearingWalls';
+
+export interface InternalBearingWallRowViewModel {
+  wallId: string;
+  floorLabel: string;
+  typeLabel: string;
+  subtitle: string;
+}
 
 export interface RequiredDecisionFieldViewModel {
   key: string;
@@ -19,6 +27,11 @@ export interface RequiredDecisionFieldViewModel {
   floorId?: string;
   /** Для issue resolution — id issue */
   issueId?: string;
+  /** Режим: unset | no | yes + выбранные id */
+  internalBearingMode?: '' | 'no' | 'yes';
+  internalBearingWallRows?: InternalBearingWallRowViewModel[];
+  /** Нет стен в snapshot при confirmed=true */
+  internalBearingCandidatesEmpty?: boolean;
 }
 
 export interface IssueViewModel {

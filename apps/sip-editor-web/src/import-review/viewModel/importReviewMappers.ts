@@ -4,6 +4,7 @@ import {
   IMPORT_JOB_STATUS_LABELS,
   IMPORT_PROJECT_APPLY_STATUS_LABELS,
   IMPORT_REVIEW_STATUS_LABELS,
+  IMPORT_REVIEW_UI,
   ISSUE_RESOLUTION_OPTIONS,
   ISSUE_SEVERITY_LABELS,
   REQUIRED_DECISION_HINTS,
@@ -11,6 +12,12 @@ import {
   ROOF_TYPE_OPTIONS,
   SCALE_MODE_OPTIONS,
 } from '../constants/labels';
+import {
+  floorLabelForSnapshot,
+  getInternalWallCandidatesFromSnapshot,
+  wallSubtitleCompact,
+  wallTypeLabel,
+} from '../utils/internalWallCandidates';
 import { computeImportReviewReadiness } from './reviewReadiness';
 import type {
   ImportReviewJobListItemViewModel,
@@ -121,19 +128,40 @@ function buildRequiredFields(
     });
   }
 
+  const bearingCodes = [
+    'INTERNAL_BEARING_WALLS_CONFIRMATION_REQUIRED',
+    'INTERNAL_BEARING_WALL_IDS_REQUIRED',
+    'INTERNAL_BEARING_WALL_CANDIDATES_UNAVAILABLE',
+  ] as const;
+  const bearingMissing = bearingCodes.some((c) => missingCodes.has(c));
+  const wallCandidates = getInternalWallCandidatesFromSnapshot(snap);
+  const wallRows = wallCandidates.map((w) => ({
+    wallId: w.id,
+    floorLabel: floorLabelForSnapshot(snap, w.floorId),
+    typeLabel: wallTypeLabel(w),
+    subtitle: wallSubtitleCompact(w),
+  }));
+  const mode: '' | 'no' | 'yes' =
+    decisions.internalBearingWalls?.confirmed === undefined
+      ? ''
+      : decisions.internalBearingWalls.confirmed
+        ? 'yes'
+        : 'no';
+  const candidatesEmpty = wallRows.length === 0;
   fields.push({
-    key: 'internalBearing',
-    label: REQUIRED_DECISION_LABELS.INTERNAL_BEARING_WALLS_CONFIRMATION_REQUIRED,
+    key: 'internalBearingWalls',
+    label: IMPORT_REVIEW_UI.internalBearingSectionTitle,
     description: REQUIRED_DECISION_HINTS.INTERNAL_BEARING_WALLS_CONFIRMATION_REQUIRED,
-    controlType: 'boolean',
-    value:
-      decisions.internalBearingWalls?.confirmed === undefined
-        ? ''
-        : decisions.internalBearingWalls.confirmed
-          ? 'yes'
-          : 'no',
+    controlType: 'internalBearingWalls',
+    value: {
+      mode,
+      wallIds: decisions.internalBearingWalls?.wallIds ?? [],
+    },
+    internalBearingMode: mode,
+    internalBearingWallRows: wallRows,
+    internalBearingCandidatesEmpty: candidatesEmpty,
     isRequired: true,
-    isMissing: missingCodes.has('INTERNAL_BEARING_WALLS_CONFIRMATION_REQUIRED'),
+    isMissing: bearingMissing,
   });
 
   fields.push({

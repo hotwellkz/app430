@@ -3,6 +3,7 @@ import type {
   ImportRequiredDecision,
   ImportUserDecisionSet,
 } from '@2wix/shared-types';
+import { getInternalWallCandidatesFromSnapshot } from '../utils/internalWallCandidates';
 
 /**
  * Локальная копия правил backend `computeReviewReadiness` (importJobService),
@@ -42,6 +43,23 @@ export function computeImportReviewReadiness(
       message: 'Нужно подтвердить внутренние несущие стены',
       satisfied: false,
     });
+  } else if (decisions.internalBearingWalls.confirmed === true) {
+    const candidates = getInternalWallCandidatesFromSnapshot(snapshot);
+    const allowed = new Set(candidates.map((w) => w.id));
+    const selected = (decisions.internalBearingWalls.wallIds ?? []).filter((id) => allowed.has(id));
+    if (candidates.length === 0) {
+      missing.push({
+        code: 'INTERNAL_BEARING_WALL_CANDIDATES_UNAVAILABLE',
+        message: 'В snapshot нет стен для выбора внутренних несущих',
+        satisfied: false,
+      });
+    } else if (selected.length === 0) {
+      missing.push({
+        code: 'INTERNAL_BEARING_WALL_IDS_REQUIRED',
+        message: 'Выберите хотя бы одну стену',
+        satisfied: false,
+      });
+    }
   }
 
   if (!decisions.scale?.mode) {

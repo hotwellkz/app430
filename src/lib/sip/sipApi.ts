@@ -117,6 +117,20 @@ export async function sipListProjects(limit = 60): Promise<SipProjectRow[]> {
   return Array.isArray(data.projects) ? data.projects : [];
 }
 
+export async function sipDeleteProject(projectId: string): Promise<void> {
+  const id = projectId.trim();
+  if (!id) {
+    throw new SipApiError('Некорректный идентификатор проекта', 400, 'VALIDATION_ERROR');
+  }
+  const res = await sipFetch(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  const data =
+    (await parseJsonBody<{ deleted?: boolean; projectId?: string } & SipApiErrorPayload>(res)) ?? {};
+  if (!res.ok) {
+    const msg = data.message ?? `Ошибка ${res.status}`;
+    throw new SipApiError(formatErrorMessage(msg, data.requestId), res.status, data.code, data.requestId);
+  }
+}
+
 export async function sipGetProject(projectId: string): Promise<SipProjectRow> {
   const id = projectId.trim();
   const res = await sipFetch(`/api/projects/${encodeURIComponent(id)}`);

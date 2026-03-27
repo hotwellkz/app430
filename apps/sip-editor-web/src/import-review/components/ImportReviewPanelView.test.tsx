@@ -147,6 +147,40 @@ describe('ImportReviewPanelView', () => {
     expect((applyBtn as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('renders internal bearing wall checkboxes when mode yes', () => {
+    const base = detailVm();
+    render(
+      <ImportReviewPanelView
+        {...defaultProps}
+        detailVm={{
+          ...base,
+          requiredFields: [
+            {
+              key: 'internalBearingWalls',
+              label: 'Внутренние несущие стены',
+              controlType: 'internalBearingWalls',
+              value: { mode: 'yes', wallIds: [] },
+              internalBearingMode: 'yes',
+              internalBearingWallRows: [
+                {
+                  wallId: 'w1',
+                  floorLabel: 'Этаж 1',
+                  typeLabel: 'Внутренняя',
+                  subtitle: '2 точ.',
+                },
+              ],
+              internalBearingCandidatesEmpty: false,
+              isRequired: true,
+              isMissing: true,
+            },
+          ],
+        }}
+      />
+    );
+    expect(screen.getByTestId('ir-internal-bearing-section')).toBeTruthy();
+    expect(screen.getByTestId('ir-wall-cb-w1')).toBeTruthy();
+  });
+
   it('enables apply when vm allows', () => {
     const { container } = render(
       <ImportReviewPanelView

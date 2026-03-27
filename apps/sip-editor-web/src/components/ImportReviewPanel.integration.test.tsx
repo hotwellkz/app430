@@ -36,7 +36,18 @@ const baseJob = {
   snapshot: {
     projectMeta: {},
     floors: [{ id: 'f1' }],
-    walls: [],
+    walls: [
+      {
+        id: 'w-int-1',
+        floorId: 'f1',
+        points: [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+        ],
+        typeHint: 'internal' as const,
+        thicknessHintMm: 200,
+      },
+    ],
     openings: [],
     stairs: [],
     unresolved: [],
@@ -626,5 +637,93 @@ describe('ImportReviewPanel integration', () => {
       expect(v.getByText('Candidate применён на сервере')).toBeTruthy()
     );
     expect(v.getByText(/sync failed/)).toBeTruthy();
+  });
+
+  it('internal bearing: да без выбранных стен — apply-review disabled', async () => {
+    const job = {
+      ...baseJob,
+      review: {
+        ...baseJob.review,
+        decisions: {
+          floorHeightsMmByFloorId: { f1: 2800 },
+          internalBearingWalls: { confirmed: true, wallIds: [] },
+          scale: { mode: 'confirmed' as const, mmPerPixel: null },
+        },
+      },
+    };
+    vi.mocked(projectsApi.listImportJobs).mockResolvedValue({ items: [job] });
+    vi.mocked(projectsApi.getImportJob).mockResolvedValue({ job });
+
+    const { container } = render(
+      wrapper(
+        <ImportReviewPanel
+          projectId="p1"
+          versionMarkers={{
+            expectedCurrentVersionId: 'v1',
+            expectedVersionNumber: 1,
+            expectedSchemaVersion: 2,
+          }}
+        />
+      )
+    );
+    const v = within(container);
+    await waitFor(() => expect(v.queryAllByTestId('ir-job-row-ij-1').length).toBeGreaterThan(0));
+    fireEvent.click(firstJobRow(v));
+    await waitFor(() => expect(v.getByTestId('ir-internal-bearing-section')).toBeTruthy());
+    expect((v.getByTestId('ir-apply-review') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('internal bearing: выбор стены включает apply-review', async () => {
+    const readyJob = {
+      ...baseJob,
+      review: {
+        ...baseJob.review,
+        decisions: {
+          floorHeightsMmByFloorId: { f1: 2800 },
+          internalBearingWalls: { confirmed: true, wallIds: [] },
+          scale: { mode: 'confirmed' as const, mmPerPixel: null },
+        },
+      },
+    };
+    vi.mocked(projectsApi.listImportJobs).mockResolvedValue({ items: [readyJob] });
+    vi.mocked(projectsApi.getImportJob).mockResolvedValue({ job: readyJob });
+    vi.mocked(projectsApi.applyImportJobReview).mockResolvedValue({
+      job: {
+        ...readyJob,
+        review: {
+          ...readyJob.review,
+          status: 'applied' as const,
+          applyStatus: 'applied' as const,
+          reviewedSnapshot: null,
+        },
+      },
+      reviewedSnapshot: {} as never,
+    });
+
+    const { container } = render(
+      wrapper(
+        <ImportReviewPanel
+          projectId="p1"
+          versionMarkers={{
+            expectedCurrentVersionId: 'v1',
+            expectedVersionNumber: 1,
+            expectedSchemaVersion: 2,
+          }}
+        />
+      )
+    );
+    const v = within(container);
+    await waitFor(() => expect(v.queryAllByTestId('ir-job-row-ij-1').length).toBeGreaterThan(0));
+    fireEvent.click(firstJobRow(v));
+    await waitFor(() => expect(v.getByTestId('ir-wall-cb-w-int-1')).toBeTruthy());
+    expect((v.getByTestId('ir-apply-review') as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(v.getByTestId('ir-wall-cb-w-int-1'));
+    await waitFor(() => expect((v.getByTestId('ir-apply-review') as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(v.getByTestId('ir-apply-review'));
+    await waitFor(() =>
+      expect(projectsApi.applyImportJobReview).toHaveBeenCalledWith('p1', 'ij-1', {
+        appliedBy: 'user-1',
+      })
+    );
   });
 });

@@ -19,7 +19,7 @@ import {
   ValidationAppError,
   VersionConflictError,
 } from '../errors/httpErrors.js';
-import { getDb } from '../firestore/admin.js';
+import { getDb, getStorageBucket } from '../firestore/admin.js';
 import { mapProjectDoc, mapVersionDoc } from '../mappers/firestoreMappers.js';
 import { evaluateVersionConcurrency } from '../versioning/concurrency.js';
 import {
@@ -292,6 +292,70 @@ export async function createVersion(
     vd,
     normalizeBuildingModel((vd as { buildingModel?: unknown }).buildingModel)
   );
+}
+
+async function deleteFirestoreDocsByProjectId(
+  collectionName: string,
+  projectId: string
+): Promise<void> {
+  const db = getDb();
+  const col = db.collection(collectionName);
+  while (true) {
+    const snap = await col.where('projectId', '==', projectId).limit(500).get();
+    if (snap.empty) break;
+    const batch = db.batch();
+    for (const d of snap.docs) {
+      batch.delete(d.ref);
+    }
+    await batch.commit();
+  }
+}
+
+/**
+ * Полное удаление SIP-проекта: документ проекта, все версии, import jobs, экспорты и файлы экспортов в GCS.
+ * Не трогает данные CRM (сделки и т.д.) — только коллекции sipEditor_*.
+ */
+export async function deleteProject(
+  projectId: string,
+  actorId: string
+): Promise<{ deleted: true; projectId: string }> {
+  const trimmed = projectId.trim();
+  if (!trimmed) {
+    throw new ValidationAppError('Невалидный projectId');
+  }
+
+  await getProject(trimmed, actorId);
+
+  const db = getDb();
+  const bucket = getStorageBucket();
+
+  const exportCol = db.collection(COLLECTIONS.PROJECT_EXPORTS);
+  while (true) {
+    const snap = await exportCol.where('projectId', '==', trimmed).limit(500).get();
+    if (snap.empty) break;
+    for (const d of snap.docs) {
+      const sp = d.data()?.storagePath;
+      if (typeof sp === 'string' && sp.length > 0) {
+        try {
+          await bucket.file(sp).delete({ ignoreNotFound: true });
+        } catch {
+          /* ignore storage errors — документ всё равно удалим */
+        }
+      }
+    }
+    const batch = db.batch();
+    for (const d of snap.docs) {
+      batch.delete(d.ref);
+    }
+    await batch.commit();
+  }
+
+  await deleteFirestoreDocsByProjectId(COLLECTIONS.IMPORT_JOBS, trimmed);
+  await deleteFirestoreDocsByProjectId(COLLECTIONS.PROJECT_VERSIONS, trimmed);
+
+  await db.collection(COLLECTIONS.PROJECTS).doc(trimmed).delete();
+
+  return { deleted: true, projectId: trimmed };
 }
 
 export async function patchCurrentVersion(

@@ -1,4 +1,9 @@
-import type { ImportIssueResolutionAction, ImportUserDecisionSet } from '@2wix/shared-types';
+import type {
+  ArchitecturalImportSnapshot,
+  ImportIssueResolutionAction,
+  ImportUserDecisionSet,
+} from '@2wix/shared-types';
+import { getInternalWallCandidatesFromSnapshot } from '../utils/internalWallCandidates';
 import type { RequiredDecisionFieldViewModel } from './importReviewViewModel.types';
 
 export function initialDecisionsFromJob(job: { review?: { decisions?: ImportUserDecisionSet } }): ImportUserDecisionSet {
@@ -8,6 +13,56 @@ export function initialDecisionsFromJob(job: { review?: { decisions?: ImportUser
     floorHeightsMmByFloorId: { ...(prev.floorHeightsMmByFloorId ?? {}) },
     issueResolutions: prev.issueResolutions ? [...prev.issueResolutions] : undefined,
   };
+}
+
+export type InternalBearingWallsInteractionPayload =
+  | { kind: 'setMode'; mode: 'yes' | 'no' | '' }
+  | { kind: 'toggleWall'; wallId: string };
+
+export function applyInternalBearingWallsInteraction(
+  decisions: ImportUserDecisionSet,
+  snapshot: ArchitecturalImportSnapshot,
+  payload: InternalBearingWallsInteractionPayload
+): ImportUserDecisionSet {
+  const next: ImportUserDecisionSet = {
+    ...decisions,
+    floorHeightsMmByFloorId: { ...(decisions.floorHeightsMmByFloorId ?? {}) },
+    issueResolutions: decisions.issueResolutions ? [...decisions.issueResolutions] : [],
+  };
+
+  const candidates = getInternalWallCandidatesFromSnapshot(snapshot);
+  const allowed = new Set(candidates.map((w) => w.id));
+
+  if (payload.kind === 'setMode') {
+    if (payload.mode === '' || payload.mode === undefined) {
+      delete next.internalBearingWalls;
+      return next;
+    }
+    if (payload.mode === 'no') {
+      next.internalBearingWalls = { confirmed: false, wallIds: [] };
+      return next;
+    }
+    const prevIds = decisions.internalBearingWalls?.wallIds ?? [];
+    const filtered = prevIds.filter((id) => allowed.has(id));
+    next.internalBearingWalls = { confirmed: true, wallIds: filtered };
+    return next;
+  }
+
+  if (payload.kind === 'toggleWall') {
+    if (!allowed.has(payload.wallId)) return next;
+    const cur = next.internalBearingWalls ?? { confirmed: true, wallIds: [] };
+    if (!cur.confirmed) {
+      next.internalBearingWalls = { confirmed: true, wallIds: [payload.wallId] };
+      return next;
+    }
+    const set = new Set(cur.wallIds ?? []);
+    if (set.has(payload.wallId)) set.delete(payload.wallId);
+    else set.add(payload.wallId);
+    next.internalBearingWalls = { confirmed: true, wallIds: [...set] };
+    return next;
+  }
+
+  return next;
 }
 
 export function applyFieldToDecisions(
@@ -40,20 +95,6 @@ export function applyFieldToDecisions(
       delete next.roofTypeConfirmed;
     } else {
       next.roofTypeConfirmed = raw as ImportUserDecisionSet['roofTypeConfirmed'];
-    }
-    return next;
-  }
-
-  if (field.key === 'internalBearing') {
-    if (raw === 'yes') {
-      next.internalBearingWalls = {
-        confirmed: true,
-        wallIds: decisions.internalBearingWalls?.wallIds ?? [],
-      };
-    } else if (raw === 'no') {
-      next.internalBearingWalls = { confirmed: false, wallIds: [] };
-    } else {
-      delete next.internalBearingWalls;
     }
     return next;
   }

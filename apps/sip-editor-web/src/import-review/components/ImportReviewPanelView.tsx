@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import type { ImportReviewJobListItemViewModel, ImportReviewJobViewModel } from '../viewModel/importReviewViewModel.types';
 import type { ImportReviewPanelMessage } from '../viewModel/importReviewViewModel.types';
 import type { RequiredDecisionFieldViewModel } from '../viewModel/importReviewViewModel.types';
+import type { InternalBearingWallsInteractionPayload } from '../viewModel/decisionsDraft';
 import { IMPORT_REVIEW_UI } from '../constants/labels';
 
 const cardStyle: CSSProperties = {
@@ -46,7 +47,10 @@ export interface ImportReviewPanelViewProps {
   onRetryJob: () => void;
   onRefresh: () => void;
   refreshDisabled: boolean;
-  onFieldChange: (field: RequiredDecisionFieldViewModel, raw: string | number) => void;
+  onFieldChange: (
+    field: RequiredDecisionFieldViewModel,
+    raw: string | number | boolean | InternalBearingWallsInteractionPayload
+  ) => void;
   onSaveDraft: () => void;
   onApplyReview: () => void;
   onPrepareCandidate: () => void;
@@ -308,7 +312,7 @@ export function ImportReviewPanelView(props: ImportReviewPanelViewProps) {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {detailVm.requiredFields.map((field) => (
-                  <label key={field.key} style={{ fontSize: 12, display: 'block' }}>
+                  <div key={field.key} style={{ fontSize: 12, display: 'block' }}>
                     <span style={{ fontWeight: 600 }}>
                       {field.label}
                       {field.isMissing ? <span style={{ color: '#b91c1c' }}> *</span> : null}
@@ -354,7 +358,118 @@ export function ImportReviewPanelView(props: ImportReviewPanelViewProps) {
                         <option value="no">Нет</option>
                       </select>
                     ) : null}
-                  </label>
+                    {field.controlType === 'internalBearingWalls' ? (
+                      <div data-testid="ir-internal-bearing-section" style={{ marginTop: 8 }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          <button
+                            type="button"
+                            data-testid="ir-internal-bearing-no"
+                            disabled={!canSaveReview || anyMutationPending}
+                            onClick={() => onFieldChange(field, { kind: 'setMode', mode: 'no' })}
+                            style={{
+                              padding: '6px 12px',
+                              fontSize: 12,
+                              borderRadius: 8,
+                              border: `1px solid ${field.internalBearingMode === 'no' ? '#0f172a' : 'var(--twix-border)'}`,
+                              background: field.internalBearingMode === 'no' ? '#e2e8f0' : '#fff',
+                              cursor: canSaveReview && !anyMutationPending ? 'pointer' : 'not-allowed',
+                            }}
+                          >
+                            {IMPORT_REVIEW_UI.internalBearingModeNo}
+                          </button>
+                          <button
+                            type="button"
+                            data-testid="ir-internal-bearing-yes"
+                            disabled={!canSaveReview || anyMutationPending}
+                            onClick={() => onFieldChange(field, { kind: 'setMode', mode: 'yes' })}
+                            style={{
+                              padding: '6px 12px',
+                              fontSize: 12,
+                              borderRadius: 8,
+                              border: `1px solid ${field.internalBearingMode === 'yes' ? '#0f172a' : 'var(--twix-border)'}`,
+                              background: field.internalBearingMode === 'yes' ? '#e2e8f0' : '#fff',
+                              cursor: canSaveReview && !anyMutationPending ? 'pointer' : 'not-allowed',
+                            }}
+                          >
+                            {IMPORT_REVIEW_UI.internalBearingModeYes}
+                          </button>
+                        </div>
+                        {field.internalBearingMode === 'yes' ? (
+                          <div style={{ marginTop: 10 }}>
+                            <p style={{ fontSize: 11, margin: '0 0 6px' }} className="twix-muted">
+                              {IMPORT_REVIEW_UI.internalBearingWallListHint}
+                            </p>
+                            {field.internalBearingCandidatesEmpty ? (
+                              <p
+                                data-testid="ir-internal-bearing-empty-candidates"
+                                style={{ fontSize: 12, color: '#b45309', margin: 0 }}
+                              >
+                                {IMPORT_REVIEW_UI.internalBearingEmptyCandidates}
+                              </p>
+                            ) : (
+                              <>
+                                <p style={{ fontSize: 12, margin: '0 0 6px', fontWeight: 600 }}>
+                                  {IMPORT_REVIEW_UI.internalBearingSelectedCount(
+                                    Array.isArray((field.value as { wallIds?: string[] })?.wallIds)
+                                      ? ((field.value as { wallIds: string[] }).wallIds?.length ?? 0)
+                                      : 0
+                                  )}
+                                </p>
+                                <ul
+                                  style={{
+                                    listStyle: 'none',
+                                    padding: 0,
+                                    margin: 0,
+                                    maxHeight: 200,
+                                    overflowY: 'auto',
+                                  }}
+                                >
+                                  {(field.internalBearingWallRows ?? []).map((row) => {
+                                    const wallIds = (field.value as { wallIds?: string[] })?.wallIds ?? [];
+                                    const selected = wallIds.includes(row.wallId);
+                                    return (
+                                      <li key={row.wallId} style={{ marginBottom: 6 }}>
+                                        <label
+                                          style={{
+                                            display: 'flex',
+                                            gap: 8,
+                                            alignItems: 'flex-start',
+                                            cursor:
+                                              canSaveReview && !anyMutationPending ? 'pointer' : 'not-allowed',
+                                          }}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            data-testid={`ir-wall-cb-${row.wallId}`}
+                                            checked={selected}
+                                            disabled={!canSaveReview || anyMutationPending}
+                                            onChange={() =>
+                                              onFieldChange(field, {
+                                                kind: 'toggleWall',
+                                                wallId: row.wallId,
+                                              })
+                                            }
+                                          />
+                                          <span style={{ fontSize: 12 }}>
+                                            <code>{row.wallId.length > 12 ? `${row.wallId.slice(0, 10)}…` : row.wallId}</code>
+                                            <span className="twix-muted"> · этаж {row.floorLabel}</span>
+                                            <div style={{ marginTop: 2 }}>{row.typeLabel}</div>
+                                            <div className="twix-muted" style={{ fontSize: 11 }}>
+                                              {row.subtitle}
+                                            </div>
+                                          </span>
+                                        </label>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             )}

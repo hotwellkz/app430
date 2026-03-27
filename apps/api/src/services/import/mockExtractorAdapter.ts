@@ -25,7 +25,18 @@ export function createMockArchitecturalImportSnapshot(input?: {
       },
     ],
     outerContour: null,
-    walls: [],
+    walls: [
+      {
+        id: 'mock-wall-internal-1',
+        floorId: 'floor-1',
+        points: [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+        ],
+        typeHint: 'internal',
+        thicknessHintMm: 200,
+      },
+    ],
     openings: [],
     stairs: [],
     roofHints: {

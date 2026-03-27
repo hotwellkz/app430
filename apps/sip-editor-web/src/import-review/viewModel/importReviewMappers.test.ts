@@ -19,7 +19,17 @@ function jobBase(overrides: Partial<ImportJob> = {}): ImportJob {
     snapshot: {
       projectMeta: {},
       floors: [{ id: 'f1' }],
-      walls: [],
+      walls: [
+        {
+          id: 'w1',
+          floorId: 'f1',
+          points: [
+            { x: 0, y: 0 },
+            { x: 1, y: 0 },
+          ],
+          typeHint: 'internal',
+        },
+      ],
       openings: [],
       stairs: [],
       unresolved: [],
@@ -84,11 +94,21 @@ describe('mapImportJobToDetailViewModel', () => {
     expect(vmBad.canApplyReview).toBe(false);
     const complete: ImportUserDecisionSet = {
       floorHeightsMmByFloorId: { f1: 2800 },
-      internalBearingWalls: { confirmed: true, wallIds: [] },
+      internalBearingWalls: { confirmed: true, wallIds: ['w1'] },
       scale: { mode: 'confirmed', mmPerPixel: null },
     };
     const vmOk = mapImportJobToDetailViewModel(j, complete);
     expect(vmOk.canApplyReview).toBe(true);
+  });
+
+  it('blocks apply when internal bearing yes but wallIds empty', () => {
+    const j = jobBase();
+    const bad: ImportUserDecisionSet = {
+      floorHeightsMmByFloorId: { f1: 2800 },
+      internalBearingWalls: { confirmed: true, wallIds: [] },
+      scale: { mode: 'confirmed', mmPerPixel: null },
+    };
+    expect(mapImportJobToDetailViewModel(j, bad).canApplyReview).toBe(false);
   });
 
   it('enables apply candidate when editorApply ready', () => {
@@ -124,7 +144,7 @@ describe('mapImportJobToDetailViewModel', () => {
     const vm = mapImportJobToDetailViewModel(j, {});
     const keys = vm.requiredFields.map((f) => f.key);
     expect(keys.some((k) => k.startsWith('floorHeight:'))).toBe(true);
-    expect(keys).toContain('internalBearing');
+    expect(keys).toContain('internalBearingWalls');
     expect(keys).toContain('scaleMode');
   });
 });

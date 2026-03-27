@@ -12,7 +12,12 @@ import {
 } from '@/api/projectsApi';
 import { getSipUserId } from '@/identity/sipUser';
 import { IMPORT_REVIEW_UI } from '@/import-review/constants/labels';
-import { initialDecisionsFromJob, applyFieldToDecisions } from '@/import-review/viewModel/decisionsDraft';
+import {
+  applyFieldToDecisions,
+  applyInternalBearingWallsInteraction,
+  initialDecisionsFromJob,
+  type InternalBearingWallsInteractionPayload,
+} from '@/import-review/viewModel/decisionsDraft';
 import {
   mapImportJobToDetailViewModel,
   mapImportJobToListItemViewModel,
@@ -254,11 +259,26 @@ export function useImportReviewPanel(
     setPanelMessage(null);
   }, []);
 
-  const onFieldChange = useCallback((field: RequiredDecisionFieldViewModel, raw: string | number) => {
-    setDraftDecisions((prev) => applyFieldToDecisions(prev, field, raw));
-    setDecisionsDirty(true);
-    setPanelMessage(null);
-  }, []);
+  const jobSnapshot = job?.snapshot ?? null;
+
+  const onFieldChange = useCallback(
+    (
+      field: RequiredDecisionFieldViewModel,
+      raw: string | number | boolean | InternalBearingWallsInteractionPayload
+    ) => {
+      setPanelMessage(null);
+      if (field.controlType === 'internalBearingWalls') {
+        if (!jobSnapshot) return;
+        setDraftDecisions((prev) =>
+          applyInternalBearingWallsInteraction(prev, jobSnapshot, raw as InternalBearingWallsInteractionPayload)
+        );
+      } else {
+        setDraftDecisions((prev) => applyFieldToDecisions(prev, field, raw as string | number | boolean));
+      }
+      setDecisionsDirty(true);
+    },
+    [jobSnapshot]
+  );
 
   const onRefresh = useCallback(() => {
     setPanelMessage(null);

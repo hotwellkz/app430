@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Layers, ExternalLink, Plus, RefreshCw, Search } from 'lucide-react';
+import { Dialog, Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
+import { ExternalLink, Layers, MoreHorizontal, Plus, RefreshCw, Search } from 'lucide-react';
 import { useCurrentSipUser } from '../hooks/useCurrentSipUser';
 import { openSipEditorWindow } from '../lib/sip/sipEditorUrl';
-import { SipApiError, sipCreateProject, sipListProjects } from '../lib/sip/sipApi';
+import { SipApiError, sipCreateProject, sipDeleteProject, sipListProjects } from '../lib/sip/sipApi';
 import type { SipProjectRow } from '../lib/sip/sipTypes';
 
 const LS_LAST_PROJECT = 'crm_sip_last_project_id';
@@ -42,6 +43,8 @@ export const SipProjectsPage: React.FC = () => {
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
   const [creatingTest, setCreatingTest] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<SipProjectRow | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!sipUserId) {
@@ -61,7 +64,7 @@ export const SipProjectsPage: React.FC = () => {
             ? 'Нет доступа к SIP-проектам'
             : e.status === 503 || e.status === 504
               ? 'SIP API недоступен. Проверьте backend/proxy и повторите.'
-            : e.message
+              : e.message
           : e instanceof Error
             ? e.message
             : 'Не удалось загрузить список';
@@ -86,6 +89,48 @@ export const SipProjectsPage: React.FC = () => {
         p.id.toLowerCase().includes(q)
     );
   }, [projects, query]);
+
+  const searchActive = query.trim().length > 0;
+  const showSearchEmpty = !loading && !error && projects.length > 0 && filtered.length === 0 && searchActive;
+  const showGlobalEmpty = !loading && !error && projects.length === 0;
+
+  const tryOpenEditor = (projectId: string) => {
+    if (!sipUserId) return;
+    try {
+      openEditorTab(projectId, sipUserId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'SIP Editor production URL не настроен');
+    }
+  };
+
+  const onConfirmDelete = async () => {
+    if (!confirmDelete || !sipUserId) return;
+    const id = confirmDelete.id;
+    setDeletingId(id);
+    try {
+      await sipDeleteProject(id);
+      toast.success('Проект удалён');
+      setProjects((prev) => prev.filter((p) => p.id !== id));
+      try {
+        if (typeof localStorage !== 'undefined' && localStorage.getItem(LS_LAST_PROJECT) === id) {
+          localStorage.removeItem(LS_LAST_PROJECT);
+        }
+      } catch {
+        /* ignore */
+      }
+      setConfirmDelete(null);
+    } catch (e) {
+      const msg =
+        e instanceof SipApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : 'Не удалось удалить проект';
+      toast.error(msg);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const onCreateEmpty = async () => {
     if (!sipUserId) {
@@ -151,8 +196,8 @@ export const SipProjectsPage: React.FC = () => {
     }
     try {
       openEditorTab(id, sipUserId);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'SIP Editor production URL не настроен');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'SIP Editor production URL не настроен');
     }
   };
 
@@ -186,6 +231,11 @@ export const SipProjectsPage: React.FC = () => {
               <p className="text-xs text-slate-500 truncate">
                 Редактор открывается в новой вкладке с вашим UID — ручной ввод sipUserId не нужен.
               </p>
+              {!loading && !error && (
+                <p className="text-xs text-slate-600 mt-1" data-testid="sip-projects-count">
+                  Проектов: {projects.length}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -255,9 +305,24 @@ export const SipProjectsPage: React.FC = () => {
           </div>
         ) : loading ? (
           <p className="text-sm text-slate-500">Загрузка списка…</p>
-        ) : filtered.length === 0 ? (
-          <div className="max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="font-medium text-slate-800">Пока нет проектов</p>
+        ) : showSearchEmpty ? (
+          <div
+            className="max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+            data-testid="sip-search-empty"
+          >
+            <p className="font-medium text-slate-800">Ничего не найдено</p>
+            <p className="mt-1 text-sm text-slate-600">Попробуйте изменить запрос или сбросить поиск.</p>
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              className="mt-4 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 hover:bg-slate-50"
+            >
+              Сбросить поиск
+            </button>
+          </div>
+        ) : showGlobalEmpty ? (
+          <div className="max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-sm" data-testid="sip-global-empty">
+            <p className="font-medium text-slate-800">Проектов пока нет</p>
             <p className="mt-1 text-sm text-slate-600">
               Создайте проект или тестовый проект — редактор откроется автоматически.
             </p>
@@ -290,62 +355,150 @@ export const SipProjectsPage: React.FC = () => {
                   <th className="px-4 py-3">Сделка</th>
                   <th className="px-4 py-3">Обновлён</th>
                   <th className="px-4 py-3">Автор / правки</th>
-                  <th className="px-4 py-3 w-40"></th>
+                  <th className="px-4 py-3 w-[200px] text-right">Действия</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/80">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-slate-900">{p.title}</div>
-                      <div className="text-xs text-slate-400 font-mono mt-0.5">{p.id.slice(0, 10)}…</div>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{STATUS_RU[p.status] ?? p.status}</td>
-                    <td className="px-4 py-3">
-                      {p.dealId ? (
-                        <span className="text-emerald-700 font-mono text-xs">{p.dealId.slice(0, 12)}…</span>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{formatDt(p.updatedAt)}</td>
-                    <td className="px-4 py-3 text-xs text-slate-500 font-mono">
-                      <div>созд.: {p.createdBy ? `${p.createdBy.slice(0, 8)}…` : '—'}</div>
-                      <div>изм.: {p.updatedBy ? `${p.updatedBy.slice(0, 8)}…` : '—'}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          try {
-                            openEditorTab(p.id, sipUserId);
-                          } catch (error) {
-                            toast.error(
-                              error instanceof Error
-                                ? error.message
-                                : 'SIP Editor production URL не настроен'
-                            );
-                          }
-                        }}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        Открыть
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map((p) => {
+                  const rowBusy = deletingId === p.id;
+                  return (
+                    <tr
+                      key={p.id}
+                      data-testid={`sip-project-row-${p.id}`}
+                      className={`border-b border-slate-100 hover:bg-slate-50/80 ${rowBusy ? 'opacity-60 pointer-events-none' : ''}`}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-slate-900">{p.title}</div>
+                        <div className="text-xs text-slate-400 font-mono mt-0.5">{p.id.slice(0, 10)}…</div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">{STATUS_RU[p.status] ?? p.status}</td>
+                      <td className="px-4 py-3">
+                        {p.dealId ? (
+                          <span className="text-emerald-700 font-mono text-xs">{p.dealId.slice(0, 12)}…</span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{formatDt(p.updatedAt)}</td>
+                      <td className="px-4 py-3 text-xs text-slate-500 font-mono">
+                        <div>созд.: {p.createdBy ? `${p.createdBy.slice(0, 8)}…` : '—'}</div>
+                        <div>изм.: {p.updatedBy ? `${p.updatedBy.slice(0, 8)}…` : '—'}</div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="inline-flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            data-testid={`sip-open-${p.id}`}
+                            onClick={() => tryOpenEditor(p.id)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            Открыть
+                          </button>
+                          <Menu as="div" className="relative inline-block text-left">
+                            <MenuButton
+                              type="button"
+                              disabled={rowBusy}
+                              data-testid={`sip-actions-${p.id}`}
+                              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                              aria-label="Действия с проектом"
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </MenuButton>
+                            <MenuItems
+                              anchor="bottom end"
+                              modal={false}
+                              className="z-40 w-48 rounded-md border border-slate-200 bg-white py-1 shadow-lg outline-none [--anchor-gap:4px]"
+                            >
+                              <MenuItem>
+                                {({ focus }) => (
+                                  <button
+                                    type="button"
+                                    className={`${focus ? 'bg-slate-50' : ''} flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-800`}
+                                    onClick={() => tryOpenEditor(p.id)}
+                                  >
+                                    Открыть
+                                  </button>
+                                )}
+                              </MenuItem>
+                              <MenuItem>
+                                {({ focus }) => (
+                                  <button
+                                    type="button"
+                                    data-testid={`sip-delete-trigger-${p.id}`}
+                                    className={`${focus ? 'bg-red-50' : ''} flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-700`}
+                                    onClick={() => setConfirmDelete(p)}
+                                  >
+                                    Удалить проект
+                                  </button>
+                                )}
+                              </MenuItem>
+                            </MenuItems>
+                          </Menu>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
 
-        {!loading && projects.length > 0 && (
+        {!loading && projects.length > 0 && !showSearchEmpty && (
           <p className="mt-4 text-xs text-slate-500">
             Показано: {filtered.length} из {projects.length}
           </p>
         )}
       </div>
+
+      <Dialog
+        open={confirmDelete !== null}
+        onClose={() => {
+          if (deletingId) return;
+          setConfirmDelete(null);
+        }}
+        className="relative z-50"
+      >
+        <div className="fixed inset-0 bg-slate-900/40" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="mx-auto w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
+            <Dialog.Title className="text-lg font-semibold text-slate-900">Удалить проект?</Dialog.Title>
+            <p className="mt-2 text-sm text-slate-600">
+              Проект будет удалён полностью из системы. Восстановить данные будет нельзя.
+            </p>
+            {confirmDelete && (
+              <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-800">
+                <p className="font-medium">{confirmDelete.title}</p>
+                <p className="mt-1 font-mono text-xs text-slate-500 break-all">ID: {confirmDelete.id}</p>
+                {confirmDelete.dealId ? (
+                  <p className="mt-1 font-mono text-xs text-slate-500">Сделка: {confirmDelete.dealId}</p>
+                ) : null}
+              </div>
+            )}
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                data-testid="sip-delete-cancel"
+                disabled={Boolean(deletingId)}
+                onClick={() => setConfirmDelete(null)}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                data-testid="sip-delete-confirm"
+                disabled={Boolean(deletingId)}
+                onClick={() => void onConfirmDelete()}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+              >
+                {deletingId ? 'Удаление…' : 'Удалить'}
+              </button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
     </div>
   );
 };

@@ -33,6 +33,13 @@ export const IMPORT_REVIEW_UI = {
   lastResult: 'Результат последнего действия',
   concurrencyHint:
     'Конфликт версии: модель в редакторе устарела относительно сервера. Сохраните или перезагрузите проект и повторите.',
+  internalBearingSectionTitle: 'Внутренние несущие стены',
+  internalBearingModeNo: 'Нет',
+  internalBearingModeYes: 'Да, выбрать стены',
+  internalBearingSelectedCount: (n: number) => `Выбрано: ${n}`,
+  internalBearingEmptyCandidates:
+    'В snapshot нет стен для выбора. Укажите «Нет» или дождитесь корректного импорта.',
+  internalBearingWallListHint: 'Отметьте стены, которые считаете внутренними несущими.',
 } as const;
 
 export const IMPORT_JOB_STATUS_LABELS: Record<string, string> = {
@@ -70,6 +77,8 @@ export const REQUIRED_DECISION_LABELS: Record<ImportRequiredDecision['code'], st
   FLOOR_HEIGHTS_REQUIRED: 'Высоты этажей',
   ROOF_TYPE_CONFIRMATION_REQUIRED: 'Тип крыши',
   INTERNAL_BEARING_WALLS_CONFIRMATION_REQUIRED: 'Внутренние несущие стены',
+  INTERNAL_BEARING_WALL_IDS_REQUIRED: 'Выбор стен (несущие)',
+  INTERNAL_BEARING_WALL_CANDIDATES_UNAVAILABLE: 'Нет стен в snapshot',
   SCALE_DECISION_REQUIRED: 'Масштаб',
   SCALE_OVERRIDE_VALUE_REQUIRED: 'Значение mm/px для override',
   BLOCKING_ISSUES_RESOLUTION_REQUIRED: 'Разрешение blocking issues',
@@ -80,6 +89,10 @@ export const REQUIRED_DECISION_HINTS: Partial<Record<ImportRequiredDecision['cod
   ROOF_TYPE_CONFIRMATION_REQUIRED: 'Подтвердите тип крыши, если он есть в snapshot.',
   INTERNAL_BEARING_WALLS_CONFIRMATION_REQUIRED:
     'Подтвердите наличие/отсутствие внутренних несущих стен.',
+  INTERNAL_BEARING_WALL_IDS_REQUIRED:
+    'При ответе «да» отметьте хотя бы одну стену из списка.',
+  INTERNAL_BEARING_WALL_CANDIDATES_UNAVAILABLE:
+    'В импортированном snapshot нет стен для выбора — нельзя подтвердить «да» без данных.',
   SCALE_DECISION_REQUIRED: 'Подтвердите авто-масштаб или задайте override.',
   SCALE_OVERRIDE_VALUE_REQUIRED: 'Для режима override укажите положительный mmPerPixel.',
   BLOCKING_ISSUES_RESOLUTION_REQUIRED:

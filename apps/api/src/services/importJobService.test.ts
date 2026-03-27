@@ -290,7 +290,9 @@ describe('importJobService', () => {
     const s = createMockArchitecturalImportSnapshot({ projectName: 'Demo' });
     expect(s.projectMeta.name).toBe('Demo');
     expect(s.outerContour).toBeNull();
-    expect(s.walls).toHaveLength(0);
+    expect(s.walls).toHaveLength(1);
+    expect(s.walls[0]?.id).toBe('mock-wall-internal-1');
+    expect(s.walls[0]?.typeHint).toBe('internal');
     expect(s.unresolved[0]?.severity).toBe('blocking');
     expect(s.notes[0]).toContain('mock import snapshot generated without AI extractor');
   });
@@ -354,7 +356,7 @@ describe('importJobService', () => {
       {
         updatedBy: 'u1',
         decisions: {
-          internalBearingWalls: { confirmed: true, wallIds: [] },
+          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -382,7 +384,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 3000 },
           roofTypeConfirmed: 'single-slope',
-          internalBearingWalls: { confirmed: true, wallIds: [] },
+          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
           scale: { mode: 'override', mmPerPixel: 2.5 },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'override' }],
         },
@@ -429,7 +431,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 2800 },
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: [] },
+          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -471,7 +473,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 2800 },
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: [] },
+          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -503,7 +505,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 2800 },
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: [] },
+          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -542,7 +544,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 2800 },
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: [] },
+          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -611,7 +613,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 2800 },
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: [] },
+          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -649,7 +651,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 2800 },
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: [] },
+          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -692,7 +694,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 2800 },
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: [] },
+          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -823,7 +825,7 @@ describe('importJobService', () => {
         updatedBy: 'u1',
         decisions: {
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: [] },
+          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
