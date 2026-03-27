@@ -69,10 +69,6 @@ export const StickyNavigation: React.FC<StickyNavigationProps> = ({ onNavigate }
       );
   }, []);
 
-  if (!isTransactionsRoute || isAttachmentPreviewOpen) {
-    return null;
-  }
-
   const scheduleCollapse = useCallback(() => {
     if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
     collapseTimerRef.current = setTimeout(() => {
@@ -118,6 +114,10 @@ export const StickyNavigation: React.FC<StickyNavigationProps> = ({ onNavigate }
   const showAwaitingGlow = waState.hasAwaitingReply;
 
   const showAsCollapsed = !isMobile && !desktopExpanded && canAccessWhatsApp;
+
+  if (!isTransactionsRoute || isAttachmentPreviewOpen) {
+    return null;
+  }
 
   return (
     <>
