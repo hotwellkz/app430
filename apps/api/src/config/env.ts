@@ -8,7 +8,8 @@ interface ApiEnv {
   firebaseProjectId: string | null;
   googleApplicationCredentials: string | null;
   storageBucket: string | null;
-  importExtractorMode: 'mock';
+  importExtractorMode: 'mock' | 'openai';
+  openaiApiKey: string | null;
   importJobExecutionMode: 'sync' | 'async-inline';
 }
 
@@ -38,6 +39,7 @@ function parseNodeEnv(raw: string | undefined): ApiEnv['nodeEnv'] {
 
 function parseImportExtractorMode(raw: string | undefined): ApiEnv['importExtractorMode'] {
   if (!raw || !raw.trim()) return 'mock';
+  if (raw.trim().toLowerCase() === 'openai') return 'openai';
   return 'mock';
 }
 
@@ -79,6 +81,7 @@ export function loadApiEnv(src: NodeJS.ProcessEnv = process.env): ApiEnv {
     googleApplicationCredentials: src.GOOGLE_APPLICATION_CREDENTIALS?.trim() || null,
     storageBucket: src.FIREBASE_STORAGE_BUCKET?.trim() || null,
     importExtractorMode: parseImportExtractorMode(src.IMPORT_EXTRACTOR_MODE),
+    openaiApiKey: src.OPENAI_API_KEY?.trim() || null,
     importJobExecutionMode: parseImportJobExecutionMode(src.IMPORT_JOB_EXECUTION_MODE),
   };
 }

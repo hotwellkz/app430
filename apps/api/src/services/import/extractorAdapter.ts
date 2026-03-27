@@ -11,7 +11,7 @@ export interface ArchitecturalExtractionInput {
 }
 
 export interface ArchitecturalExtractorAdapter {
-  readonly mode: 'mock';
+  readonly mode: 'mock' | 'openai';
   extractArchitecturalSnapshot(
     input: ArchitecturalExtractionInput
   ): Promise<ArchitecturalImportSnapshot>;

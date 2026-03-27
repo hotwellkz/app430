@@ -379,6 +379,8 @@ export interface ImportAssetRef {
   heightPx?: number;
   storagePath?: string;
   fileUrl?: string;
+  /** Base64-encoded image data for AI extraction pipeline (not stored in DB). */
+  base64Data?: string;
 }
 
 export interface ImportConfidence {

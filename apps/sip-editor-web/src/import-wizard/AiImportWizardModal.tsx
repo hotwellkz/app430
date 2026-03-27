@@ -148,7 +148,7 @@ export function AiImportWizardModal({
     setBusy(true);
     setError(null);
     try {
-      const body = buildCreateImportJobRequest(files, projectTitle);
+      const body = await buildCreateImportJobRequest(files, projectTitle);
       const { job } = await createImportJob(projectId, body);
       const poll = await waitForImportJobReviewable(projectId, job.id, getImportJob, {
         maxMs: 120_000,

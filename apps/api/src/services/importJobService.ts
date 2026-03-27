@@ -337,6 +337,8 @@ export async function createImportJobRecord(
   const db = getDb();
   const now = FieldValue.serverTimestamp();
   const ref = db.collection(COLLECTIONS.IMPORT_JOBS).doc();
+  // Strip base64Data before persisting — it is only used in-memory by the extraction pipeline.
+  const sourceImagesForStorage = input.sourceImages.map(({ base64Data: _b64, ...rest }) => rest);
   await ref.set({
     projectId,
     status: 'queued',
@@ -344,7 +346,7 @@ export async function createImportJobRecord(
     createdAt: now,
     updatedAt: now,
     importSchemaVersion: IMPORT_SCHEMA_VERSION,
-    sourceImages: input.sourceImages,
+    sourceImages: sourceImagesForStorage,
     snapshot: null,
     errorMessage: null,
   });

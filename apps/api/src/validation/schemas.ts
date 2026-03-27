@@ -118,6 +118,7 @@ export const zImportAssetRef = z.object({
   heightPx: z.number().int().positive().optional(),
   storagePath: z.string().min(1).optional(),
   fileUrl: z.string().min(1).optional(),
+  base64Data: z.string().optional(),
 });
 
 export const zArchitecturalImportSnapshot = z.object({
