@@ -66,7 +66,10 @@ interface ChatWindowProps {
   onContextMenuMessage?: (e: React.MouseEvent, messageId: string) => void;
   onCloseSelection?: () => void;
   onReplyToMessage?: (messageId: string) => void;
-  onForwardMessages?: (messageIds: string[]) => void;
+  /** Открыть модалку «Переслать в чат» по текущему выделению (action bar / sheet). */
+  onOpenForwardDialog?: () => void;
+  /** ПКМ «Переслать»: войти в выбор с этим сообщением или bulk, если выбор уже есть. */
+  onForwardFromContextMenu?: (messageId: string) => void;
   onDeleteMessages?: (messageIds: string[]) => void;
   onStarMessages?: (messageIds: string[]) => void;
   onCopyMessage?: (messageId: string) => void;
@@ -964,7 +967,8 @@ const ChatWindow: React.FC<ChatWindowProps> = (props) => {
     onContextMenuMessage,
     onCloseSelection,
     onReplyToMessage,
-    onForwardMessages,
+    onOpenForwardDialog,
+    onForwardFromContextMenu,
     onDeleteMessages,
     onStarMessages,
     onCopyMessage,
@@ -1529,7 +1533,7 @@ const ChatWindow: React.FC<ChatWindowProps> = (props) => {
               ? () => onReplyToMessage(selectedMessageIds[0])
               : undefined
           }
-          onForward={onForwardMessages ? () => onForwardMessages(selectedMessageIds) : undefined}
+          onForward={() => onOpenForwardDialog?.()}
           onDelete={onDeleteMessages ? () => onDeleteMessages(selectedMessageIds) : undefined}
           onStar={onStarMessages ? () => onStarMessages(selectedMessageIds) : undefined}
           onMore={onSelectionMore}
@@ -1692,7 +1696,13 @@ const ChatWindow: React.FC<ChatWindowProps> = (props) => {
           y={contextMenu.y}
           onClose={onCloseContextMenu ?? (() => {})}
           onReply={() => { onReplyToMessage?.(contextMenu.messageId); onCloseContextMenu?.(); }}
-          onForward={() => { onForwardMessages?.([contextMenu.messageId]); onCloseContextMenu?.(); }}
+          onForward={() => {
+            if (selectionMode && selectedMessageIds.length > 0) {
+              onOpenForwardDialog?.();
+            } else {
+              onForwardFromContextMenu?.(contextMenu.messageId);
+            }
+          }}
           onCopy={() => { onCopyMessage?.(contextMenu.messageId); onCloseContextMenu?.(); }}
           onTranslate={() => { handleTranslateMessage(contextMenu.messageId); onCloseContextMenu?.(); }}
           onStar={() => { onStarMessages?.([contextMenu.messageId]); onCloseContextMenu?.(); }}
@@ -1707,7 +1717,9 @@ const ChatWindow: React.FC<ChatWindowProps> = (props) => {
           open={true}
           onClose={onCloseSelection ?? (() => {})}
           onReply={() => { onReplyToMessage?.(actionsSheetMessageId); onCloseSelection?.(); }}
-          onForward={() => { onForwardMessages?.(selectedMessageIds); onCloseSelection?.(); }}
+          onForward={() => {
+            onOpenForwardDialog?.();
+          }}
           onCopy={() => { onCopyMessage?.(actionsSheetMessageId); onCloseSelection?.(); }}
           onTranslate={() => { handleTranslateMessage(actionsSheetMessageId); onCloseSelection?.(); }}
           onStar={() => { onStarMessages?.(selectedMessageIds); onCloseSelection?.(); }}

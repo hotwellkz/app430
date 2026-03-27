@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, X } from 'lucide-react';
 import Avatar from './Avatar';
+import { formatForwardMessageCountRu } from '../../utils/whatsappForwardSelection';
 
 export interface ForwardTargetItem {
   id: string;
@@ -129,15 +130,17 @@ const ForwardDialog: React.FC<ForwardDialogProps> = ({
           </div>
         </div>
 
-        {/* Превью пересылаемого */}
-        {forwardPreviewSummary && (
-          <div className="flex-none px-4 py-2 bg-gray-50 border-b border-gray-100">
+        {/* Сколько сообщений + превью состава */}
+        <div className="flex-none px-4 py-2 bg-gray-50 border-b border-gray-100 space-y-1">
+          <p className="text-sm text-gray-800 font-medium">
+            Пересылается: {formatForwardMessageCountRu(selectedCount)}
+          </p>
+          {forwardPreviewSummary ? (
             <p className="text-sm text-gray-600">
-              <span className="font-medium text-gray-800">Пересылается:</span>{' '}
-              {forwardPreviewSummary}
+              <span className="font-medium text-gray-700">Состав:</span> {forwardPreviewSummary}
             </p>
-          </div>
-        )}
+          ) : null}
+        </div>
 
         {/* Выбрано чатов */}
         {selectedIds.size > 0 && (

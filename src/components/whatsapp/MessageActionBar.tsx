@@ -76,11 +76,13 @@ const MessageActionBar: React.FC<MessageActionBarProps> = ({
           type="button"
           onClick={onForward}
           className="p-2 rounded-lg hover:bg-gray-100 text-gray-700 inline-flex items-center gap-1"
-          aria-label="Переслать"
-          title="Переслать"
+          aria-label={`Переслать (${selectedCount})`}
+          title={`Переслать (${selectedCount})`}
         >
           <Forward className="w-5 h-5" />
-          {!isMobile && <span className="text-xs font-medium">Переслать</span>}
+          <span className="text-xs font-medium">
+            {isMobile ? `(${selectedCount})` : `Переслать (${selectedCount})`}
+          </span>
         </button>
         <button
           type="button"

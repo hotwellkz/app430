@@ -92,6 +92,7 @@ import { MAX_ATTACHMENT_MB } from '../components/whatsapp/ChatInput';
 import { compressImage, validateVideoForChat, isLargeVideo } from '../utils/mediaUtils';
 import { acquireVoiceStream, createVoiceRecorder } from '../utils/voiceRecording';
 import { formatVoiceListDuration, isVoiceNoteAttachment } from '../components/whatsapp/whatsappUtils';
+import { buildForwardPayloadMessages, getOrderedSelectedMessages } from '../utils/whatsappForwardSelection';
 
 const NEW_MESSAGE_SOUND_PATH = '/sounds/new-message.mp3';
 
@@ -1609,9 +1610,14 @@ const WhatsAppChat: React.FC = () => {
     };
   }, [selectedId, messages, companyId, incognitoMode]);
 
+  /** Сколько реально уйдёт при пересылке (без удалённых и «пустых»). */
+  const forwardDialogForwardableCount = useMemo(() => {
+    return buildForwardPayloadMessages(messages, selectedMessageIds).forwardable.length;
+  }, [messages, selectedMessageIds]);
+
   /** Краткое описание пересылаемого: "1 изображение, 2 сообщения" и т.п. */
   const forwardPreviewSummary = useMemo(() => {
-    const toSend = messages.filter((m) => selectedMessageIds.includes(m.id) && !m.deleted);
+    const toSend = getOrderedSelectedMessages(messages, selectedMessageIds).filter((m) => !m.deleted);
     if (toSend.length === 0) return '';
     const parts: string[] = [];
     let images = 0;
@@ -3308,10 +3314,31 @@ const WhatsAppChat: React.FC = () => {
     closeSelectionAndOverlays();
   }, [messages, closeSelectionAndOverlays]);
 
-  const handleForwardMessages = useCallback((messageIds: string[]) => {
-    setSelectedMessageIds(messageIds);
+  const openForwardDialogFromSelection = useCallback(() => {
+    const { forwardable, skipped } = buildForwardPayloadMessages(messages, selectedMessageIds);
+    if (forwardable.length === 0) {
+      toast.error('Нет сообщений для пересылки (удалённые или без текста и вложений пропущены).');
+      return;
+    }
+    if (skipped > 0) {
+      toast(`Не все выбранные сообщения можно переслать. Пропущено: ${skipped}.`, {
+        duration: 4000,
+        icon: 'ℹ️'
+      });
+    }
     setForwardDialogOpen(true);
-  }, []);
+  }, [messages, selectedMessageIds]);
+
+  const handleForwardFromContextMenu = useCallback(
+    (messageId: string) => {
+      if (selectedMessageIds.length > 0) {
+        openForwardDialogFromSelection();
+        return;
+      }
+      setSelectedMessageIds([messageId]);
+    },
+    [selectedMessageIds, openForwardDialogFromSelection]
+  );
 
   const handleDeleteMessages = useCallback(async (messageIds: string[]) => {
     for (const id of messageIds) {
@@ -3449,8 +3476,11 @@ const WhatsAppChat: React.FC = () => {
   const handleForwardConfirm = useCallback(
     async (targetConversationIds: string[]) => {
       if (!selectedId || !companyId) return;
-      const toSend = messages.filter((m) => selectedMessageIds.includes(m.id));
-      if (toSend.length === 0) return;
+      const { forwardable: toSend } = buildForwardPayloadMessages(messages, selectedMessageIds);
+      if (toSend.length === 0) {
+        toast.error('Нечего переслать.');
+        return;
+      }
       const convMap = new Map(conversations.map((c) => [c.id, c]));
       setForwardLoading(true);
       try {
@@ -3463,7 +3493,6 @@ const WhatsAppChat: React.FC = () => {
               forwarded: true,
               companyId: companyId ?? undefined
             };
-            if (msg.deleted) continue;
             if (msg.attachments?.length && msg.attachments[0].url) {
               payload.contentUri = msg.attachments[0].url;
               payload.attachmentType = msg.attachments[0].type;
@@ -4220,7 +4249,8 @@ const WhatsAppChat: React.FC = () => {
               onContextMenuMessage={handleContextMenuMessage}
               onCloseSelection={closeSelectionAndOverlays}
               onReplyToMessage={handleReplyToMessage}
-              onForwardMessages={handleForwardMessages}
+              onOpenForwardDialog={openForwardDialogFromSelection}
+              onForwardFromContextMenu={handleForwardFromContextMenu}
               onDeleteMessages={handleDeleteMessages}
               onStarMessages={handleStarMessages}
               onCopyMessage={handleCopyMessage}
@@ -4324,7 +4354,7 @@ const WhatsAppChat: React.FC = () => {
           avatarUrl: c.client?.avatarUrl ?? undefined
         }))}
         excludeConversationId={selectedId}
-        selectedCount={selectedMessageIds.length}
+        selectedCount={forwardDialogForwardableCount}
         forwardPreviewSummary={forwardPreviewSummary}
         onClose={() => setForwardDialogOpen(false)}
         onForward={handleForwardConfirm}
