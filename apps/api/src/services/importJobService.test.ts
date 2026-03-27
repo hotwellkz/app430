@@ -2,6 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const store = new Map<string, Record<string, any>>();
 
+function assertNoFirestoreUndefined(value: unknown, path = 'root'): void {
+  if (value === undefined) {
+    throw new Error(`Firestore mock: undefined at ${path}`);
+  }
+  if (value === null || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    value.forEach((v, i) => assertNoFirestoreUndefined(v, `${path}[${i}]`));
+    return;
+  }
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    assertNoFirestoreUndefined(v, `${path}.${k}`);
+  }
+}
+
 function resetStore() {
   store.clear();
   store.set('sipEditor_projectVersions/v-current', {
@@ -118,6 +132,7 @@ vi.mock('../firestore/admin.js', () => ({
             };
           },
           async update(payload: Record<string, unknown>) {
+            assertNoFirestoreUndefined(payload);
             const prev = store.get(key) ?? {};
             const nowIso = new Date('2026-03-26T12:00:00.000Z').toISOString();
             store.set(key, {
@@ -312,6 +327,15 @@ describe('importJobService', () => {
     expect(done.status).toBe('needs_review');
     expect(done.snapshot?.floors[0]?.id).toBe('floor-1');
     expect(done.errorMessage).toBeNull();
+  });
+
+  it('draft editorApply без candidate: запись в Firestore без undefined (MVP pipeline)', async () => {
+    await updateImportJobStatus('ij-older', 'running');
+    await completeImportJobWithSnapshot('ij-older', createMockArchitecturalImportSnapshot());
+    const raw = store.get('sipEditor_importJobs/ij-older');
+    expect(raw?.editorApply?.status).toBe('draft');
+    expect('candidate' in (raw?.editorApply ?? {})).toBe(false);
+    expect(raw?.editorApply?.candidate).toBeUndefined();
   });
 
   it('failImportJob обновляет status/errorMessage', async () => {

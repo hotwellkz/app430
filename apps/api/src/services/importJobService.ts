@@ -49,6 +49,7 @@ import {
 } from './import/buildBuildingModelCandidate.js';
 import { classifyImportApplyHistoryVersion } from './import/historyClassifier.js';
 import { logObservabilityEvent } from '../utils/observability.js';
+import { omitUndefinedDeep } from '../utils/omitUndefinedForFirestore.js';
 
 export const IMPORT_SCHEMA_VERSION = 1;
 
@@ -209,14 +210,22 @@ function buildReviewState(
 }
 
 function createInitialEditorApplyState(): ImportEditorApplyState {
+  // Firestore forbids explicit `undefined` anywhere in the payload; omit optional fields until set.
   return {
     status: 'draft',
-    candidate: undefined,
     errorMessage: null,
     generatedAt: null,
     generatedBy: null,
     mapperVersion: null,
   };
+}
+
+async function updateImportJobDoc(
+  docId: string,
+  data: Record<string, unknown>
+): Promise<void> {
+  const db = getDb();
+  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(docId).update(omitUndefinedDeep(data) as any);
 }
 
 function createInitialProjectApplyState(): ImportProjectApplyState {
@@ -358,8 +367,7 @@ export async function updateImportJobStatus(
 ): Promise<ImportJob> {
   const current = await getImportJobById(jobId);
   assertStatusTransitionAllowed(current.status, nextStatus);
-  const db = getDb();
-  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).update({
+  await updateImportJobDoc(jobId, {
     status: nextStatus,
     // queued/running states should not carry a completed snapshot.
     snapshot: null,
@@ -382,8 +390,7 @@ export async function completeImportJobWithSnapshot(
   }
   const current = await getImportJobById(jobId);
   assertStatusTransitionAllowed(current.status, 'needs_review');
-  const db = getDb();
-  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).update({
+  await updateImportJobDoc(jobId, {
     status: 'needs_review',
     snapshot: snapshotValid.data,
     review: buildReviewState(snapshotValid.data, {}, current.createdBy, current.review),
@@ -398,8 +405,7 @@ export async function completeImportJobWithSnapshot(
 export async function failImportJob(jobId: string, errorMessage: string): Promise<ImportJob> {
   const current = await getImportJobById(jobId);
   assertStatusTransitionAllowed(current.status, 'failed');
-  const db = getDb();
-  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).update({
+  await updateImportJobDoc(jobId, {
     status: 'failed',
     snapshot: null,
     errorMessage: errorMessage.trim() || 'Import pipeline failed',
@@ -492,8 +498,7 @@ export async function saveImportJobReview(
   }
   const nextDecisions = mergeDecisions(job.review?.decisions ?? {}, parsed.data.decisions);
   const nextReview = buildReviewState(job.snapshot, nextDecisions, actorId, job.review);
-  const db = getDb();
-  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).update({
+  await updateImportJobDoc(jobId, {
     review: nextReview,
     editorApply: createInitialEditorApplyState(),
     projectApply: createInitialProjectApplyState(),
@@ -551,8 +556,7 @@ export async function applyImportJobReview(
     lastUpdatedAt: nowIso(),
     lastUpdatedBy: actorId,
   };
-  const db = getDb();
-  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(jobId).update({
+  await updateImportJobDoc(jobId, {
     review: appliedReview,
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -614,8 +618,7 @@ export async function prepareImportJobEditorApply(
       importJobId: job.id,
     });
   } catch (error) {
-    const db = getDb();
-    await db.collection(COLLECTIONS.IMPORT_JOBS).doc(job.id).update({
+    await updateImportJobDoc(job.id, {
       editorApply: {
         status: 'failed',
         errorMessage: error instanceof Error ? error.message : 'Candidate generation failed',
@@ -628,8 +631,7 @@ export async function prepareImportJobEditorApply(
     throw new AppHttpError(409, 'CONFLICT', 'Не удалось построить editor candidate');
   }
 
-  const db = getDb();
-  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(job.id).update({
+  await updateImportJobDoc(job.id, {
     editorApply: {
       status: 'candidate_ready',
       candidate,
@@ -719,8 +721,7 @@ export async function applyImportJobCandidateToProject(
     };
   }
 
-  const db = getDb();
-  await db.collection(COLLECTIONS.IMPORT_JOBS).doc(job.id).update({
+  await updateImportJobDoc(job.id, {
     projectApply: {
       ...(job.projectApply ?? createInitialProjectApplyState()),
       status: 'draft',
@@ -730,6 +731,7 @@ export async function applyImportJobCandidateToProject(
     updatedAt: FieldValue.serverTimestamp(),
   });
 
+  const db = getDb();
   try {
     const appliedVersion = await patchCurrentVersion(
       projectId,
@@ -762,7 +764,7 @@ export async function applyImportJobCandidateToProject(
     );
     const summary = buildCandidateApplySummary(job.editorApply.candidate);
     summary.createdOrUpdatedVersionId = appliedVersion.id;
-    await db.collection(COLLECTIONS.IMPORT_JOBS).doc(job.id).update({
+    await updateImportJobDoc(job.id, {
       projectApply: {
         status: 'applied',
         summary,
@@ -808,7 +810,7 @@ export async function applyImportJobCandidateToProject(
         error.details
       );
     }
-    await db.collection(COLLECTIONS.IMPORT_JOBS).doc(job.id).update({
+    await updateImportJobDoc(job.id, {
       projectApply: {
         status: 'failed',
         errorMessage: error instanceof Error ? error.message : 'Import apply failed',
