@@ -25,7 +25,7 @@ interface EditorToolbarProps {
   savePending: boolean;
   newVersionPending: boolean;
   onFitView?: () => void;
-  /** MVP: мастер AI-импорта по фото/планам */
+  /** MVP: мастер AI-импорта по фото/планам (кнопка всегда видима) */
   onOpenAiImport?: () => void;
 }
 
@@ -83,6 +83,7 @@ export function EditorToolbar({
 
   const wallSelected = isWallSelected(selection);
   const canSpatialDelete = canDeleteSelectedSpatial(selection);
+  const canOpenAiImport = typeof onOpenAiImport === 'function';
 
   const setMode = (mode: CanvasToolMode) => setToolMode(mode);
 
@@ -156,26 +157,28 @@ export function EditorToolbar({
         Новая версия
       </button>
 
-      {onOpenAiImport ? (
-        <>
-          <span style={{ width: 1, height: 20, background: '#e2e8f0', margin: '0 4px' }} />
-          <button
-            type="button"
-            style={{
-              ...btn,
-              fontWeight: 600,
-              borderColor: '#6366f1',
-              color: '#4338ca',
-            }}
-            disabled={savePending || newVersionPending}
-            onClick={onOpenAiImport}
-            title="Загрузить планы/фасады и создать import-job"
-            data-testid="editor-toolbar-ai-import"
-          >
-            Импорт по фото/планам
-          </button>
-        </>
-      ) : null}
+      <span style={{ width: 1, height: 20, background: '#e2e8f0', margin: '0 4px' }} />
+      <button
+        type="button"
+        style={{
+          ...btn,
+          fontWeight: 600,
+          borderColor: '#6366f1',
+          color: '#4338ca',
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+        }}
+        disabled={savePending || newVersionPending || !canOpenAiImport}
+        onClick={() => onOpenAiImport?.()}
+        title={
+          canOpenAiImport
+            ? 'Загрузить планы/фасады и создать import-job'
+            : 'AI-импорт недоступен в текущем экране'
+        }
+        data-testid="editor-toolbar-ai-import"
+      >
+        Импорт по фото/планам
+      </button>
 
       <button
         type="button"
