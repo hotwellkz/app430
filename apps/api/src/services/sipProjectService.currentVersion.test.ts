@@ -77,7 +77,7 @@ vi.mock('../firestore/admin.js', () => ({
   }),
 }));
 
-import { getCurrentVersion } from './sipProjectService.js';
+import { createProject, getCurrentVersion } from './sipProjectService.js';
 
 describe('getCurrentVersion bootstrap', () => {
   beforeEach(() => {
@@ -107,6 +107,33 @@ describe('getCurrentVersion bootstrap', () => {
     const updatedProject = store.get(key(COLLECTIONS.PROJECTS, 'p1')) as Record<string, unknown>;
     expect(typeof updatedProject.currentVersionId).toBe('string');
     expect(updatedProject.currentVersionNumber).toBe(1);
+  });
+
+  it('createProject writes initial current version and linkage', async () => {
+    const result = await createProject(
+      {
+        title: 'Новый проект с версией',
+        dealId: null,
+        createdBy: 'u1',
+      },
+      'u1'
+    );
+
+    expect(result.project.id).toBeTruthy();
+    expect(result.currentVersion.id).toBeTruthy();
+    expect(result.project.currentVersionId).toBe(result.currentVersion.id);
+    expect(result.project.currentVersionNumber).toBe(1);
+    expect(result.currentVersion.versionNumber).toBe(1);
+
+    const projectDoc = store.get(key(COLLECTIONS.PROJECTS, result.project.id)) as Record<string, unknown>;
+    const versionDoc = store.get(
+      key(COLLECTIONS.PROJECT_VERSIONS, result.currentVersion.id)
+    ) as Record<string, unknown>;
+
+    expect(projectDoc.currentVersionId).toBe(result.currentVersion.id);
+    expect(projectDoc.currentVersionNumber).toBe(1);
+    expect(versionDoc.projectId).toBe(result.project.id);
+    expect(versionDoc.versionNumber).toBe(1);
   });
 
   it('repairs pointer to latest existing version when currentVersion doc is missing', async () => {

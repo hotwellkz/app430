@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getCurrentVersion } from './projectsApi';
+import { SipApiError } from './http';
 
 const fetchJsonMock = vi.fn();
 
-vi.mock('./http', () => ({
-  fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
-}));
+vi.mock('./http', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./http')>();
+  return {
+    ...actual,
+    fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
+  };
+});
 
 describe('projectsApi.getCurrentVersion', () => {
   beforeEach(() => {
@@ -22,6 +27,18 @@ describe('projectsApi.getCurrentVersion', () => {
     fetchJsonMock.mockResolvedValueOnce({ currentVersion: { id: 'v2' } });
     const res = await getCurrentVersion('p1');
     expect((res.version as { id: string }).id).toBe('v2');
+  });
+
+  it('accepts legacy { current-version } payload', async () => {
+    fetchJsonMock.mockResolvedValueOnce({ 'current-version': { id: 'v2-kebab' } });
+    const res = await getCurrentVersion('p1');
+    expect((res.version as { id: string }).id).toBe('v2-kebab');
+  });
+
+  it('accepts legacy { current_version } payload', async () => {
+    fetchJsonMock.mockResolvedValueOnce({ current_version: { id: 'v2-snake' } });
+    const res = await getCurrentVersion('p1');
+    expect((res.version as { id: string }).id).toBe('v2-snake');
   });
 
   it('accepts legacy { item } payload', async () => {
@@ -51,5 +68,18 @@ describe('projectsApi.getCurrentVersion', () => {
     await expect(getCurrentVersion('p1')).rejects.toThrow(
       'Ответ сервера не содержит данные current-version для этого проекта.'
     );
+  });
+
+  it('falls back to /versions when /current-version returns 404', async () => {
+    fetchJsonMock.mockRejectedValueOnce(
+      new SipApiError(404, {
+        code: 'NOT_FOUND',
+        message: 'Текущая версия не назначена',
+        status: 404,
+      })
+    );
+    fetchJsonMock.mockResolvedValueOnce({ versions: [{ id: 'v404' }] });
+    const res = await getCurrentVersion('p1');
+    expect((res.version as { id: string }).id).toBe('v404');
   });
 });

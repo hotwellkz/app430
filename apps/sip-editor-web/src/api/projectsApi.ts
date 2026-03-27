@@ -23,7 +23,7 @@ import type {
   SaveImportReviewRequest,
   SaveImportReviewResponse,
 } from '@2wix/shared-types';
-import { fetchJson } from './http';
+import { fetchJson, SipApiError } from './http';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -36,10 +36,14 @@ function extractVersionPayload(v: unknown): ProjectVersion | null {
   if (!root) return null;
   if (root.version) return root.version as ProjectVersion;
   if (root.currentVersion) return root.currentVersion as ProjectVersion;
+  if (root['current-version']) return root['current-version'] as ProjectVersion;
+  if (root.current_version) return root.current_version as ProjectVersion;
   if (root.item) return root.item as ProjectVersion;
   const data = asRecord(root.data);
   if (data?.version) return data.version as ProjectVersion;
   if (data?.currentVersion) return data.currentVersion as ProjectVersion;
+  if (data?.['current-version']) return data['current-version'] as ProjectVersion;
+  if (data?.current_version) return data.current_version as ProjectVersion;
   if (data?.item) return data.item as ProjectVersion;
   return null;
 }
@@ -62,11 +66,16 @@ export async function getProject(projectId: string): Promise<{ project: Project 
 export async function getCurrentVersion(
   projectId: string
 ): Promise<{ version: ProjectVersion }> {
-  const primary = await fetchJson<unknown>(
-    `/api/projects/${encodeURIComponent(projectId)}/current-version`
-  );
-  const direct = extractVersionPayload(primary);
-  if (direct) return { version: direct };
+  let primary: unknown = null;
+  try {
+    primary = await fetchJson<unknown>(`/api/projects/${encodeURIComponent(projectId)}/current-version`);
+    const direct = extractVersionPayload(primary);
+    if (direct) return { version: direct };
+  } catch (error) {
+    if (!(error instanceof SipApiError) || error.status !== 404) {
+      throw error;
+    }
+  }
 
   // Fallback for inconsistent contracts in old environments:
   // if /current-version answered without version payload, pick latest from /versions.
