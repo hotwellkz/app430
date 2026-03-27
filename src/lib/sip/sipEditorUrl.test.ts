@@ -2,26 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildCrmSipProjectsUrl, buildSipEditorUrl, openSipEditorWindow } from './sipEditorUrl';
 
 describe('sipEditorUrl helpers', () => {
-  function withBrowserWindow<T>(cb: () => T): T {
-    const prev = (globalThis as { window?: unknown }).window;
-    vi.stubGlobal('window', {
-      location: { origin: 'https://2wix.ru' },
-      open: vi.fn(),
-    });
-    try {
-      return cb();
-    } finally {
-      if (prev === undefined) {
-        vi.unstubAllGlobals();
-      } else {
-        vi.stubGlobal('window', prev);
-      }
-    }
-  }
-
   it('builds editor url with encoded project id and uid', () => {
     const url = buildSipEditorUrl('p 1', 'u-1', {
-      VITE_SIP_EDITOR_ORIGIN: 'https://2wix.ru',
+      VITE_SIP_EDITOR_ORIGIN: 'https://editor.2wix.ru',
       PROD: true,
       DEV: false,
     });
@@ -30,15 +13,21 @@ describe('sipEditorUrl helpers', () => {
   });
 
   it('uses localhost fallback only in dev', () => {
-    const url = buildSipEditorUrl('p-1', 'u-1', { DEV: true, PROD: false });
-    expect(url.startsWith('http://localhost:5174/sip-editor/p-1')).toBe(true);
+    const prev = (globalThis as { window?: unknown }).window;
+    vi.stubGlobal('window', { location: { hostname: 'localhost', origin: 'http://localhost:3000' } });
+    try {
+      const url = buildSipEditorUrl('p-1', 'u-1', { DEV: true, PROD: false });
+      expect(url.startsWith('http://localhost:5174/sip-editor/p-1')).toBe(true);
+    } finally {
+      if (prev === undefined) vi.unstubAllGlobals();
+      else vi.stubGlobal('window', prev);
+    }
   });
 
-  it('falls back to CRM launch page when editor origin is missing', () => {
-    const url = withBrowserWindow(() => buildSipEditorUrl('p-1', 'u-1', { DEV: false, PROD: true }));
-    expect(url).toContain('/integrations/sip-editor?');
-    expect(url).toContain('projectId=p-1');
-    expect(url).toContain('sipUserId=u-1');
+  it('throws in production when editor origin is missing', () => {
+    expect(() => buildSipEditorUrl('p-1', 'u-1', { DEV: false, PROD: true })).toThrow(
+      /SIP Editor production URL не настроен/
+    );
   });
 
   it('throws in production when editor origin points to localhost', () => {
@@ -65,16 +54,21 @@ describe('sipEditorUrl helpers', () => {
     );
   });
 
-  it('uses CRM fallback when origin points to decommissioned site', () => {
-    const url = withBrowserWindow(() =>
-      buildSipEditorUrl('proj-2', 'uid-2', {
-        VITE_SIP_EDITOR_ORIGIN: 'https://sip-editor-web-2wix-mvp.netlify.app',
-        DEV: false,
-        PROD: true,
-      })
-    );
-    expect(url).toContain('/integrations/sip-editor?');
-    expect(url).toContain('projectId=proj-2');
+  it('throws when editor origin points to current CRM origin', () => {
+    const prev = (globalThis as { window?: unknown }).window;
+    vi.stubGlobal('window', { location: { origin: 'https://2wix.ru' } });
+    try {
+      expect(() =>
+        buildSipEditorUrl('proj-2', 'uid-2', {
+          VITE_SIP_EDITOR_ORIGIN: 'https://2wix.ru',
+          DEV: false,
+          PROD: true,
+        })
+      ).toThrow(/указывает на текущий CRM origin/);
+    } finally {
+      if (prev === undefined) vi.unstubAllGlobals();
+      else vi.stubGlobal('window', prev);
+    }
   });
 
   it('builds crm projects url', () => {

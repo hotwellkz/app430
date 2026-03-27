@@ -305,11 +305,12 @@ const AppContent: React.FC = () => {
                 <SipProjectsPage />
               </ApprovalGuard>
             } />
-            <Route path="/integrations/sip-editor" element={
+            <Route path="/sip-editor/legacy-launch" element={
               <ApprovalGuard>
                 <SipEditorLaunch />
               </ApprovalGuard>
             } />
+            <Route path="/integrations/sip-editor" element={<Navigate to="/sip-editor/legacy-launch" replace />} />
             <Route path="/analytics" element={
               <ApprovalGuard>
                 <AnalyticsPage />
