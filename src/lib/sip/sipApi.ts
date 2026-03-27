@@ -80,7 +80,17 @@ async function sipFetch(path: string, init: RequestInit = {}): Promise<Response>
   }
 
   try {
-    return await doFetch(url);
+    let res = await doFetch(url);
+    // Если в env задан прямой URL на Cloud Run со старым образом (нет маршрута), а Netlify
+    // проксирует /sip-editor-api на актуальный сервис — повторяем через same-origin proxy.
+    if (
+      res.status === 404 &&
+      fallbackUrl &&
+      !base.startsWith('/')
+    ) {
+      res = await doFetch(fallbackUrl);
+    }
+    return res;
   } catch (error) {
     if (fallbackUrl) {
       try {

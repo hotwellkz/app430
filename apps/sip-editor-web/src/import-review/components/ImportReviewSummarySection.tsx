@@ -1,5 +1,11 @@
 import type { CSSProperties } from 'react';
+import { useCallback, useState } from 'react';
+import { IMPORT_SUMMARY_UI } from '../constants/labels';
 import type { ImportSummaryViewModel } from '../viewModel/importSummaryViewModel.types';
+import {
+  formatImportSummaryForClipboard,
+  hasImportSummaryClipboardContent,
+} from '../utils/formatImportSummaryForClipboard';
 
 const cardStyle: CSSProperties = {
   marginBottom: 12,
@@ -29,11 +35,61 @@ const badgeStyle = (tone: 'neutral' | 'ok' | 'warn' | 'bad'): CSSProperties => (
 });
 
 export function ImportReviewSummarySection({ vm }: { vm: ImportSummaryViewModel }) {
+  const [copyFeedback, setCopyFeedback] = useState<'ok' | 'err' | null>(null);
+
+  const canCopy = hasImportSummaryClipboardContent(vm);
+
+  const onCopy = useCallback(async () => {
+    if (!canCopy) return;
+    const text = formatImportSummaryForClipboard(vm);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyFeedback('ok');
+      window.setTimeout(() => setCopyFeedback(null), 2200);
+    } catch {
+      setCopyFeedback('err');
+      window.setTimeout(() => setCopyFeedback(null), 4500);
+    }
+  }, [canCopy, vm]);
+
   return (
     <div data-testid="ir-import-summary" style={{ ...cardStyle, padding: 8, marginBottom: 10 }}>
-      <p className="twix-panelTitle" style={{ margin: '0 0 8px', fontSize: 12 }}>
-        {vm.sectionTitle}
-      </p>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          marginBottom: copyFeedback ? 6 : 8,
+        }}
+      >
+        <p className="twix-panelTitle" style={{ margin: 0, fontSize: 12, flex: '1 1 auto' }}>
+          {vm.sectionTitle}
+        </p>
+        <button
+          type="button"
+          data-testid="ir-summary-copy"
+          disabled={!canCopy}
+          onClick={onCopy}
+          style={{ fontSize: 11, padding: '4px 8px', flexShrink: 0 }}
+        >
+          {IMPORT_SUMMARY_UI.copySummaryButton}
+        </button>
+      </div>
+      {copyFeedback ? (
+        <p
+          data-testid="ir-summary-copy-feedback"
+          style={{
+            margin: '0 0 8px',
+            fontSize: 11,
+            color: copyFeedback === 'err' ? '#b91c1c' : '#15803d',
+          }}
+        >
+          {copyFeedback === 'ok'
+            ? IMPORT_SUMMARY_UI.copySummarySuccess
+            : IMPORT_SUMMARY_UI.copySummaryError}
+        </p>
+      ) : null}
 
       <div style={{ marginBottom: 10 }}>
         <p className="twix-muted" style={{ fontSize: 11, margin: '0 0 6px' }}>

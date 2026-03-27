@@ -68,7 +68,27 @@ fi
 
 gcloud "${DEPLOY_ARGS[@]}"
 
-echo "==> Cloud Run URL"
-gcloud run services describe "${SIP_API_SERVICE_NAME}" \
+RUN_URL="$(gcloud run services describe "${SIP_API_SERVICE_NAME}" \
   --region "${GCP_REGION}" \
   --format='value(status.url)'
+)"
+
+echo "==> Cloud Run URL"
+echo "${RUN_URL}"
+
+echo "==> Smoke: DELETE /api/projects (ожидается 401 без x-sip-user-id, не 404 Route)"
+DEL_CODE="$(curl -sS -o /tmp/sip-api-del-smoke.body -w "%{http_code}" \
+  -X DELETE "${RUN_URL}/api/projects/__smoke_route_check__" \
+  --max-time 20)"
+if [[ "${DEL_CODE}" == "401" ]]; then
+  echo "OK: маршрут DELETE зарегистрирован (401 Unauthorized)."
+elif [[ "${DEL_CODE}" == "404" ]]; then
+  echo "ОШИБКА: 404 — маршрут DELETE не найден в развёрнутом образе. Проверьте, что репозиторий с registerProjectRoutes и apps/api/Dockerfile задеплоен."
+  head -c 400 /tmp/sip-api-del-smoke.body || true
+  echo ""
+  exit 1
+else
+  echo "Предупреждение: DELETE вернул HTTP ${DEL_CODE} (ожидали 401)."
+  head -c 400 /tmp/sip-api-del-smoke.body || true
+  echo ""
+fi

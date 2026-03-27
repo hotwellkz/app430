@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ImportJob } from '@2wix/shared-types';
-import { IMPORT_REVIEW_UI } from '../constants/labels';
+import { IMPORT_REVIEW_UI, IMPORT_SUMMARY_UI } from '../constants/labels';
 import type { ImportReviewJobViewModel } from '../viewModel/importReviewViewModel.types';
 import { mapImportSummaryViewModel } from '../viewModel/importSummaryMapper';
 import { ImportReviewPanelView } from './ImportReviewPanelView';
@@ -118,6 +118,10 @@ const defaultProps = {
 };
 
 describe('ImportReviewPanelView', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it('shows post-apply editor refresh label on button', () => {
     render(
       <ImportReviewPanelView
@@ -171,6 +175,28 @@ describe('ImportReviewPanelView', () => {
     render(<ImportReviewPanelView {...defaultProps} />);
     expect(screen.getAllByTestId('ir-import-summary').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Сводка импорта').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('копирование сводки: clipboard получает текст со «Сводка AI-импорта»', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<ImportReviewPanelView {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('ir-summary-copy'));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(writeText.mock.calls[0][0]).toMatch(/Сводка AI-импорта/);
+    expect(screen.getByTestId('ir-summary-copy-feedback').textContent).toBe(IMPORT_SUMMARY_UI.copySummarySuccess);
+  });
+
+  it('сводка без candidate/projectApply: копирование даёт fallback-блоки', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const summaryVm = mapImportSummaryViewModel(minimalJobForSummary());
+    render(<ImportReviewPanelView {...defaultProps} summaryVm={summaryVm} />);
+    fireEvent.click(screen.getByTestId('ir-summary-copy'));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    const text = writeText.mock.calls[0][0] as string;
+    expect(text).toMatch(/недоступен|ещё не подготовлено/);
+    expect(text).toMatch(/не применяли|ещё не применено/);
   });
 
   it('renders missing decision field and disables apply', () => {

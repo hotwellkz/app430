@@ -1,12 +1,13 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createEmptyBuildingModel } from '@2wix/domain-model';
 import type { ImportJob } from '@2wix/shared-types';
 import { IMPORT_SUMMARY_UI } from '../constants/labels';
 import { mapImportSummaryViewModel } from '../viewModel/importSummaryMapper';
+import { formatImportSummaryForClipboard } from '../utils/formatImportSummaryForClipboard';
 import { ImportReviewSummarySection } from './ImportReviewSummarySection';
 
 function jobBase(over: Partial<ImportJob> = {}): ImportJob {
@@ -34,6 +35,18 @@ function jobBase(over: Partial<ImportJob> = {}): ImportJob {
 }
 
 describe('ImportReviewSummarySection', () => {
+  const writeText = vi.fn();
+
+  beforeEach(() => {
+    writeText.mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
   it('partial: нет review — показы hint', () => {
     const vm = mapImportSummaryViewModel(jobBase({ review: undefined }));
     render(<ImportReviewSummarySection vm={vm} />);
@@ -122,5 +135,35 @@ describe('ImportReviewSummarySection', () => {
     );
     render(<ImportReviewSummarySection vm={vm} />);
     expect(screen.getAllByTestId('ir-summary-candidate-lines')[0]?.textContent).toMatch(/этажей/);
+  });
+
+  it('кнопка копирования вызывает clipboard.writeText с текстом formatter', async () => {
+    const vm = mapImportSummaryViewModel(jobBase({ review: undefined }));
+    const expected = formatImportSummaryForClipboard(vm);
+    render(<ImportReviewSummarySection vm={vm} />);
+    const btn = screen.getByTestId('ir-summary-copy');
+    expect((btn as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(btn);
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(expected);
+    });
+    expect(screen.getByTestId('ir-summary-copy-feedback').textContent).toBe(IMPORT_SUMMARY_UI.copySummarySuccess);
+  });
+
+  it('при ошибке clipboard показывается предупреждение', async () => {
+    writeText.mockRejectedValueOnce(new Error('denied'));
+    const vm = mapImportSummaryViewModel(jobBase({ review: undefined }));
+    render(<ImportReviewSummarySection vm={vm} />);
+    fireEvent.click(screen.getByTestId('ir-summary-copy'));
+    await waitFor(() => {
+      expect(screen.getByTestId('ir-summary-copy-feedback').textContent).toBe(IMPORT_SUMMARY_UI.copySummaryError);
+    });
+  });
+
+  it('кнопка disabled если нет pipeline badges', () => {
+    const vm = mapImportSummaryViewModel(jobBase({ review: undefined }));
+    const broken = { ...vm, pipelineBadges: [] };
+    render(<ImportReviewSummarySection vm={broken} />);
+    expect((screen.getByTestId('ir-summary-copy') as HTMLButtonElement).disabled).toBe(true);
   });
 });

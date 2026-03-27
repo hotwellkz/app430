@@ -81,6 +81,9 @@ export const IMPORT_SUMMARY_UI = {
   warningsTraceShortLabel: 'Предупреждения / trace',
   basedOnMapperLabel: 'Mapper (источник)',
   noteLabel: 'Заметка',
+  copySummaryButton: 'Скопировать сводку',
+  copySummarySuccess: 'Сводка скопирована',
+  copySummaryError: 'Не удалось скопировать. Проверьте разрешения браузера.',
 } as const;
 
 export const IMPORT_JOB_STATUS_LABELS: Record<string, string> = {
