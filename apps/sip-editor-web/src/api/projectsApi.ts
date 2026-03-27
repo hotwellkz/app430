@@ -25,6 +25,32 @@ import type {
 } from '@2wix/shared-types';
 import { fetchJson } from './http';
 
+type UnknownRecord = Record<string, unknown>;
+
+function asRecord(v: unknown): UnknownRecord | null {
+  return typeof v === 'object' && v !== null ? (v as UnknownRecord) : null;
+}
+
+function extractVersionPayload(v: unknown): ProjectVersion | null {
+  const root = asRecord(v);
+  if (!root) return null;
+  if (root.version) return root.version as ProjectVersion;
+  if (root.currentVersion) return root.currentVersion as ProjectVersion;
+  const data = asRecord(root.data);
+  if (data?.version) return data.version as ProjectVersion;
+  if (data?.currentVersion) return data.currentVersion as ProjectVersion;
+  return null;
+}
+
+function extractVersionsPayload(v: unknown): ProjectVersion[] {
+  const root = asRecord(v);
+  if (!root) return [];
+  if (Array.isArray(root.versions)) return root.versions as ProjectVersion[];
+  const data = asRecord(root.data);
+  if (Array.isArray(data?.versions)) return data.versions as ProjectVersion[];
+  return [];
+}
+
 export async function getProject(projectId: string): Promise<{ project: Project }> {
   return fetchJson(`/api/projects/${encodeURIComponent(projectId)}`);
 }
@@ -32,15 +58,25 @@ export async function getProject(projectId: string): Promise<{ project: Project 
 export async function getCurrentVersion(
   projectId: string
 ): Promise<{ version: ProjectVersion }> {
-  return fetchJson(
+  const primary = await fetchJson<unknown>(
     `/api/projects/${encodeURIComponent(projectId)}/current-version`
   );
+  const direct = extractVersionPayload(primary);
+  if (direct) return { version: direct };
+
+  // Fallback for inconsistent contracts in old environments:
+  // if /current-version answered without version payload, pick latest from /versions.
+  const fallback = await fetchJson<unknown>(`/api/projects/${encodeURIComponent(projectId)}/versions`);
+  const candidate = extractVersionsPayload(fallback)[0] ?? null;
+  if (candidate) return { version: candidate };
+  throw new Error('Ответ сервера не содержит данные current-version для этого проекта.');
 }
 
 export async function listVersions(
   projectId: string
 ): Promise<{ versions: ProjectVersion[] }> {
-  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/versions`);
+  const raw = await fetchJson<unknown>(`/api/projects/${encodeURIComponent(projectId)}/versions`);
+  return { versions: extractVersionsPayload(raw) };
 }
 
 export async function createProject(

@@ -176,6 +176,8 @@ export function EditorShellPage() {
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [aiImportWizardOpen, setAiImportWizardOpen] = useState(false);
   const [pendingSelectImportJobId, setPendingSelectImportJobId] = useState<string | null>(null);
+  const [initError, setInitError] = useState<string | null>(null);
+  const [initTimedOut, setInitTimedOut] = useState(false);
 
   const versionsQuery = useSipVersionsList(
     projectId,
@@ -183,20 +185,26 @@ export function EditorShellPage() {
   );
 
   useEffect(() => {
-    const title = projectQuery.data?.project.title ?? null;
+    const title = projectQuery.data?.project?.title ?? null;
     if (projectId) {
       setProjectContext(projectId, title);
     }
-  }, [projectId, projectQuery.data?.project.title, setProjectContext]);
+  }, [projectId, projectQuery.data?.project?.title, setProjectContext]);
 
   useEffect(() => {
     const v = versionQuery.data?.version;
     if (!v || !projectId) return;
-    loadDocumentFromServer({
-      projectId,
-      projectTitle: projectQuery.data?.project.title ?? null,
-      version: v,
-    });
+    try {
+      loadDocumentFromServer({
+        projectId,
+        projectTitle: projectQuery.data?.project?.title ?? null,
+        version: v,
+      });
+      setInitError(null);
+      setInitTimedOut(false);
+    } catch (error) {
+      setInitError(error instanceof Error ? error.message : String(error));
+    }
   }, [
     projectId,
     projectQuery.data?.project?.title,
@@ -206,6 +214,15 @@ export function EditorShellPage() {
     versionQuery.data?.version?.versionNumber,
     versionQuery.data?.version?.schemaVersion,
   ]);
+
+  useEffect(() => {
+    const v = versionQuery.data?.version;
+    if (!v || document.draftModel) return;
+    const timer = window.setTimeout(() => {
+      setInitTimedOut(true);
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [versionQuery.data?.version, document.draftModel]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -264,7 +281,7 @@ export function EditorShellPage() {
       void queryClient.invalidateQueries({ queryKey: ['sip-versions', projectId] });
       loadDocumentFromServer({
         projectId,
-        projectTitle: projectQuery.data?.project.title ?? null,
+        projectTitle: projectQuery.data?.project?.title ?? null,
         version: res.version,
       });
       setConflictDetails(null);
@@ -273,6 +290,8 @@ export function EditorShellPage() {
 
   const reloadFromServer = useCallback(async () => {
     setConflictDetails(null);
+    setInitError(null);
+    setInitTimedOut(false);
     await versionQuery.refetch();
     await projectQuery.refetch();
     await versionsQuery.refetch();
@@ -318,6 +337,33 @@ export function EditorShellPage() {
 
   const statusBadge = saveStatusLabel(document.saveStatus);
   const draft = document.draftModel;
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    console.info('[sip-editor:init]', {
+      projectId,
+      sipUserId: Boolean(sipUserId),
+      projectLoading: projectQuery.isLoading,
+      projectError: projectQuery.isError,
+      versionLoading: versionQuery.isLoading,
+      versionError: versionQuery.isError,
+      hasVersion: Boolean(version),
+      hasDraft: Boolean(draft),
+      initError,
+      initTimedOut,
+    });
+  }, [
+    projectId,
+    sipUserId,
+    projectQuery.isLoading,
+    projectQuery.isError,
+    versionQuery.isLoading,
+    versionQuery.isError,
+    version,
+    draft,
+    initError,
+    initTimedOut,
+  ]);
 
   if (!projectId) {
     return (
@@ -376,6 +422,14 @@ export function EditorShellPage() {
               <span>ID: {projectId}</span>
               <br />
               <span className="twix-muted">{d.message}</span>
+              <br />
+              <button
+                type="button"
+                style={{ marginTop: 10, fontSize: 12, padding: '6px 10px' }}
+                onClick={() => void reloadFromServer()}
+              >
+                Повторить
+              </button>
               <GuardCrmLinks />
             </>
           }
@@ -390,16 +444,71 @@ export function EditorShellPage() {
       <div style={{ height: '100vh', padding: 24 }}>
         <EmptyState
           title={d.title}
-          description={d.message}
+          description={
+            <>
+              <span>{d.message}</span>
+              <br />
+              <button
+                type="button"
+                style={{ marginTop: 10, fontSize: 12, padding: '6px 10px' }}
+                onClick={() => void reloadFromServer()}
+              >
+                Повторить
+              </button>
+            </>
+          }
         />
       </div>
     );
   }
 
-  if (!draft || !version) {
+  if (!version) {
     return (
-      <div style={{ height: '100vh' }}>
-        <LoadingState message="Инициализация модели…" />
+      <div style={{ height: '100vh', padding: 24 }}>
+        <EmptyState
+          title="Текущая версия не получена"
+          description={
+            <>
+              <span>Ответ сервера не содержит данные current-version для этого проекта.</span>
+              <br />
+              <button
+                type="button"
+                style={{ marginTop: 10, fontSize: 12, padding: '6px 10px' }}
+                onClick={() => void reloadFromServer()}
+              >
+                Повторить
+              </button>
+            </>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (initError || initTimedOut || !draft) {
+    return (
+      <div style={{ height: '100vh', padding: 24 }}>
+        <EmptyState
+          title="Не удалось инициализировать модель"
+          description={
+            <>
+              <span>
+                {initError ??
+                  (initTimedOut
+                    ? 'Инициализация заняла слишком много времени. Проверьте ответ current-version.'
+                    : 'Данные версии получены, но модель не была собрана в editor state.')}
+              </span>
+              <br />
+              <button
+                type="button"
+                style={{ marginTop: 10, fontSize: 12, padding: '6px 10px' }}
+                onClick={() => void reloadFromServer()}
+              >
+                Повторить
+              </button>
+            </>
+          }
+        />
       </div>
     );
   }
@@ -541,7 +650,7 @@ export function EditorShellPage() {
             <TopBar
               title={
                 <>
-                  SIP Editor — {projectQuery.data?.project.title ?? 'проект'}{' '}
+                  SIP Editor — {projectQuery.data?.project?.title ?? 'проект'}{' '}
                   <span style={{ fontWeight: 400, color: 'var(--twix-muted)' }}>
                     (v{version.versionNumber} · {projectId.slice(0, 8)}…)
                   </span>
@@ -764,7 +873,7 @@ export function EditorShellPage() {
         open={aiImportWizardOpen}
         onClose={() => setAiImportWizardOpen(false)}
         projectId={projectId}
-        projectTitle={projectQuery.data?.project.title ?? ''}
+        projectTitle={projectQuery.data?.project?.title ?? ''}
         onSuccess={(jobId) => {
           setPendingSelectImportJobId(jobId);
         }}
