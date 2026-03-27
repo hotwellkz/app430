@@ -21,6 +21,7 @@ import { PanelizationPanel } from '@/components/PanelizationPanel';
 import { SpecPanel } from '@/components/SpecPanel';
 import { ExportPanel } from '@/components/ExportPanel';
 import { ImportApplyHistoryPanel } from '@/components/ImportApplyHistoryPanel';
+import { ImportReviewPanel } from '@/components/ImportReviewPanel';
 import { FloorInspector } from '@/components/FloorInspector';
 import { OpeningInspector } from '@/components/OpeningInspector';
 import { RoofInspector } from '@/components/RoofInspector';
@@ -558,6 +559,20 @@ export function EditorShellPage() {
               projectId={projectId}
               versionId={version?.id ?? null}
               onSaveBeforeExport={saveBeforeExport}
+            />
+            <ImportReviewPanel
+              projectId={projectId}
+              versionMarkers={
+                document.currentVersionId !== null &&
+                document.currentVersionNumber !== null &&
+                document.schemaVersion !== null
+                  ? {
+                      expectedCurrentVersionId: document.currentVersionId,
+                      expectedVersionNumber: document.currentVersionNumber,
+                      expectedSchemaVersion: document.schemaVersion,
+                    }
+                  : null
+              }
             />
             <ImportApplyHistoryPanel projectId={projectId} />
             <div

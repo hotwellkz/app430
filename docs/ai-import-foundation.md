@@ -27,6 +27,10 @@
   - не меняет source-of-truth `BuildingModel`;
   - используется read-only endpoint историй apply операций.
 
+## Frontend (MVP review wizard)
+
+Описание UI-потока и модулей: [ui-ai-import-review.md](./ui-ai-import-review.md).
+
 ## Endpoints
 
 - `POST /api/projects/:projectId/import-jobs`

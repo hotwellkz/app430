@@ -1,15 +1,25 @@
 import type {
+  ApplyCandidateToProjectRequest,
+  ApplyCandidateToProjectResponse,
+  ApplyImportReviewRequest,
+  ApplyImportReviewResponse,
   CreateExportRequest,
   CreateExportResponse,
   CreateProjectRequest,
   CreateVersionRequest,
   ExportArtifactMeta,
   GetImportApplyHistoryResponse,
+  GetImportJobResponse,
   ExportPackageSnapshot,
+  ListImportJobsResponse,
   PatchCurrentVersionRequestBody,
+  PrepareEditorApplyRequest,
+  PrepareEditorApplyResponse,
   Project,
   ProjectVersion,
   ProjectWithCurrentVersion,
+  SaveImportReviewRequest,
+  SaveImportReviewResponse,
 } from '@2wix/shared-types';
 import { fetchJson } from './http';
 
@@ -99,4 +109,63 @@ export async function getImportApplyHistory(
   projectId: string
 ): Promise<GetImportApplyHistoryResponse> {
   return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/import-apply-history`);
+}
+
+export async function listImportJobs(
+  projectId: string
+): Promise<ListImportJobsResponse> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/import-jobs`);
+}
+
+export async function getImportJob(
+  projectId: string,
+  jobId: string
+): Promise<GetImportJobResponse> {
+  return fetchJson(
+    `/api/projects/${encodeURIComponent(projectId)}/import-jobs/${encodeURIComponent(jobId)}`
+  );
+}
+
+export async function saveImportJobReview(
+  projectId: string,
+  jobId: string,
+  body: SaveImportReviewRequest
+): Promise<SaveImportReviewResponse> {
+  return fetchJson(
+    `/api/projects/${encodeURIComponent(projectId)}/import-jobs/${encodeURIComponent(jobId)}/review`,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
+export async function applyImportJobReview(
+  projectId: string,
+  jobId: string,
+  body: ApplyImportReviewRequest
+): Promise<ApplyImportReviewResponse> {
+  return fetchJson(
+    `/api/projects/${encodeURIComponent(projectId)}/import-jobs/${encodeURIComponent(jobId)}/apply-review`,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
+export async function prepareImportJobEditorApply(
+  projectId: string,
+  jobId: string,
+  body: PrepareEditorApplyRequest
+): Promise<PrepareEditorApplyResponse> {
+  return fetchJson(
+    `/api/projects/${encodeURIComponent(projectId)}/import-jobs/${encodeURIComponent(jobId)}/prepare-editor-apply`,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
+export async function applyImportJobCandidateToProject(
+  projectId: string,
+  jobId: string,
+  body: ApplyCandidateToProjectRequest
+): Promise<ApplyCandidateToProjectResponse> {
+  return fetchJson(
+    `/api/projects/${encodeURIComponent(projectId)}/import-jobs/${encodeURIComponent(jobId)}/apply-candidate`,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
 }
