@@ -830,6 +830,9 @@ describe('importJobService', () => {
       'u1'
     );
     const jobId = created.job.id;
+    expect(created.job.status).toBe('needs_review');
+    expect(created.job.snapshot).toBeTruthy();
+    assertNoFirestoreUndefined(store.get(`sipEditor_importJobs/${jobId}`));
 
     await saveImportJobReview(
       'p1',
@@ -857,7 +860,11 @@ describe('importJobService', () => {
       'u1'
     );
     await applyImportJobReview('p1', jobId, { appliedBy: 'u1' }, 'u1');
+    assertNoFirestoreUndefined(store.get(`sipEditor_importJobs/${jobId}`));
     await prepareImportJobEditorApply('p1', jobId, { generatedBy: 'u1' }, 'u1');
+    assertNoFirestoreUndefined(store.get(`sipEditor_importJobs/${jobId}`));
+    expect(store.get(`sipEditor_importJobs/${jobId}`)?.editorApply?.status).toBe('candidate_ready');
+    expect(store.get(`sipEditor_importJobs/${jobId}`)?.editorApply?.candidate).toBeTruthy();
     await applyImportJobCandidateToProject(
       'p1',
       jobId,
@@ -870,6 +877,7 @@ describe('importJobService', () => {
       },
       'u1'
     );
+    assertNoFirestoreUndefined(store.get(`sipEditor_importJobs/${jobId}`));
 
     const versionDoc = store.get('sipEditor_projectVersions/v-current');
     expect(versionDoc?.importProvenance?.importJobId).toBe(jobId);
