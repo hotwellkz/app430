@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Reply, Forward, Copy, Star, Trash2, Info, Languages } from 'lucide-react';
+import { isEditableTarget } from '../../utils/isEditableTarget';
 
 export interface MessageContextMenuProps {
   x: number;
@@ -39,6 +40,7 @@ const MessageContextMenu: React.FC<MessageContextMenuProps> = ({
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
     const handleEscape = (e: KeyboardEvent) => {
+      if (isEditableTarget(e.target)) return;
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('mousedown', handleClickOutside);

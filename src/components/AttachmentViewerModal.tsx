@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { X, Download, ExternalLink } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+import { isEditableTarget } from '../utils/isEditableTarget';
 
 const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
 
@@ -82,6 +83,7 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
     document.body.classList.add('attachment-preview-open');
     window.dispatchEvent(new CustomEvent('attachment-preview-visibility-change'));
     const onKey = (e: KeyboardEvent) => {
+      if (isEditableTarget(e.target)) return;
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);

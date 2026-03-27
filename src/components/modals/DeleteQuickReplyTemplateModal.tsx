@@ -1,4 +1,5 @@
 import React, { useEffect, useCallback, useRef } from 'react';
+import { isEditableTarget } from '../../utils/isEditableTarget';
 
 export interface DeleteQuickReplyTemplateModalProps {
   open: boolean;
@@ -22,6 +23,7 @@ export function DeleteQuickReplyTemplateModal({
 
   const handleEscape = useCallback(
     (e: KeyboardEvent) => {
+      if (isEditableTarget(e.target)) return;
       if (e.key === 'Escape' && open && !deleting) onCancel();
     },
     [open, deleting, onCancel]

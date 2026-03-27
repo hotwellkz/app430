@@ -94,6 +94,7 @@ import { acquireVoiceStream, createVoiceRecorder } from '../utils/voiceRecording
 import { formatVoiceListDuration, isVoiceNoteAttachment } from '../components/whatsapp/whatsappUtils';
 import { buildForwardPayloadMessages, getOrderedSelectedMessages } from '../utils/whatsappForwardSelection';
 import { normalizeClipboardImageFileName } from '../utils/clipboardComposerPaste';
+import { isEditableTarget } from '../utils/isEditableTarget';
 
 const NEW_MESSAGE_SOUND_PATH = '/sounds/new-message.mp3';
 
@@ -777,6 +778,7 @@ const WhatsAppChat: React.FC = () => {
   useEffect(() => {
     if (!conversationMenu) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isEditableTarget(e.target)) return;
       if (e.key === 'Escape') {
         setConversationMenu(null);
       }
@@ -3663,6 +3665,7 @@ const WhatsAppChat: React.FC = () => {
   useEffect(() => {
     if (!isMobile || !mobileChatSearchOpen) return;
     const onKey = (e: KeyboardEvent) => {
+      if (isEditableTarget(e.target)) return;
       if (e.key === 'Escape') setMobileChatSearchOpen(false);
     };
     window.addEventListener('keydown', onKey);

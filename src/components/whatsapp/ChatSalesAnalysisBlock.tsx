@@ -4,6 +4,7 @@ import { getAuthToken } from '../../lib/firebase/auth';
 import { useAIConfigured } from '../../hooks/useAIConfigured';
 import type { WhatsAppMessage } from '../../types/whatsappDb';
 import { getMessageTextContentForAi } from '../../utils/whatsappAiMessageContent';
+import { isEditableTarget } from '../../utils/isEditableTarget';
 
 const SALES_ANALYZE_ENDPOINTS = ['/.netlify/functions/ai-analyze-sales', '/api/ai/analyze-sales'] as const;
 const CLIENT_ANALYZE_ENDPOINTS = ['/.netlify/functions/ai-analyze-client', '/api/ai/analyze-client'] as const;
@@ -321,6 +322,7 @@ export function ChatSalesAnalysisBlock({
   useEffect(() => {
     if (!insertChoiceOpen) return;
     const onKey = (e: KeyboardEvent) => {
+      if (isEditableTarget(e.target)) return;
       if (e.key === 'Escape') setInsertChoiceOpen(false);
     };
     const onDocClick = (e: MouseEvent) => {
