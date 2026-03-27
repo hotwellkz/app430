@@ -10,6 +10,7 @@ import {
   prepareImportJobEditorApply,
   saveImportJobReview,
 } from '@/api/projectsApi';
+
 import { getSipUserId } from '@/identity/sipUser';
 import { IMPORT_REVIEW_UI } from '@/import-review/constants/labels';
 import {
@@ -67,6 +68,9 @@ export function useImportReviewPanel(
   const [decisionsDirty, setDecisionsDirty] = useState(false);
   const [panelMessage, setPanelMessage] = useState<ImportReviewPanelMessage | null>(null);
   const [postApplyRefreshPending, setPostApplyRefreshPending] = useState(false);
+  const autoApplyJobIdRef = useRef<string | null>(null);
+  const versionMarkersRef = useRef(versionMarkers);
+  versionMarkersRef.current = versionMarkers;
 
   const jobsQuery = useQuery({
     queryKey: jobsListKey(projectId),
@@ -94,11 +98,12 @@ export function useImportReviewPanel(
     }
     if (pendingHandledIdRef.current === pendingSelectJobId) return;
     pendingHandledIdRef.current = pendingSelectJobId;
+    autoApplyJobIdRef.current = pendingSelectJobId;
     setSelectedJobId(pendingSelectJobId);
     setPanelMessage({
       kind: 'success',
       title: 'Импорт создан',
-      detail: 'Черновик review заполнен параметрами из мастера.',
+      detail: 'Применяю к проекту автоматически…',
     });
     void queryClient.invalidateQueries({ queryKey: jobsListKey(projectId) });
     void queryClient.prefetchQuery({
@@ -271,6 +276,68 @@ export function useImportReviewPanel(
     },
   });
 
+  // Auto-apply sequence: apply review → prepare candidate → apply candidate to project.
+  const autoApplySequenceMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      const uid = getSipUserId();
+      if (!uid) throw new Error('Нет пользователя');
+      const markers = versionMarkersRef.current;
+      if (!markers) throw new Error('Нет маркеров версии проекта');
+      await applyImportJobReview(projectId, jobId, { appliedBy: uid });
+      await prepareImportJobEditorApply(projectId, jobId, { generatedBy: uid });
+      const result = await applyImportJobCandidateToProject(projectId, jobId, {
+        appliedBy: uid,
+        expectedCurrentVersionId: markers.expectedCurrentVersionId,
+        expectedVersionNumber: markers.expectedVersionNumber,
+        expectedSchemaVersion: markers.expectedSchemaVersion,
+      });
+      return result;
+    },
+    onSuccess: (res) => {
+      if (res.job.id) {
+        queryClient.setQueryData(jobQueryKey(projectId, res.job.id), { job: res.job });
+      }
+      invalidateJobQueries();
+      const v = res.appliedVersionMeta;
+      const s = res.applySummary;
+      setPanelMessage({
+        kind: 'success',
+        title: '3D модель создана',
+        detail: `Версия #${v.versionNumber}, этажей: ${s.appliedObjectCounts.floors}, стен: ${s.appliedObjectCounts.walls}`,
+      });
+      if (onEditorRefreshAfterApply) {
+        setPostApplyRefreshPending(true);
+        void (async () => {
+          try {
+            await onEditorRefreshAfterApply();
+          } finally {
+            setPostApplyRefreshPending(false);
+          }
+        })();
+      }
+    },
+    onError: (e: unknown) => {
+      const f = formatImportReviewError(e, 'Не удалось авто-применить импорт');
+      setPanelMessage({ kind: 'error', title: f.title, detail: f.detail, code: f.code });
+    },
+  });
+
+  // Trigger auto-apply when the job from wizard is loaded and ready.
+  useEffect(() => {
+    const autoJobId = autoApplyJobIdRef.current;
+    if (!autoJobId || autoJobId !== selectedJobId) return;
+    if (!job || job.id !== autoJobId) return;
+    if (!job.review?.isReadyToApply) return;
+    if (job.review.status === 'applied') {
+      autoApplyJobIdRef.current = null;
+      return;
+    }
+    if (!versionMarkersRef.current) return;
+    if (autoApplySequenceMutation.isPending) return;
+    autoApplyJobIdRef.current = null;
+    autoApplySequenceMutation.mutate(autoJobId);
+  }, [job, selectedJobId, autoApplySequenceMutation]);
+
   const listItems = useMemo(() => {
     const items = jobsQuery.data?.items ?? [];
     return [...items]
@@ -345,6 +412,7 @@ export function useImportReviewPanel(
     applyReviewFlowMutation.isPending ||
     prepareMutation.isPending ||
     applyCandidateMutation.isPending ||
+    autoApplySequenceMutation.isPending ||
     postApplyRefreshPending;
 
   return {

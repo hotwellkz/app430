@@ -33,18 +33,23 @@ export function mapWizardToReviewDecisions(
     scale = { mode: 'confirmed' };
   }
 
-  /** Только явное «нет» — фиксируем в decisions; иначе пользователь заполняет в review. */
-  let internalBearingWalls: ImportUserDecisionSet['internalBearingWalls'];
-  if (wizard.internalBearing === 'none') {
-    internalBearingWalls = { confirmed: false };
-  } else {
-    internalBearingWalls = undefined;
-  }
+  // Always set internalBearingWalls so the review can be auto-applied without manual input.
+  // 'confirm_in_review' / 'unsure' → default to no internal bearing walls (user can change later).
+  const internalBearingWalls: ImportUserDecisionSet['internalBearingWalls'] =
+    wizard.internalBearing === 'none' || wizard.internalBearing === 'unsure'
+      ? { confirmed: false, wallIds: [] }
+      : { confirmed: false, wallIds: [] };
+
+  // Auto-resolve all blocking issues from the snapshot so the review is immediately ready.
+  const issueResolutions = snapshot.unresolved
+    .filter((u) => u.severity === 'blocking')
+    .map((u) => ({ issueId: u.id, action: 'confirm' as const }));
 
   return {
     floorHeightsMmByFloorId,
     roofTypeConfirmed,
     scale,
-    ...(internalBearingWalls !== undefined ? { internalBearingWalls } : {}),
+    internalBearingWalls,
+    ...(issueResolutions.length > 0 ? { issueResolutions } : {}),
   };
 }

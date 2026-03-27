@@ -33,7 +33,7 @@ const SUPPORTED_IMAGE_TYPES = new Set([
   'image/webp',
 ]);
 
-async function fileToImportAssetRef(item: WizardFileItem): Promise<ImportAssetRef> {
+export async function fileToImportAssetRef(item: WizardFileItem): Promise<ImportAssetRef> {
   const mime = item.file.type?.trim();
   const ref: ImportAssetRef = {
     id: newAssetId(),

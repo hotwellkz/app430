@@ -29,22 +29,22 @@ describe('mapWizardToReviewDecisions', () => {
     expect(d.floorHeightsMmByFloorId?.f2).toBe(2600);
   });
 
-  it('sets internalBearingWalls only for none', () => {
+  it('always sets internalBearingWalls to allow auto-apply', () => {
     const snap = snapshotTwoFloors();
     const none = mapWizardToReviewDecisions(snap, { ...defaultImportWizardForm(), internalBearing: 'none' });
-    expect(none.internalBearingWalls).toEqual({ confirmed: false });
+    expect(none.internalBearingWalls).toEqual({ confirmed: false, wallIds: [] });
 
     const review = mapWizardToReviewDecisions(snap, {
       ...defaultImportWizardForm(),
       internalBearing: 'confirm_in_review',
     });
-    expect(review.internalBearingWalls).toBeUndefined();
+    expect(review.internalBearingWalls).toEqual({ confirmed: false, wallIds: [] });
 
     const unsure = mapWizardToReviewDecisions(snap, {
       ...defaultImportWizardForm(),
       internalBearing: 'unsure',
     });
-    expect(unsure.internalBearingWalls).toBeUndefined();
+    expect(unsure.internalBearingWalls).toEqual({ confirmed: false, wallIds: [] });
   });
 
   it('maps roof and scale', () => {

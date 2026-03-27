@@ -13,8 +13,8 @@ function makeItem(overrides: Partial<WizardFileItem> = {}): WizardFileItem {
 }
 
 describe('buildCreateImportJobRequest', () => {
-  it('maps files to sourceImages with kinds', () => {
-    const body = buildCreateImportJobRequest(
+  it('maps files to sourceImages with kinds', async () => {
+    const body = await buildCreateImportJobRequest(
       [
         makeItem({ kind: 'plan' }),
         makeItem({
@@ -32,14 +32,14 @@ describe('buildCreateImportJobRequest', () => {
     expect(body.projectName).toBe('Мой проект');
   });
 
-  it('omits projectName when title empty', () => {
-    const body = buildCreateImportJobRequest([makeItem()], '   ');
+  it('omits projectName when title empty', async () => {
+    const body = await buildCreateImportJobRequest([makeItem()], '   ');
     expect(body.projectName).toBeUndefined();
   });
 
-  it('fileToImportAssetRef uses file metadata', () => {
+  it('fileToImportAssetRef uses file metadata', async () => {
     const item = makeItem({ kind: 'other', file: new File([''], 'doc.pdf', { type: 'application/pdf' }) });
-    const ref = fileToImportAssetRef(item);
+    const ref = await fileToImportAssetRef(item);
     expect(ref.kind).toBe('other');
     expect(ref.fileName).toBe('doc.pdf');
     expect(ref.mimeType).toBe('application/pdf');
