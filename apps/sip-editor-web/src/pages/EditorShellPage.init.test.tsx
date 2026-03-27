@@ -153,5 +153,57 @@ describe('EditorShellPage init flow', () => {
     renderPage();
     expect((await screen.findAllByTestId('editor-toolbar-ai-import')).length).toBeGreaterThan(0);
     expect(screen.queryByText('Инициализация модели…')).toBeNull();
+    expect(screen.queryByText('Версия не загружена')).toBeNull();
+    expect(screen.queryByText('Текущая версия не получена')).toBeNull();
+  });
+
+  it('smoke: opens fresh project in empty working state', async () => {
+    currentVersionQueryMock = {
+      data: {
+        version: {
+          id: 'v-fresh',
+          projectId: 'p1',
+          versionNumber: 1,
+          schemaVersion: 2,
+          buildingModel: createEmptyBuildingModel(),
+          createdAt: '2025-01-01T00:00:00.000Z',
+          createdBy: 'u1',
+        },
+      },
+      isLoading: false,
+      isError: false,
+      refetch: async () => ({}),
+    };
+
+    renderPage();
+    expect((await screen.findAllByTestId('editor-toolbar-ai-import')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Загрузка проекта…')).toBeNull();
+    expect(screen.queryByText('Версия не загружена')).toBeNull();
+    expect(screen.queryByText('Текущая версия не получена')).toBeNull();
+  });
+
+  it('smoke: fallback path still opens editor when version resolved', async () => {
+    // Симулируем уже отработавший API fallback /versions после 404 /current-version.
+    currentVersionQueryMock = {
+      data: {
+        version: {
+          id: 'v-from-versions',
+          projectId: 'p1',
+          versionNumber: 1,
+          schemaVersion: 2,
+          buildingModel: createEmptyBuildingModel(),
+          createdAt: '2025-01-01T00:00:00.000Z',
+          createdBy: 'u1',
+        },
+      },
+      isLoading: false,
+      isError: false,
+      refetch: async () => ({}),
+    };
+
+    renderPage();
+    expect((await screen.findAllByTestId('editor-toolbar-ai-import')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Версия не загружена')).toBeNull();
+    expect(screen.queryByText('Текущая версия не получена')).toBeNull();
   });
 });

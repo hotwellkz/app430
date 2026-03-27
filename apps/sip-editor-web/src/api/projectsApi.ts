@@ -27,6 +27,32 @@ import { fetchJson, SipApiError } from './http';
 
 type UnknownRecord = Record<string, unknown>;
 
+function shouldLogOpenFlowDiagnostics(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (import.meta.env.DEV && import.meta.env.MODE !== 'test') return true;
+  try {
+    return window.localStorage.getItem('sip_debug_open_flow') === '1';
+  } catch {
+    return false;
+  }
+}
+
+function logVersionResolution(
+  source: 'current-version' | 'versions-fallback',
+  projectId: string,
+  version: ProjectVersion
+): void {
+  if (!shouldLogOpenFlowDiagnostics()) return;
+  const editorOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  console.info('[sip-editor:open-flow]', {
+    projectId,
+    source,
+    resolvedVersionId: version.id,
+    resolvedVersionNumber: version.versionNumber,
+    editorOrigin,
+  });
+}
+
 function asRecord(v: unknown): UnknownRecord | null {
   return typeof v === 'object' && v !== null ? (v as UnknownRecord) : null;
 }
@@ -70,7 +96,10 @@ export async function getCurrentVersion(
   try {
     primary = await fetchJson<unknown>(`/api/projects/${encodeURIComponent(projectId)}/current-version`);
     const direct = extractVersionPayload(primary);
-    if (direct) return { version: direct };
+    if (direct) {
+      logVersionResolution('current-version', projectId, direct);
+      return { version: direct };
+    }
   } catch (error) {
     if (!(error instanceof SipApiError) || error.status !== 404) {
       throw error;
@@ -81,7 +110,10 @@ export async function getCurrentVersion(
   // if /current-version answered without version payload, pick latest from /versions.
   const fallback = await fetchJson<unknown>(`/api/projects/${encodeURIComponent(projectId)}/versions`);
   const candidate = extractVersionsPayload(fallback)[0] ?? null;
-  if (candidate) return { version: candidate };
+  if (candidate) {
+    logVersionResolution('versions-fallback', projectId, candidate);
+    return { version: candidate };
+  }
   throw new Error('Ответ сервера не содержит данные current-version для этого проекта.');
 }
 
