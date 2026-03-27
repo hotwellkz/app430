@@ -25,6 +25,12 @@ import { QuickRepliesPopup, type QuickReplyItem } from './QuickRepliesPopup';
 import { MediaQuickRepliesPopup } from './MediaQuickRepliesPopup';
 import type { MediaQuickReply } from '../../types/mediaQuickReplies';
 import MobileWhatsappAiComposer, { type MobileWhatsappAiCrmConfig } from './MobileWhatsappAiComposer';
+import toast from 'react-hot-toast';
+import {
+  extractClipboardImagesFromDataTransfer,
+  extractDataUrlImageFilesFromHtml,
+  normalizeClipboardImageFileName,
+} from '../../utils/clipboardComposerPaste';
 
 const MAX_ATTACHMENT_MB = 10;
 
@@ -100,6 +106,8 @@ interface ChatInputProps {
   isMobile?: boolean;
   /** Настройки CRM AI для моб. кнопки «настройки» (те же патчи, что в карточке клиента) */
   mobileCrmAi?: MobileWhatsappAiCrmConfig | null;
+  /** Вставка изображений из буфера (Ctrl/Cmd+V) — только в этом поле, без глобальных слушателей */
+  onComposerPasteImages?: (files: File[]) => void;
 }
 
 const QUICK_REPLIES_MAX = 5;
@@ -133,6 +141,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   translateInputLoading = false,
   isMobile = false,
   mobileCrmAi = null,
+  onComposerPasteImages,
 }) => {
   /** Android/iOS: только фото + capture → камера, не галерея */
   const cameraPhotoRef = useRef<HTMLInputElement>(null);
@@ -480,6 +489,53 @@ const ChatInput: React.FC<ChatInputProps> = ({
     document.addEventListener('pointercancel', onDocUp, { passive: true });
   };
 
+  const handleTextareaPaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      if (!onComposerPasteImages || disabled) return;
+      const cd = e.clipboardData;
+      if (!cd) return;
+
+      let { imageFiles, plainText, hadUnsupportedOrNonImageFile } =
+        extractClipboardImagesFromDataTransfer(cd);
+
+      if (imageFiles.length === 0) {
+        const html = cd.getData('text/html');
+        if (html?.trim()) {
+          imageFiles = extractDataUrlImageFilesFromHtml(html);
+        }
+      }
+
+      if (imageFiles.length === 0) {
+        if (hadUnsupportedOrNonImageFile) {
+          toast.error(
+            'Этот тип вложения из буфера не поддерживается. Используйте PNG, JPEG, WebP или GIF.'
+          );
+        }
+        return;
+      }
+
+      e.preventDefault();
+
+      const text = plainText ?? '';
+      if (text.length > 0) {
+        const el = e.currentTarget;
+        const start = el.selectionStart ?? value.length;
+        const end = el.selectionEnd ?? value.length;
+        const newVal = value.slice(0, start) + text + value.slice(end);
+        onChange(newVal);
+        requestAnimationFrame(() => {
+          const pos = start + text.length;
+          el.setSelectionRange(pos, pos);
+          el.focus();
+        });
+      }
+
+      const normalized = imageFiles.map((f, i) => normalizeClipboardImageFileName(f, i));
+      onComposerPasteImages(normalized);
+    },
+    [onComposerPasteImages, disabled, value, onChange]
+  );
+
   const handleEmojiClick = useCallback(
     (data: EmojiClickData) => {
       const el = textareaRef.current;
@@ -628,6 +684,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   value={value}
                   onChange={(e) => onChange(e.target.value)}
                   onKeyDown={handleKeyDown}
+                  onPaste={handleTextareaPaste}
                   onFocus={() => setShowEmojiPicker(false)}
                   placeholder={hasAttachment ? 'Подпись к файлу (необязательно)' : 'Сообщение...'}
                   rows={TEXTAREA_MIN_ROWS}
@@ -754,7 +811,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                       type="button"
                       onClick={() => setShowAttachmentSheet(true)}
                       disabled={disabled || isRecordingVoice}
-                      title="Прикрепить"
+                      title="Прикрепить. Можно вставить изображение из буфера (Ctrl+V или Cmd+V)"
                       className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 md:h-auto md:w-auto md:p-2"
                       aria-label="Прикрепить"
                     >

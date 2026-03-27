@@ -80,7 +80,7 @@ import { getAuthToken } from '../lib/firebase/auth';
 import type { WhatsAppMessage } from '../types/whatsappDb';
 import type { MediaQuickReply } from '../types/mediaQuickReplies';
 import ConversationList from '../components/whatsapp/ConversationList';
-import ChatWindow from '../components/whatsapp/ChatWindow';
+import ChatWindow, { type PendingComposerAttachment } from '../components/whatsapp/ChatWindow';
 import { HeaderSearchBar } from '../components/HeaderSearchBar';
 import ClientInfoPanel from '../components/whatsapp/ClientInfoPanel';
 import { ResizeHandle } from '../components/whatsapp/ResizeHandle';
@@ -93,8 +93,13 @@ import { compressImage, validateVideoForChat, isLargeVideo } from '../utils/medi
 import { acquireVoiceStream, createVoiceRecorder } from '../utils/voiceRecording';
 import { formatVoiceListDuration, isVoiceNoteAttachment } from '../components/whatsapp/whatsappUtils';
 import { buildForwardPayloadMessages, getOrderedSelectedMessages } from '../utils/whatsappForwardSelection';
+import { normalizeClipboardImageFileName } from '../utils/clipboardComposerPaste';
 
 const NEW_MESSAGE_SOUND_PATH = '/sounds/new-message.mp3';
+
+function createPendingAttachmentId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
 
 /** Длительность локального аудио-блоба для превью в списке после отправки голосового. */
 function probeBlobAudioDurationSec(blob: Blob): Promise<number | undefined> {
@@ -424,7 +429,7 @@ const WhatsAppChat: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [indexBuilding, setIndexBuilding] = useState(false);
-  const [pendingAttachment, setPendingAttachment] = useState<{ file: File; preview?: string } | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<PendingComposerAttachment[]>([]);
   /** Файлы из быстрого ответа: отправляются по нажатию «Отправить» вместе с текстом из поля */
   const [pendingQuickReplyFiles, setPendingQuickReplyFiles] = useState<
     Array<{ id: string; url: string; name: string; type: string }> | null
@@ -2678,52 +2683,134 @@ const WhatsAppChat: React.FC = () => {
     executeCrmAiFlush
   ]);
 
-  const handleFileSelect = useCallback(async (file: File) => {
+  const buildPendingFromFile = useCallback(
+    async (
+      file: File,
+      id: string,
+      sourceLabel?: string
+    ): Promise<PendingComposerAttachment> => {
+      if (file.type.startsWith('video/')) {
+        return { id, file, preview: undefined, sourceLabel };
+      }
+      if (file.type.startsWith('image/')) {
+        try {
+          const compressed = await compressImage(file);
+          const preview = URL.createObjectURL(compressed);
+          return { id, file: compressed, preview, sourceLabel };
+        } catch (e) {
+          console.error(e);
+          const preview = URL.createObjectURL(file);
+          return { id, file, preview, sourceLabel };
+        }
+      }
+      return { id, file, preview: undefined, sourceLabel };
+    },
+    []
+  );
+
+  const handleFileSelect = useCallback(
+    async (file: File) => {
+      setSendError(null);
+      if (file.size > MAX_BYTES) {
+        toast.error(`Файл слишком большой. Максимум ${MAX_ATTACHMENT_MB} МБ.`);
+        return;
+      }
+      if (file.type.startsWith('video/')) {
+        setMediaPreparing(true);
+        try {
+          const v = await validateVideoForChat(file, MAX_BYTES);
+          if (!v.ok) {
+            setSendError(v.error);
+            return;
+          }
+          if (isLargeVideo(file)) {
+            setSendError(null);
+          }
+        } finally {
+          setMediaPreparing(false);
+        }
+        const id = createPendingAttachmentId();
+        setPendingAttachments((prev) => {
+          prev.forEach((p) => {
+            if (p.preview) URL.revokeObjectURL(p.preview);
+          });
+          return [{ id, file, preview: undefined }];
+        });
+        return;
+      }
+      if (file.type.startsWith('image/')) {
+        setMediaPreparing(true);
+        try {
+          const id = createPendingAttachmentId();
+          const item = await buildPendingFromFile(file, id);
+          setPendingAttachments((prev) => {
+            prev.forEach((p) => {
+              if (p.preview) URL.revokeObjectURL(p.preview);
+            });
+            return [item];
+          });
+        } finally {
+          setMediaPreparing(false);
+        }
+        return;
+      }
+      const id = createPendingAttachmentId();
+      setPendingAttachments((prev) => {
+        prev.forEach((p) => {
+          if (p.preview) URL.revokeObjectURL(p.preview);
+        });
+        return [{ id, file, preview: undefined }];
+      });
+    },
+    [buildPendingFromFile]
+  );
+
+  const handleComposerPasteImages = useCallback(
+    async (rawFiles: File[]) => {
+      setSendError(null);
+      const normalized = rawFiles.map((f, i) => normalizeClipboardImageFileName(f, i));
+      const accepted: PendingComposerAttachment[] = [];
+      setMediaPreparing(true);
+      try {
+        for (const file of normalized) {
+          if (file.size > MAX_BYTES) {
+            toast.error(`Файл слишком большой (макс. ${MAX_ATTACHMENT_MB} МБ): ${file.name}`);
+            continue;
+          }
+          if (!file.type.startsWith('image/')) {
+            toast.error(`Формат не поддерживается для вставки: ${file.name || file.type}`);
+            continue;
+          }
+          const id = createPendingAttachmentId();
+          accepted.push(await buildPendingFromFile(file, id, 'Изображение из буфера'));
+        }
+      } finally {
+        setMediaPreparing(false);
+      }
+      if (accepted.length > 0) {
+        setPendingAttachments((prev) => [...prev, ...accepted]);
+      }
+    },
+    [buildPendingFromFile]
+  );
+
+  const handleRemovePendingAttachment = useCallback((id: string) => {
     setSendError(null);
-    if (file.size > MAX_BYTES) {
-      setSendError(`Файл слишком большой. Максимум ${MAX_ATTACHMENT_MB} МБ.`);
-      return;
-    }
-    if (file.type.startsWith('video/')) {
-      setMediaPreparing(true);
-      try {
-        const v = await validateVideoForChat(file, MAX_BYTES);
-        if (!v.ok) {
-          setSendError(v.error);
-          return;
-        }
-        if (isLargeVideo(file)) {
-          setSendError(null);
-        }
-      } finally {
-        setMediaPreparing(false);
-      }
-      setPendingAttachment({ file, preview: undefined });
-      return;
-    }
-    if (file.type.startsWith('image/')) {
-      setMediaPreparing(true);
-      try {
-        const compressed = await compressImage(file);
-        const preview = URL.createObjectURL(compressed);
-        setPendingAttachment({ file: compressed, preview });
-      } catch (e) {
-        console.error(e);
-        const preview = URL.createObjectURL(file);
-        setPendingAttachment({ file, preview });
-      } finally {
-        setMediaPreparing(false);
-      }
-      return;
-    }
-    setPendingAttachment({ file, preview: undefined });
+    setPendingAttachments((prev) => {
+      const next = prev.filter((p) => p.id !== id);
+      const removed = prev.find((p) => p.id === id);
+      if (removed?.preview) URL.revokeObjectURL(removed.preview);
+      return next;
+    });
   }, []);
 
-  const handleClearAttachment = useCallback(() => {
+  const handleClearPendingAttachments = useCallback(() => {
     setSendError(null);
-    setPendingAttachment((prev) => {
-      if (prev?.preview) URL.revokeObjectURL(prev.preview);
-      return null;
+    setPendingAttachments((prev) => {
+      prev.forEach((p) => {
+        if (p.preview) URL.revokeObjectURL(p.preview);
+      });
+      return [];
     });
   }, []);
 
@@ -3027,12 +3114,14 @@ const WhatsAppChat: React.FC = () => {
     sendVoiceBlobRef.current = sendVoiceBlob;
   }, [sendVoiceBlob]);
 
-  useEffect(() => () => {
-    if (pendingAttachment?.preview) URL.revokeObjectURL(pendingAttachment.preview);
-  }, [pendingAttachment]);
-
   useEffect(() => {
     setPendingQuickReplyFiles(null);
+    setPendingAttachments((prev) => {
+      prev.forEach((p) => {
+        if (p.preview) URL.revokeObjectURL(p.preview);
+      });
+      return [];
+    });
   }, [selectedId]);
 
   useEffect(() => {
@@ -3048,85 +3137,105 @@ const WhatsAppChat: React.FC = () => {
     if (!phone || phone === '…' || sending || uploadState !== 'idle') return;
 
     const caption = inputText.trim();
-    const hasAttachment = !!pendingAttachment;
+    const attachmentQueue = pendingAttachments;
 
-    if (hasAttachment && companyId && selectedId) {
-      let uploadFile = pendingAttachment!.file;
-      if (uploadFile.type.startsWith('image/')) {
-        setMediaPreparing(true);
-        try {
-          uploadFile = await compressImage(uploadFile);
-        } catch {
-          /* */
-        } finally {
-          setMediaPreparing(false);
-        }
-      }
+    if (attachmentQueue.length > 0 && companyId && selectedId) {
+      const replyId = replyToMessage?.id ?? undefined;
       setUploadState('uploading');
       try {
-        const path = `${companyId}/${WHATSAPP_MEDIA_PREFIX}/${selectedId}/${Date.now()}_${sanitizeFileName(uploadFile.name)}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from(CLIENTS_BUCKET)
-          .upload(path, uploadFile, { upsert: false });
-
-        if (uploadError) {
-          setSendError('Ошибка загрузки файла. Попробуйте ещё раз.');
-          setUploadState('idle');
-          return;
-        }
-        const { data: urlData } = supabase.storage.from(CLIENTS_BUCKET).getPublicUrl(uploadData.path);
-        const contentUri = urlData.publicUrl;
-
-        setUploadState('sending');
-        const res = await fetch(SEND_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(
-            wazzupSendBody(phone, {
-              contentUri,
-              attachmentType: getAttachmentType(uploadFile),
-              fileName: uploadFile.name,
-              text: caption ? formatMessageForWhatsApp(caption) : undefined,
-              repliedToMessageId: replyToMessage?.id ?? undefined,
-              companyId: companyId ?? undefined
-            })
-          )
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          lastAiDraftBaselineRef.current = null;
-          setInputText('');
-          setSendError(null);
-          setReplyToMessage(null);
-          setPendingAttachment((p) => {
-            if (p?.preview) URL.revokeObjectURL(p.preview);
-            return null;
-          });
-          if (selectedId) moveConversationToTopByActivity(selectedId);
-        } else {
-          const d = data as { error?: string; status?: number; detail?: any };
-          let message = 'Сообщение не отправлено: проверьте номер, текст или вложение.';
-          if (d?.error === 'Wazzup API error') {
-            const detail = d.detail as any;
-            let providerMsg = '';
-            if (detail && typeof detail === 'object') {
-              const firstData =
-                Array.isArray((detail as any).data) && (detail as any).data.length > 0
-                  ? (detail as any).data[0]
-                  : null;
-              const code = firstData?.code || (detail as any).error;
-              const desc = firstData?.description || (detail as any).description;
-              if (code && desc) providerMsg = `${code}: ${desc}`;
-              else providerMsg = desc || code || (detail as any).message || (detail as any).raw || '';
+        for (let i = 0; i < attachmentQueue.length; i++) {
+          const pendingItem = attachmentQueue[i];
+          let uploadFile = pendingItem.file;
+          if (uploadFile.type.startsWith('image/')) {
+            setMediaPreparing(true);
+            try {
+              uploadFile = await compressImage(uploadFile);
+            } catch {
+              /* */
+            } finally {
+              setMediaPreparing(false);
             }
-            if (providerMsg) {
-              message = `Wazzup: ${providerMsg}`;
-            }
-          } else if (d?.error) {
-            message = d.error;
           }
-          setSendError(message);
+
+          const path = `${companyId}/${WHATSAPP_MEDIA_PREFIX}/${selectedId}/${Date.now()}_${i}_${sanitizeFileName(uploadFile.name)}`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from(CLIENTS_BUCKET)
+            .upload(path, uploadFile, { upsert: false });
+
+          if (uploadError) {
+            setSendError('Ошибка загрузки файла. Попробуйте ещё раз.');
+            for (let j = 0; j < i; j++) {
+              const p = attachmentQueue[j];
+              if (p.preview) URL.revokeObjectURL(p.preview);
+            }
+            setPendingAttachments(attachmentQueue.slice(i));
+            return;
+          }
+          const { data: urlData } = supabase.storage.from(CLIENTS_BUCKET).getPublicUrl(uploadData.path);
+          const contentUri = urlData.publicUrl;
+
+          setUploadState('sending');
+          const res = await fetch(SEND_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(
+              wazzupSendBody(phone, {
+                contentUri,
+                attachmentType: getAttachmentType(uploadFile),
+                fileName: uploadFile.name,
+                text: i === 0 && caption ? formatMessageForWhatsApp(caption) : undefined,
+                repliedToMessageId: i === 0 ? replyId : undefined,
+                companyId: companyId ?? undefined
+              })
+            )
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const d = data as { error?: string; status?: number; detail?: any };
+            let message = 'Сообщение не отправлено: проверьте номер, текст или вложение.';
+            if (d?.error === 'Wazzup API error') {
+              const detail = d.detail as any;
+              let providerMsg = '';
+              if (detail && typeof detail === 'object') {
+                const firstData =
+                  Array.isArray((detail as any).data) && (detail as any).data.length > 0
+                    ? (detail as any).data[0]
+                    : null;
+                const code = firstData?.code || (detail as any).error;
+                const desc = firstData?.description || (detail as any).description;
+                if (code && desc) providerMsg = `${code}: ${desc}`;
+                else providerMsg = desc || code || (detail as any).message || (detail as any).raw || '';
+              }
+              if (providerMsg) {
+                message = `Wazzup: ${providerMsg}`;
+              }
+            } else if (d?.error) {
+              message = d.error;
+            }
+            setSendError(message);
+            for (let j = 0; j < i; j++) {
+              const p = attachmentQueue[j];
+              if (p.preview) URL.revokeObjectURL(p.preview);
+            }
+            setPendingAttachments(attachmentQueue.slice(i));
+            return;
+          }
+          if (selectedId) moveConversationToTopByActivity(selectedId);
+          if (i < attachmentQueue.length - 1) {
+            await new Promise((r) => setTimeout(r, 300));
+          }
         }
+
+        lastAiDraftBaselineRef.current = null;
+        setInputText('');
+        setSendError(null);
+        setReplyToMessage(null);
+        setPendingAttachments((prev) => {
+          prev.forEach((p) => {
+            if (p.preview) URL.revokeObjectURL(p.preview);
+          });
+          return [];
+        });
       } finally {
         setUploadState('idle');
       }
@@ -4223,9 +4332,11 @@ const WhatsAppChat: React.FC = () => {
               onBack={isMobile ? () => setSelectedId(null) : undefined}
               isMobile={isMobile}
               mobileCrmAiComposer={mobileCrmAiComposer}
-              pendingAttachment={pendingAttachment}
+              pendingAttachments={pendingAttachments}
               onFileSelect={handleFileSelect}
-              onClearAttachment={handleClearAttachment}
+              onRemovePendingAttachment={handleRemovePendingAttachment}
+              onClearPendingAttachments={handleClearPendingAttachments}
+              onComposerPasteImages={handleComposerPasteImages}
               uploadState={uploadState}
               sendError={sendError}
               mediaPreparing={mediaPreparing}

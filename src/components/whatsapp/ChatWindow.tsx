@@ -21,9 +21,12 @@ import { capMessagesForTransport } from '../../utils/buildAiReplyContext';
 import { detectRuKzLang, getTargetLangForTranslate, translateRuKz } from '../../utils/translateRuKz';
 import toast from 'react-hot-toast';
 
-interface PendingAttachment {
+export interface PendingComposerAttachment {
+  id: string;
   file: File;
   preview?: string;
+  /** Подпись в превью (например «Изображение из буфера») */
+  sourceLabel?: string;
 }
 
 interface ChatWindowProps {
@@ -38,10 +41,11 @@ interface ChatWindowProps {
   onBack?: () => void;
   /** На мобильных — фиксированный инпут и скролл по calc(100vh - header - input) */
   isMobile?: boolean;
-  /** Выбранный файл перед отправкой */
-  pendingAttachment?: PendingAttachment | null;
+  /** Вложения перед отправкой (файл с диска, буфер и т.д.) */
+  pendingAttachments?: PendingComposerAttachment[];
   onFileSelect?: (file: File) => void;
-  onClearAttachment?: () => void;
+  onRemovePendingAttachment?: (id: string) => void;
+  onClearPendingAttachments?: () => void;
   /** 'uploading' | 'sending' — блокировать кнопку отправки */
   uploadState?: 'idle' | 'uploading' | 'sending';
   sendError?: string | null;
@@ -127,6 +131,8 @@ interface ChatWindowProps {
   showAiDebug?: boolean;
   /** При перетаскивании файлов в чат (только desktop) — отправить файлы */
   onFilesDrop?: (files: File[]) => void;
+  /** Вставка изображений из буфера в поле ввода (paste) */
+  onComposerPasteImages?: (files: File[]) => void;
   /** Дизейблить кнопку «Расшифровать всё», когда идёт подготовка к анализу (prepare for analysis) */
   disableTranscribeAllButton?: boolean;
   /** Сообщить родителю, что массовая расшифровка запущена/завершена (чтобы дизейблить «Проанализировать чат») */
@@ -945,9 +951,10 @@ const ChatWindow: React.FC<ChatWindowProps> = (props) => {
     sending,
     onBack,
     isMobile = false,
-    pendingAttachment = null,
+    pendingAttachments = [],
     onFileSelect,
-    onClearAttachment,
+    onRemovePendingAttachment,
+    onClearPendingAttachments,
     uploadState = 'idle',
     sendError = null,
     mediaPreparing = false,
@@ -988,6 +995,7 @@ const ChatWindow: React.FC<ChatWindowProps> = (props) => {
     onSendProposalImage,
     showAiDebug = false,
     onFilesDrop,
+    onComposerPasteImages,
     disableTranscribeAllButton = false,
     onBatchTranscribeRunningChange,
     mobileCrmAiComposer = null,
@@ -1795,33 +1803,63 @@ const ChatWindow: React.FC<ChatWindowProps> = (props) => {
           onSend={onStopVoice}
         />
       )}
-      {pendingAttachment && (
-        <div className="flex-none flex items-center gap-2 px-2 py-1.5 bg-white border-t border-gray-200 rounded-t-lg">
-          {pendingAttachment.preview ? (
-            <img
-              src={pendingAttachment.preview}
-              alt=""
-              className="w-10 h-10 object-cover rounded border border-gray-200"
-            />
-          ) : (
-            <FileText className="w-8 h-8 text-gray-500 flex-shrink-0" />
-          )}
-          <span className="flex-1 truncate text-sm text-gray-700" title={pendingAttachment.file.name}>
-            {pendingAttachment.file.name}
-          </span>
-          <span className="text-xs text-gray-500 flex-shrink-0">
-            {(pendingAttachment.file.size / 1024).toFixed(1)} KB
-          </span>
-          {onClearAttachment && (
-            <button
-              type="button"
-              onClick={onClearAttachment}
-              className="p-1 rounded hover:bg-gray-200 text-gray-600"
-              aria-label="Убрать файл"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+      {pendingAttachments.length > 0 && (
+        <div className="flex-none border-t border-gray-200 bg-white px-2 py-1.5 rounded-t-lg">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="text-[11px] text-gray-500">Вложения ({pendingAttachments.length})</span>
+            {pendingAttachments.length > 1 && onClearPendingAttachments && (
+              <button
+                type="button"
+                onClick={onClearPendingAttachments}
+                className="text-[11px] text-red-600 hover:underline"
+              >
+                Убрать все
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {pendingAttachments.map((att) => {
+              const label =
+                att.sourceLabel ||
+                att.file.name ||
+                (att.file.type.startsWith('image/') ? 'Изображение' : 'Файл');
+              const isImg = att.file.type.startsWith('image/');
+              return (
+                <div
+                  key={att.id}
+                  className="flex max-w-[min(100%,220px)] min-w-0 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 py-1 pl-1 pr-1"
+                >
+                  {isImg && att.preview ? (
+                    <img
+                      src={att.preview}
+                      alt=""
+                      className="h-11 w-11 shrink-0 rounded object-cover border border-gray-200"
+                    />
+                  ) : (
+                    <FileText className="h-9 w-9 shrink-0 text-gray-500" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-medium text-gray-800" title={label}>
+                      {label}
+                    </p>
+                    <p className="text-[10px] text-gray-500">
+                      {(att.file.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                  {onRemovePendingAttachment && (
+                    <button
+                      type="button"
+                      onClick={() => onRemovePendingAttachment(att.id)}
+                      className="shrink-0 rounded p-1 text-gray-600 hover:bg-gray-200"
+                      aria-label={`Убрать ${label}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
       <div
@@ -1840,7 +1878,7 @@ const ChatWindow: React.FC<ChatWindowProps> = (props) => {
           disabled={incognitoMode || !selectedItem?.phone || selectedItem.phone === '…'}
           sending={sending || uploadState !== 'idle'}
           fixedBottom={false}
-          hasAttachment={!!pendingAttachment}
+          hasAttachment={pendingAttachments.length > 0}
           onFileSelect={onFileSelect}
           onStartVoice={onStartVoice}
           onStopVoice={onStopVoice}
@@ -1863,6 +1901,7 @@ const ChatWindow: React.FC<ChatWindowProps> = (props) => {
           translateInputLoading={translateInputLoading}
           isMobile={isMobile}
           mobileCrmAi={isMobile ? mobileCrmAiComposer : null}
+          onComposerPasteImages={!incognitoMode ? onComposerPasteImages : undefined}
         />
         {onSendProposalImage && (
           <WhatsAppCalculatorDrawer
