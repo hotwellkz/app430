@@ -95,6 +95,7 @@ describe('ImportReviewPanel integration', () => {
     fireEvent.click(firstJobRow(view));
     await waitFor(() => expect(projectsApi.getImportJob).toHaveBeenCalledWith('p1', 'ij-1'));
     await waitFor(() => expect(view.getByText(IMPORT_REVIEW_UI.jobSummaryTitle)).toBeTruthy());
+    await waitFor(() => expect(view.queryAllByTestId('ir-import-summary').length).toBeGreaterThanOrEqual(1));
   });
 
   it('save review draft calls API', async () => {
@@ -725,5 +726,41 @@ describe('ImportReviewPanel integration', () => {
         appliedBy: 'user-1',
       })
     );
+  });
+
+  it('сводка показывает сохранённые решения с wallIds внутренних несущих', async () => {
+    const job = {
+      ...baseJob,
+      review: {
+        ...baseJob.review,
+        decisions: {
+          floorHeightsMmByFloorId: { f1: 2800 },
+          internalBearingWalls: { confirmed: true, wallIds: ['w-int-1', 'w-other'] },
+          scale: { mode: 'confirmed' as const, mmPerPixel: null },
+        },
+      },
+    };
+    vi.mocked(projectsApi.listImportJobs).mockResolvedValue({ items: [job] });
+    vi.mocked(projectsApi.getImportJob).mockResolvedValue({ job });
+
+    const { container } = render(wrapper(<ImportReviewPanel projectId="p1" versionMarkers={null} />));
+    const view = within(container);
+    await waitFor(() => expect(view.queryAllByTestId('ir-job-row-ij-1').length).toBeGreaterThan(0));
+    fireEvent.click(firstJobRow(view));
+    await waitFor(() => expect(view.queryAllByTestId('ir-summary-saved-lines').length).toBeGreaterThan(0));
+    expect(view.getAllByTestId('ir-summary-saved-lines')[0]?.textContent).toMatch(/w-int-1/);
+  });
+
+  it('сводка не падает при отсутствии review в job', async () => {
+    const job = { ...baseJob, review: undefined };
+    vi.mocked(projectsApi.listImportJobs).mockResolvedValue({ items: [job] });
+    vi.mocked(projectsApi.getImportJob).mockResolvedValue({ job });
+
+    const { container } = render(wrapper(<ImportReviewPanel projectId="p1" versionMarkers={null} />));
+    const view = within(container);
+    await waitFor(() => expect(view.queryAllByTestId('ir-job-row-ij-1').length).toBeGreaterThan(0));
+    fireEvent.click(firstJobRow(view));
+    await waitFor(() => expect(view.queryAllByTestId('ir-import-summary').length).toBeGreaterThanOrEqual(1));
+    expect(view.getAllByTestId('ir-summary-saved-hint')[0]?.textContent).toBeTruthy();
   });
 });

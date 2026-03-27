@@ -1,8 +1,33 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
+import type { ImportJob } from '@2wix/shared-types';
 import { IMPORT_REVIEW_UI } from '../constants/labels';
 import type { ImportReviewJobViewModel } from '../viewModel/importReviewViewModel.types';
+import { mapImportSummaryViewModel } from '../viewModel/importSummaryMapper';
 import { ImportReviewPanelView } from './ImportReviewPanelView';
+
+function minimalJobForSummary(): ImportJob {
+  return {
+    id: 'job-1',
+    projectId: 'p1',
+    status: 'needs_review',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    createdBy: 'u1',
+    importSchemaVersion: 1,
+    sourceImages: [{ id: 'x', kind: 'plan', fileName: 'a.png' }],
+    snapshot: null,
+    review: {
+      status: 'draft',
+      applyStatus: 'not_ready',
+      decisions: {},
+      missingRequiredDecisions: [],
+      remainingBlockingIssueIds: [],
+      isReadyToApply: false,
+    },
+    errorMessage: null,
+  };
+}
 
 function detailVm(overrides?: Partial<ImportReviewJobViewModel>): ImportReviewJobViewModel {
   return {
@@ -89,6 +114,7 @@ const defaultProps = {
   reviewApplied: false,
   panelMessage: null,
   onDismissMessage: vi.fn(),
+  summaryVm: mapImportSummaryViewModel(minimalJobForSummary()),
 };
 
 describe('ImportReviewPanelView', () => {
@@ -118,6 +144,7 @@ describe('ImportReviewPanelView', () => {
         listItems={[]}
         selectedJobId={null}
         detailVm={null}
+        summaryVm={null}
       />
     );
     expect(screen.getByText(IMPORT_REVIEW_UI.noJobs)).toBeTruthy();
@@ -132,11 +159,18 @@ describe('ImportReviewPanelView', () => {
         listItems={[]}
         selectedJobId={null}
         detailVm={null}
+        summaryVm={null}
       />
     );
     expect(screen.getByText('boom')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: IMPORT_REVIEW_UI.retry }));
     expect(defaultProps.onRetryJobs).toHaveBeenCalled();
+  });
+
+  it('renders import summary section', () => {
+    render(<ImportReviewPanelView {...defaultProps} />);
+    expect(screen.getAllByTestId('ir-import-summary').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Сводка импорта').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders missing decision field and disables apply', () => {

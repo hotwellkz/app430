@@ -22,6 +22,8 @@ import {
   mapImportJobToDetailViewModel,
   mapImportJobToListItemViewModel,
 } from '@/import-review/viewModel/importReviewMappers';
+import { mapImportSummaryViewModel } from '@/import-review/viewModel/importSummaryMapper';
+import type { ImportSummaryViewModel } from '@/import-review/viewModel/importSummaryViewModel.types';
 import type { ImportReviewPanelMessage } from '@/import-review/viewModel/importReviewViewModel.types';
 import type { RequiredDecisionFieldViewModel } from '@/import-review/viewModel/importReviewViewModel.types';
 import { formatImportReviewError } from '@/import-review/utils/formatImportReviewError';
@@ -254,6 +256,11 @@ export function useImportReviewPanel(
     return mapImportJobToDetailViewModel(job, draftDecisions);
   }, [job, draftDecisions]);
 
+  const summaryVm = useMemo((): ImportSummaryViewModel | null => {
+    if (!job) return null;
+    return mapImportSummaryViewModel(job);
+  }, [job]);
+
   const onSelectJob = useCallback((id: string | null) => {
     setSelectedJobId(id);
     setPanelMessage(null);
@@ -323,6 +330,7 @@ export function useImportReviewPanel(
     onSelectJob,
     job,
     detailVm,
+    summaryVm,
     detailLoading: jobDetailQuery.isLoading,
     detailError: jobDetailQuery.isError,
     detailErrorMessage: jobDetailQuery.error instanceof Error ? jobDetailQuery.error.message : null,

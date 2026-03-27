@@ -28,6 +28,7 @@ export function ImportReviewPanel({
       selectedJobId={p.selectedJobId}
       onSelectJob={p.onSelectJob}
       detailVm={p.detailVm}
+      summaryVm={p.summaryVm}
       detailLoading={p.detailLoading}
       detailError={p.detailError}
       detailErrorMessage={p.detailErrorMessage}

@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { ImportReviewJobListItemViewModel, ImportReviewJobViewModel } from '../viewModel/importReviewViewModel.types';
+import type { ImportSummaryViewModel } from '../viewModel/importSummaryViewModel.types';
+import { ImportReviewSummarySection } from './ImportReviewSummarySection';
 import type { ImportReviewPanelMessage } from '../viewModel/importReviewViewModel.types';
 import type { RequiredDecisionFieldViewModel } from '../viewModel/importReviewViewModel.types';
 import type { InternalBearingWallsInteractionPayload } from '../viewModel/decisionsDraft';
@@ -41,6 +43,7 @@ export interface ImportReviewPanelViewProps {
   selectedJobId: string | null;
   onSelectJob: (id: string | null) => void;
   detailVm: ImportReviewJobViewModel | null;
+  summaryVm: ImportSummaryViewModel | null;
   detailLoading: boolean;
   detailError: boolean;
   detailErrorMessage: string | null;
@@ -125,6 +128,7 @@ export function ImportReviewPanelView(props: ImportReviewPanelViewProps) {
     selectedJobId,
     onSelectJob,
     detailVm,
+    summaryVm,
     detailLoading,
     detailError,
     detailErrorMessage,
@@ -497,6 +501,8 @@ export function ImportReviewPanelView(props: ImportReviewPanelViewProps) {
               </ul>
             )}
           </div>
+
+          {summaryVm ? <ImportReviewSummarySection vm={summaryVm} /> : null}
 
           <div style={{ ...cardStyle, padding: 8 }}>
             <p className="twix-panelTitle" style={{ margin: '0 0 8px', fontSize: 12 }}>
