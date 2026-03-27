@@ -156,16 +156,74 @@ export async function getCurrentVersion(
   actorId: string
 ): Promise<ProjectVersion | null> {
   const project = await getProject(projectId, actorId);
-  if (!project.currentVersionId) return null;
+  if (!project.currentVersionId) {
+    return bootstrapCurrentVersion(project, actorId);
+  }
   const db = getDb();
   const snap = await db
     .collection(COLLECTIONS.PROJECT_VERSIONS)
     .doc(project.currentVersionId)
     .get();
-  if (!snap.exists) return null;
+  if (!snap.exists) {
+    return bootstrapCurrentVersion(project, actorId);
+  }
   const raw = snap.data() as { buildingModel?: unknown };
   const model = normalizeBuildingModel(raw.buildingModel);
   return mapVersionDoc(snap.id, snap.data() ?? {}, model);
+}
+
+async function bootstrapCurrentVersion(project: Project, actorId: string): Promise<ProjectVersion> {
+  const db = getDb();
+  const pRef = db.collection(COLLECTIONS.PROJECTS).doc(project.id);
+  const now = FieldValue.serverTimestamp();
+  const versions = await listVersions(project.id, actorId);
+  const existing = versions[0] ?? null;
+
+  if (existing) {
+    await pRef.update({
+      currentVersionId: existing.id,
+      currentVersionNumber: existing.versionNumber,
+      versionCounter: Math.max(project.currentVersionNumber ?? 0, existing.versionNumber),
+      schemaVersion: existing.schemaVersion,
+      updatedAt: now,
+      updatedBy: actorId,
+    });
+    return existing;
+  }
+
+  const versionRef = db.collection(COLLECTIONS.PROJECT_VERSIONS).doc();
+  const versionNumber = Math.max(1, project.currentVersionNumber ?? 0, 1);
+  const model = syncBuildingModelMeta(createEmptyBuildingModel(), {
+    projectId: project.id,
+    versionId: versionRef.id,
+    versionNumber,
+    projectTitle: project.title,
+  });
+
+  const batch = db.batch();
+  batch.set(versionRef, {
+    projectId: project.id,
+    versionNumber,
+    schemaVersion: BUILDING_MODEL_SCHEMA_VERSION,
+    buildingModel: model,
+    createdAt: now,
+    createdBy: actorId,
+    basedOnVersionId: null,
+    isSnapshot: false,
+  });
+  batch.update(pRef, {
+    currentVersionId: versionRef.id,
+    currentVersionNumber: versionNumber,
+    versionCounter: Math.max(project.currentVersionNumber ?? 0, versionNumber),
+    schemaVersion: BUILDING_MODEL_SCHEMA_VERSION,
+    updatedAt: now,
+    updatedBy: actorId,
+  });
+  await batch.commit();
+
+  const createdSnap = await versionRef.get();
+  const raw = createdSnap.data() as { buildingModel?: unknown };
+  return mapVersionDoc(createdSnap.id, createdSnap.data() ?? {}, normalizeBuildingModel(raw?.buildingModel));
 }
 
 export async function listVersions(
