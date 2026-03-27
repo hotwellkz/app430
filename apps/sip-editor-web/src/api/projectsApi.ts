@@ -36,9 +36,11 @@ function extractVersionPayload(v: unknown): ProjectVersion | null {
   if (!root) return null;
   if (root.version) return root.version as ProjectVersion;
   if (root.currentVersion) return root.currentVersion as ProjectVersion;
+  if (root.item) return root.item as ProjectVersion;
   const data = asRecord(root.data);
   if (data?.version) return data.version as ProjectVersion;
   if (data?.currentVersion) return data.currentVersion as ProjectVersion;
+  if (data?.item) return data.item as ProjectVersion;
   return null;
 }
 
@@ -46,8 +48,10 @@ function extractVersionsPayload(v: unknown): ProjectVersion[] {
   const root = asRecord(v);
   if (!root) return [];
   if (Array.isArray(root.versions)) return root.versions as ProjectVersion[];
+  if (Array.isArray(root.items)) return root.items as ProjectVersion[];
   const data = asRecord(root.data);
   if (Array.isArray(data?.versions)) return data.versions as ProjectVersion[];
+  if (Array.isArray(data?.items)) return data.items as ProjectVersion[];
   return [];
 }
 

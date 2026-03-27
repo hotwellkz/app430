@@ -24,12 +24,25 @@ describe('projectsApi.getCurrentVersion', () => {
     expect((res.version as { id: string }).id).toBe('v2');
   });
 
+  it('accepts legacy { item } payload', async () => {
+    fetchJsonMock.mockResolvedValueOnce({ item: { id: 'v-item' } });
+    const res = await getCurrentVersion('p1');
+    expect((res.version as { id: string }).id).toBe('v-item');
+  });
+
   it('falls back to /versions when current-version payload is malformed', async () => {
     fetchJsonMock.mockResolvedValueOnce({});
     fetchJsonMock.mockResolvedValueOnce({ versions: [{ id: 'v3' }] });
     const res = await getCurrentVersion('p1');
     expect((res.version as { id: string }).id).toBe('v3');
     expect(fetchJsonMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses fallback when /versions returns { items } shape', async () => {
+    fetchJsonMock.mockResolvedValueOnce({});
+    fetchJsonMock.mockResolvedValueOnce({ items: [{ id: 'v-items' }] });
+    const res = await getCurrentVersion('p1');
+    expect((res.version as { id: string }).id).toBe('v-items');
   });
 
   it('does not crash when /versions response shape is malformed', async () => {
