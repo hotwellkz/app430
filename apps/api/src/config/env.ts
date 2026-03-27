@@ -1,6 +1,8 @@
 interface ApiEnv {
   port: number;
   corsOrigins: string[];
+  /** Если задан (напр. papaya-seahorse-f4694d), разрешить preview/branch deploy на Netlify для этого сайта. */
+  corsNetlifySiteSlug: string | null;
   nodeEnv: 'development' | 'test' | 'production';
   hasFirebaseJson: boolean;
   firebaseProjectId: string | null;
@@ -64,11 +66,13 @@ function assertProdCorsSafety(nodeEnv: ApiEnv['nodeEnv'], corsOrigins: string[])
 export function loadApiEnv(src: NodeJS.ProcessEnv = process.env): ApiEnv {
   const port = parsePort(src.PORT);
   const corsOrigins = parseCorsOrigins(src.CORS_ORIGINS);
+  const corsNetlifySiteSlug = src.CORS_NETLIFY_SITE_SLUG?.trim() || null;
   const nodeEnv = parseNodeEnv(src.NODE_ENV);
   assertProdCorsSafety(nodeEnv, corsOrigins);
   return {
     port,
     corsOrigins,
+    corsNetlifySiteSlug,
     nodeEnv,
     hasFirebaseJson: Boolean(src.FIREBASE_SERVICE_ACCOUNT_JSON?.trim()),
     firebaseProjectId: src.FIREBASE_PROJECT_ID?.trim() || null,

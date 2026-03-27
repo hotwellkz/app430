@@ -8,13 +8,21 @@ export function ImportReviewPanel({
   projectId,
   versionMarkers,
   onEditorRefreshAfterApply,
+  pendingSelectJobId,
+  onPendingSelectConsumed,
 }: {
   projectId: string;
   versionMarkers: VersionConcurrencyMarkers | null;
   /** После успешного apply-candidate: обновить current version и документ редактора без F5 */
   onEditorRefreshAfterApply?: () => Promise<void>;
+  pendingSelectJobId?: string | null;
+  onPendingSelectConsumed?: () => void;
 }) {
-  const p = useImportReviewPanel(projectId, versionMarkers, { onEditorRefreshAfterApply });
+  const p = useImportReviewPanel(projectId, versionMarkers, {
+    onEditorRefreshAfterApply,
+    pendingSelectJobId: pendingSelectJobId ?? null,
+    onPendingSelectConsumed,
+  });
 
   const reviewApplied = p.job?.review?.status === 'applied';
 

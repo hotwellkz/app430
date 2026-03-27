@@ -9,6 +9,7 @@ set -euo pipefail
 #   CORS_ORIGINS               (comma separated)
 #
 # Optional vars:
+#   CORS_NETLIFY_SITE_SLUG   (напр. papaya-seahorse-f4694d) — preview/branch *.netlify.app для этого сайта
 #   FIREBASE_PROJECT_ID
 #   FIREBASE_SERVICE_ACCOUNT_JSON_SECRET  (Secret Manager secret name)
 #   CLOUD_RUN_TIMEOUT          (default: 30s)
@@ -55,12 +56,16 @@ DEPLOY_ARGS=(
   --concurrency "${CLOUD_RUN_CONCURRENCY}"
   --min-instances "${CLOUD_RUN_MIN_INSTANCES}"
   --max-instances "${CLOUD_RUN_MAX_INSTANCES}"
-  --set-env-vars "^@^NODE_ENV=production@CORS_ORIGINS=${CORS_ORIGINS}"
 )
 
-if [[ -n "${FIREBASE_PROJECT_ID:-}" ]]; then
-  DEPLOY_ARGS+=(--set-env-vars "FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}")
+RUN_ENV_VARS="NODE_ENV=production@CORS_ORIGINS=${CORS_ORIGINS}"
+if [[ -n "${CORS_NETLIFY_SITE_SLUG:-}" ]]; then
+  RUN_ENV_VARS="${RUN_ENV_VARS}@CORS_NETLIFY_SITE_SLUG=${CORS_NETLIFY_SITE_SLUG}"
 fi
+if [[ -n "${FIREBASE_PROJECT_ID:-}" ]]; then
+  RUN_ENV_VARS="${RUN_ENV_VARS}@FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}"
+fi
+DEPLOY_ARGS+=(--set-env-vars "^@^${RUN_ENV_VARS}")
 
 if [[ -n "${FIREBASE_SERVICE_ACCOUNT_JSON_SECRET:-}" ]]; then
   DEPLOY_ARGS+=(--set-secrets "FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON_SECRET}:latest")

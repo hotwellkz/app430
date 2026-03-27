@@ -98,6 +98,38 @@ describe('ImportReviewPanel integration', () => {
     await waitFor(() => expect(view.queryAllByTestId('ir-import-summary').length).toBeGreaterThanOrEqual(1));
   });
 
+  it('pendingSelectJobId selects job, prefetches detail, and consumes callback', async () => {
+    const jobNew = { ...baseJob, id: 'ij-new' };
+    vi.mocked(projectsApi.listImportJobs).mockResolvedValue({ items: [baseJob, jobNew] });
+    vi.mocked(projectsApi.getImportJob).mockImplementation((pid, jid) =>
+      Promise.resolve({ job: jid === 'ij-new' ? jobNew : baseJob })
+    );
+    const onConsumed = vi.fn();
+    const { rerender } = render(
+      wrapper(
+        <ImportReviewPanel
+          projectId="p1"
+          versionMarkers={null}
+          pendingSelectJobId={null}
+          onPendingSelectConsumed={onConsumed}
+        />
+      )
+    );
+    await waitFor(() => expect(projectsApi.listImportJobs).toHaveBeenCalled());
+    rerender(
+      wrapper(
+        <ImportReviewPanel
+          projectId="p1"
+          versionMarkers={null}
+          pendingSelectJobId="ij-new"
+          onPendingSelectConsumed={onConsumed}
+        />
+      )
+    );
+    await waitFor(() => expect(onConsumed).toHaveBeenCalled());
+    await waitFor(() => expect(projectsApi.getImportJob).toHaveBeenCalledWith('p1', 'ij-new'));
+  });
+
   it('save review draft calls API', async () => {
     vi.mocked(projectsApi.listImportJobs).mockResolvedValue({ items: [baseJob] });
     vi.mocked(projectsApi.getImportJob).mockResolvedValue({ job: baseJob });

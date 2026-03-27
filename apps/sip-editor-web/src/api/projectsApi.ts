@@ -5,6 +5,8 @@ import type {
   ApplyImportReviewResponse,
   CreateExportRequest,
   CreateExportResponse,
+  CreateImportJobRequest,
+  CreateImportJobResponse,
   CreateProjectRequest,
   CreateVersionRequest,
   ExportArtifactMeta,
@@ -115,6 +117,16 @@ export async function listImportJobs(
   projectId: string
 ): Promise<ListImportJobsResponse> {
   return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/import-jobs`);
+}
+
+export async function createImportJob(
+  projectId: string,
+  body: CreateImportJobRequest
+): Promise<CreateImportJobResponse> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/import-jobs`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 export async function getImportJob(

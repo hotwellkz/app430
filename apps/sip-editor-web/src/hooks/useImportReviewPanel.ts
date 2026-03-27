@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ApplyCandidateToProjectResponse, ImportUserDecisionSet } from '@2wix/shared-types';
 import { SipApiError } from '@/api/http';
@@ -45,6 +45,9 @@ function jobsListKey(projectId: string) {
 export interface UseImportReviewPanelOptions {
   /** После успешного apply-candidate: refetch current version, история import, синхронизация редактора (EditorShell). */
   onEditorRefreshAfterApply?: () => Promise<void>;
+  /** После создания import-job из мастера — выбрать job в панели. */
+  pendingSelectJobId?: string | null;
+  onPendingSelectConsumed?: () => void;
 }
 
 export function useImportReviewPanel(
@@ -52,7 +55,10 @@ export function useImportReviewPanel(
   versionMarkers: VersionConcurrencyMarkers | null,
   options: UseImportReviewPanelOptions = {}
 ) {
-  const { onEditorRefreshAfterApply } = options;
+  const { onEditorRefreshAfterApply, pendingSelectJobId, onPendingSelectConsumed } = options;
+  const pendingConsumedRef = useRef(onPendingSelectConsumed);
+  pendingConsumedRef.current = onPendingSelectConsumed;
+  const pendingHandledIdRef = useRef<string | null>(null);
   const queryClient = useQueryClient();
   const sipUserId = getSipUserId();
 
@@ -80,6 +86,27 @@ export function useImportReviewPanel(
     setDecisionsDirty(false);
     setDraftDecisions({});
   }, [selectedJobId]);
+
+  useEffect(() => {
+    if (!pendingSelectJobId) {
+      pendingHandledIdRef.current = null;
+      return;
+    }
+    if (pendingHandledIdRef.current === pendingSelectJobId) return;
+    pendingHandledIdRef.current = pendingSelectJobId;
+    setSelectedJobId(pendingSelectJobId);
+    setPanelMessage({
+      kind: 'success',
+      title: 'Импорт создан',
+      detail: 'Черновик review заполнен параметрами из мастера.',
+    });
+    void queryClient.invalidateQueries({ queryKey: jobsListKey(projectId) });
+    void queryClient.prefetchQuery({
+      queryKey: jobQueryKey(projectId, pendingSelectJobId),
+      queryFn: () => getImportJob(projectId, pendingSelectJobId),
+    });
+    pendingConsumedRef.current?.();
+  }, [pendingSelectJobId, projectId, queryClient]);
 
   useEffect(() => {
     if (!job || job.id !== selectedJobId) return;

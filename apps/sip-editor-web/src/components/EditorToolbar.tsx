@@ -25,6 +25,8 @@ interface EditorToolbarProps {
   savePending: boolean;
   newVersionPending: boolean;
   onFitView?: () => void;
+  /** MVP: мастер AI-импорта по фото/планам */
+  onOpenAiImport?: () => void;
 }
 
 function toolLabel(m: CanvasToolMode): string {
@@ -62,6 +64,7 @@ export function EditorToolbar({
   savePending,
   newVersionPending,
   onFitView,
+  onOpenAiImport,
 }: EditorToolbarProps) {
   const document = useEditorStore((s) => s.document);
   const view = useEditorStore((s) => s.view);
@@ -152,6 +155,27 @@ export function EditorToolbar({
       >
         Новая версия
       </button>
+
+      {onOpenAiImport ? (
+        <>
+          <span style={{ width: 1, height: 20, background: '#e2e8f0', margin: '0 4px' }} />
+          <button
+            type="button"
+            style={{
+              ...btn,
+              fontWeight: 600,
+              borderColor: '#6366f1',
+              color: '#4338ca',
+            }}
+            disabled={savePending || newVersionPending}
+            onClick={onOpenAiImport}
+            title="Загрузить планы/фасады и создать import-job"
+            data-testid="editor-toolbar-ai-import"
+          >
+            Импорт по фото/планам
+          </button>
+        </>
+      ) : null}
 
       <button
         type="button"

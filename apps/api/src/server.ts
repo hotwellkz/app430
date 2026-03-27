@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import { isNetlifySiteOriginAllowed } from './config/corsOrigin.js';
 import { loadApiEnv } from './config/env.js';
 import { registerRequestContext } from './plugins/requestContext.js';
 import { registerProjectRoutes } from './routes/projectsRoutes.js';
@@ -9,6 +10,7 @@ import { buildHealthDetails } from './services/healthService.js';
 const env = loadApiEnv();
 const PORT = env.port;
 const allowedOrigins = env.corsOrigins;
+const netlifySiteSlug = env.corsNetlifySiteSlug;
 
 async function main() {
   const app = Fastify({ logger: true });
@@ -20,6 +22,7 @@ async function main() {
       nodeEnv: env.nodeEnv,
       port: env.port,
       corsOrigins: env.corsOrigins,
+      corsNetlifySiteSlug: env.corsNetlifySiteSlug,
       firebaseProjectId: env.firebaseProjectId,
       hasFirebaseJson: env.hasFirebaseJson,
       hasGoogleApplicationCredentials: Boolean(env.googleApplicationCredentials),
@@ -35,6 +38,10 @@ async function main() {
         return;
       }
       if (allowedOrigins.includes(origin)) {
+        cb(null, true);
+        return;
+      }
+      if (isNetlifySiteOriginAllowed(origin, netlifySiteSlug)) {
         cb(null, true);
         return;
       }

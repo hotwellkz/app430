@@ -22,6 +22,7 @@ import { SpecPanel } from '@/components/SpecPanel';
 import { ExportPanel } from '@/components/ExportPanel';
 import { ImportApplyHistoryPanel } from '@/components/ImportApplyHistoryPanel';
 import { ImportReviewPanel } from '@/components/ImportReviewPanel';
+import { AiImportWizardModal } from '@/import-wizard/AiImportWizardModal';
 import { FloorInspector } from '@/components/FloorInspector';
 import { OpeningInspector } from '@/components/OpeningInspector';
 import { RoofInspector } from '@/components/RoofInspector';
@@ -173,6 +174,8 @@ export function EditorShellPage() {
   const [debugOpen, setDebugOpen] = useState(true);
   const [syncToken, setSyncToken] = useState(0);
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [aiImportWizardOpen, setAiImportWizardOpen] = useState(false);
+  const [pendingSelectImportJobId, setPendingSelectImportJobId] = useState<string | null>(null);
 
   const versionsQuery = useSipVersionsList(
     projectId,
@@ -552,6 +555,7 @@ export function EditorShellPage() {
               savePending={saveMutation.isPending}
               newVersionPending={newVersionMutation.isPending}
               onFitView={() => fitViewRef.current?.()}
+              onOpenAiImport={() => setAiImportWizardOpen(true)}
             />
           </div>
         }
@@ -582,6 +586,8 @@ export function EditorShellPage() {
                   : null
               }
               onEditorRefreshAfterApply={onEditorRefreshAfterApply}
+              pendingSelectJobId={pendingSelectImportJobId}
+              onPendingSelectConsumed={() => setPendingSelectImportJobId(null)}
             />
             <ImportApplyHistoryPanel projectId={projectId} />
             <div
@@ -753,6 +759,15 @@ export function EditorShellPage() {
             )}
           </RightPanel>
         }
+      />
+      <AiImportWizardModal
+        open={aiImportWizardOpen}
+        onClose={() => setAiImportWizardOpen(false)}
+        projectId={projectId}
+        projectTitle={projectQuery.data?.project.title ?? ''}
+        onSuccess={(jobId) => {
+          setPendingSelectImportJobId(jobId);
+        }}
       />
     </div>
   );

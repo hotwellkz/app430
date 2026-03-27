@@ -9,6 +9,8 @@
   SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
   # SIP API через same-origin proxy → Cloud Run (см. redirect /sip-editor-api/* ниже)
   VITE_SIP_API_BASE_URL = "/sip-editor-api"
+  # sip-editor-web: без абсолютного run.app — иначе CORS на deploy preview; переопределение в Netlify UI должно совпадать или быть удалено
+  VITE_API_BASE_URL = "/sip-editor-api"
 
 # Kaspi: синхронизация заказов 4 раза в день (09:00, 13:00, 17:00, 21:00 UTC)
 [functions.kaspi-sync-scheduled]

@@ -10,6 +10,11 @@ describe('loadApiEnv', () => {
     expect(env.storageBucket).toBeNull();
     expect(env.importExtractorMode).toBe('mock');
     expect(env.importJobExecutionMode).toBe('sync');
+    expect(env.corsNetlifySiteSlug).toBeNull();
+  });
+
+  it('читает CORS_NETLIFY_SITE_SLUG', () => {
+    expect(loadApiEnv({ CORS_NETLIFY_SITE_SLUG: ' my-site ' }).corsNetlifySiteSlug).toBe('my-site');
   });
 
   it('валидирует порт', () => {
