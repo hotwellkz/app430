@@ -41,6 +41,12 @@ body.whatsapp-chat-mobile-open {
   height: 100%;
 }
 
+/* Во время полноэкранного preview вложения скрываем плавающее меню транзакций. */
+body.attachment-preview-open [data-testid="sticky-navigation-root"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 /* Встроенное видео в чате WhatsApp (как в приложении) */
 .chat-video {
   max-width: 260px;

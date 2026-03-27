@@ -79,11 +79,17 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
+    document.body.classList.add('attachment-preview-open');
+    window.dispatchEvent(new CustomEvent('attachment-preview-visibility-change'));
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.classList.remove('attachment-preview-open');
+      window.dispatchEvent(new CustomEvent('attachment-preview-visibility-change'));
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -93,18 +99,27 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex flex-col bg-black/85 backdrop-blur-sm"
+      className="fixed inset-0 z-[2100] flex flex-col bg-black/85 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="Просмотр чека"
     >
       {/* Верхняя панель: закрыть, скачать, открыть в новой вкладке */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-black/40 text-white">
+      <div
+        className="fixed left-0 right-0 z-[2110] flex-shrink-0 flex items-center justify-between bg-black/50 text-white"
+        style={{
+          paddingTop: 'max(12px, env(safe-area-inset-top, 0px))',
+          paddingLeft: 'max(12px, env(safe-area-inset-left, 0px))',
+          paddingRight: 'max(12px, env(safe-area-inset-right, 0px))',
+          paddingBottom: 10,
+        }}
+      >
         <button
           type="button"
           onClick={onClose}
           className="p-2 rounded-full hover:bg-white/20 transition-colors"
           aria-label="Закрыть"
+          data-testid="attachment-preview-close"
         >
           <X className="w-6 h-6" />
         </button>
@@ -132,6 +147,12 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
       {/* Контент: клик по затемнённой области закрывает */}
       <div
         className="flex-1 min-h-0 overflow-hidden flex items-center justify-center p-2 cursor-default"
+        style={{
+          paddingTop: 'calc(max(12px, env(safe-area-inset-top, 0px)) + 68px)',
+          paddingBottom: 'max(12px, env(safe-area-inset-bottom, 0px))',
+          paddingLeft: 'max(8px, env(safe-area-inset-left, 0px))',
+          paddingRight: 'max(8px, env(safe-area-inset-right, 0px))',
+        }}
         onClick={(e) => e.target === e.currentTarget && onClose()}
       >
         {isImage && (

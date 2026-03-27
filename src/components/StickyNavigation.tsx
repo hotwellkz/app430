@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Warehouse, ArrowLeftRight, UserCircle, List } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { useMenuVisibility } from '../contexts/MenuVisibilityContext';
@@ -18,6 +18,7 @@ interface StickyNavigationProps {
 
 export const StickyNavigation: React.FC<StickyNavigationProps> = ({ onNavigate }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useIsMobile(MOBILE_BREAKPOINT);
   const mobileChatContext = useMobileWhatsAppChat();
   const hideForMobileChat = isMobile && mobileChatContext?.isMobileWhatsAppChatOpen;
@@ -42,7 +43,35 @@ export const StickyNavigation: React.FC<StickyNavigationProps> = ({ onNavigate }
   };
 
   const { isMenuVisible } = useMenuVisibility();
-  const shouldBeVisible = (!isMobileDevice() || isMenuVisible) && !hideForMobileChat;
+  const isTransactionsRoute =
+    location.pathname === '/transactions' ||
+    location.pathname.startsWith('/transactions/') ||
+    location.pathname.startsWith('/transaction-history/');
+  const [isAttachmentPreviewOpen, setIsAttachmentPreviewOpen] = useState(() =>
+    typeof document !== 'undefined' ? document.body.classList.contains('attachment-preview-open') : false
+  );
+  const shouldBeVisible =
+    isTransactionsRoute &&
+    (!isMobileDevice() || isMenuVisible) &&
+    !hideForMobileChat &&
+    !isAttachmentPreviewOpen;
+
+  useEffect(() => {
+    const readPreviewState = () => {
+      setIsAttachmentPreviewOpen(document.body.classList.contains('attachment-preview-open'));
+    };
+    readPreviewState();
+    window.addEventListener('attachment-preview-visibility-change', readPreviewState as EventListener);
+    return () =>
+      window.removeEventListener(
+        'attachment-preview-visibility-change',
+        readPreviewState as EventListener
+      );
+  }, []);
+
+  if (!isTransactionsRoute || isAttachmentPreviewOpen) {
+    return null;
+  }
 
   const scheduleCollapse = useCallback(() => {
     if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
@@ -103,6 +132,7 @@ export const StickyNavigation: React.FC<StickyNavigationProps> = ({ onNavigate }
       )}
 
       <div
+        data-testid="sticky-navigation-root"
         className={[
           'fixed z-[1000] flex flex-col items-center transition-all duration-200 ease-out',
           isMobile ? 'right-2 bottom-[100px] gap-1.5' : 'right-4 bottom-7 gap-2.5',
