@@ -20,6 +20,7 @@ export const SipEditorLaunch: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const [searchParams] = useSearchParams();
   const dealIdFromUrl = searchParams.get('dealId')?.trim() ?? '';
+  const projectIdFromUrl = searchParams.get('projectId')?.trim() ?? '';
 
   const [projectId, setProjectId] = useState('');
   const [dealId, setDealId] = useState(dealIdFromUrl);
@@ -32,6 +33,12 @@ export const SipEditorLaunch: React.FC = () => {
   useEffect(() => {
     setDealId(dealIdFromUrl);
   }, [dealIdFromUrl]);
+
+  useEffect(() => {
+    if (projectIdFromUrl) {
+      setProjectId(projectIdFromUrl);
+    }
+  }, [projectIdFromUrl]);
 
   const loadDeal = useCallback(async (id: string) => {
     if (!id) {
