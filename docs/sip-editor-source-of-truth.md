@@ -16,6 +16,8 @@
 ## Обязательное правило для production
 
 - `VITE_SIP_EDITOR_ORIGIN` должен указывать на deploy приложения `apps/sip-editor-web`.
+- **Отдельный Netlify-сайт для редактора** обязан иметь тот же прокси SIP API, что и CRM: `GET /sip-editor-api/*` → Cloud Run (см. `apps/sip-editor-web/netlify.toml`). Иначе в сборке с пустым `VITE_API_BASE_URL` запросы уйдут на `/api/*` на origin редактора → 404 → в UI ошибка «Версия не загружена» / «нет данных current-version» при **живом** backend.
+- В билде редактора для Netlify задайте `VITE_API_BASE_URL=/sip-editor-api` (уже в `netlify.toml` приложения).
 - Backend deploy не нужен для проверки факта отображения кнопки в toolbar.
 - Если кнопка не видна, сначала проверяйте:
   1) какой URL editor реально открыт в браузере;

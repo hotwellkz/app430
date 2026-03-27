@@ -1,0 +1,23 @@
+# Отдельный Netlify-сайт для `apps/sip-editor-web` (не CRM).
+# В Netlify: Base directory = `apps/sip-editor-web`, или деплой из этой папки с этим файлом.
+[build]
+  command = "cd ../.. && pnpm install --frozen-lockfile && pnpm --filter sip-editor-web run build"
+  publish = "dist"
+
+[build.environment]
+  SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
+  # Обязательно: иначе fetch идёт на /api/* на origin редактора → 404 → «нет current-version».
+  VITE_API_BASE_URL = "/sip-editor-api"
+
+# Тот же прокси, что у CRM (`netlify.toml` в корне репозитория): Cloud Run SIP API.
+[[redirects]]
+  from = "/sip-editor-api/*"
+  to = "https://sip-editor-api-wpgpcbv3hq-ey.a.run.app/:splat"
+  status = 200
+  force = true
+
+# SPA (после API-правил). Дублирует `public/_redirects` для предсказуемости.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
