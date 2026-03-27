@@ -69,7 +69,7 @@ export interface ImportReviewJobListItemViewModel {
   reviewStatusLabel: string;
 }
 
-export type PanelStatusKind = 'idle' | 'loading' | 'error' | 'success';
+export type PanelStatusKind = 'idle' | 'loading' | 'error' | 'success' | 'warning';
 
 export interface ImportReviewPanelMessage {
   kind: PanelStatusKind;

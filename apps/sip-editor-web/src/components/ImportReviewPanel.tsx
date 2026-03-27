@@ -7,11 +7,14 @@ import { ImportReviewPanelView } from '@/import-review/components/ImportReviewPa
 export function ImportReviewPanel({
   projectId,
   versionMarkers,
+  onEditorRefreshAfterApply,
 }: {
   projectId: string;
   versionMarkers: VersionConcurrencyMarkers | null;
+  /** После успешного apply-candidate: обновить current version и документ редактора без F5 */
+  onEditorRefreshAfterApply?: () => Promise<void>;
 }) {
-  const p = useImportReviewPanel(projectId, versionMarkers);
+  const p = useImportReviewPanel(projectId, versionMarkers, { onEditorRefreshAfterApply });
 
   const reviewApplied = p.job?.review?.status === 'applied';
 
@@ -45,6 +48,8 @@ export function ImportReviewPanel({
       applyReviewPending={p.applyReviewPending}
       preparePending={p.preparePending}
       applyCandidatePending={p.applyCandidatePending}
+      applyCandidateApiPending={p.applyCandidateApiPending}
+      postApplyEditorRefreshPending={p.postApplyEditorRefreshPending}
       anyMutationPending={p.anyMutationPending}
       reviewApplied={reviewApplied}
       panelMessage={p.panelMessage}

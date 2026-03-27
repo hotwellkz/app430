@@ -35,10 +35,17 @@ function jobsListKey(projectId: string) {
   return ['sip-import-jobs', projectId] as const;
 }
 
+export interface UseImportReviewPanelOptions {
+  /** После успешного apply-candidate: refetch current version, история import, синхронизация редактора (EditorShell). */
+  onEditorRefreshAfterApply?: () => Promise<void>;
+}
+
 export function useImportReviewPanel(
   projectId: string,
-  versionMarkers: VersionConcurrencyMarkers | null
+  versionMarkers: VersionConcurrencyMarkers | null,
+  options: UseImportReviewPanelOptions = {}
 ) {
+  const { onEditorRefreshAfterApply } = options;
   const queryClient = useQueryClient();
   const sipUserId = getSipUserId();
 
@@ -46,6 +53,7 @@ export function useImportReviewPanel(
   const [draftDecisions, setDraftDecisions] = useState<ImportUserDecisionSet>({});
   const [decisionsDirty, setDecisionsDirty] = useState(false);
   const [panelMessage, setPanelMessage] = useState<ImportReviewPanelMessage | null>(null);
+  const [postApplyRefreshPending, setPostApplyRefreshPending] = useState(false);
 
   const jobsQuery = useQuery({
     queryKey: jobsListKey(projectId),
@@ -196,6 +204,26 @@ export function useImportReviewPanel(
         title: 'Candidate применён к проекту',
         detail: `Версия #${v.versionNumber} (${v.id.slice(0, 8)}…), этажей: ${s.appliedObjectCounts.floors}, стен: ${s.appliedObjectCounts.walls}`,
       });
+
+      if (!onEditorRefreshAfterApply) {
+        return;
+      }
+
+      setPostApplyRefreshPending(true);
+      void (async () => {
+        try {
+          await onEditorRefreshAfterApply();
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          setPanelMessage({
+            kind: 'warning',
+            title: 'Candidate применён на сервере',
+            detail: `Не удалось автоматически подтянуть актуальную модель в редактор: ${msg}. Попробуйте кнопку «Обновить» в этой панели или перезагрузите страницу.`,
+          });
+        } finally {
+          setPostApplyRefreshPending(false);
+        }
+      })();
     },
     onError: (e: unknown) => {
       let f = formatImportReviewError(e, 'Не удалось применить candidate');
@@ -262,7 +290,8 @@ export function useImportReviewPanel(
     saveReviewMutation.isPending ||
     applyReviewFlowMutation.isPending ||
     prepareMutation.isPending ||
-    applyCandidateMutation.isPending;
+    applyCandidateMutation.isPending ||
+    postApplyRefreshPending;
 
   return {
     sipUserId,
@@ -287,7 +316,10 @@ export function useImportReviewPanel(
     saveReviewPending: saveReviewMutation.isPending,
     applyReviewPending: applyReviewFlowMutation.isPending,
     preparePending: prepareMutation.isPending,
-    applyCandidatePending: applyCandidateMutation.isPending,
+    applyCandidatePending:
+      applyCandidateMutation.isPending || postApplyRefreshPending,
+    applyCandidateApiPending: applyCandidateMutation.isPending,
+    postApplyEditorRefreshPending: postApplyRefreshPending,
     anyMutationPending,
     panelMessage,
     dismissMessage: () => setPanelMessage(null),

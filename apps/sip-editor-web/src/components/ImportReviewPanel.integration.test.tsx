@@ -2,9 +2,12 @@ import type { ReactElement } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createEmptyBuildingModel } from '@2wix/domain-model';
 import { ImportReviewPanel } from './ImportReviewPanel';
 import * as projectsApi from '@/api/projectsApi';
 import { IMPORT_REVIEW_UI } from '@/import-review/constants/labels';
+import { refreshEditorAfterApplyCandidate } from '@/editor/refreshEditorAfterApplyCandidate';
+import { SipApiError } from '@/api/http';
 
 vi.mock('@/api/projectsApi', () => ({
   listImportJobs: vi.fn(),
@@ -13,6 +16,8 @@ vi.mock('@/api/projectsApi', () => ({
   applyImportJobReview: vi.fn(),
   prepareImportJobEditorApply: vi.fn(),
   applyImportJobCandidateToProject: vi.fn(),
+  getCurrentVersion: vi.fn(),
+  getImportApplyHistory: vi.fn(),
 }));
 
 vi.mock('@/identity/sipUser', () => ({
@@ -328,5 +333,298 @@ describe('ImportReviewPanel integration', () => {
         expectedSchemaVersion: 2,
       })
     );
+  });
+
+  it('после успешного apply-candidate вызывается refresh (getCurrentVersion + bump)', async () => {
+    const candidateJob = {
+      ...baseJob,
+      review: {
+        ...baseJob.review,
+        status: 'applied' as const,
+        applyStatus: 'applied' as const,
+        decisions: {
+          floorHeightsMmByFloorId: { f1: 2800 },
+          internalBearingWalls: { confirmed: false, wallIds: [] },
+          scale: { mode: 'confirmed' as const, mmPerPixel: null },
+        },
+        missingRequiredDecisions: [],
+        isReadyToApply: true,
+        reviewedSnapshot: {} as never,
+      },
+      editorApply: {
+        status: 'candidate_ready' as const,
+        errorMessage: null,
+        generatedAt: 't',
+        generatedBy: 'user-1',
+        mapperVersion: 'm1',
+      },
+    };
+    const bm = createEmptyBuildingModel();
+    vi.mocked(projectsApi.listImportJobs).mockResolvedValue({ items: [candidateJob] });
+    vi.mocked(projectsApi.getImportJob).mockResolvedValue({ job: candidateJob });
+    vi.mocked(projectsApi.applyImportJobCandidateToProject).mockResolvedValue({
+      job: candidateJob,
+      appliedVersionMeta: {
+        id: 'ver-applied',
+        projectId: 'p1',
+        versionNumber: 3,
+        schemaVersion: 2,
+        createdAt: 't',
+      },
+      applySummary: {
+        createdOrUpdatedVersionId: 'ver-applied',
+        appliedObjectCounts: { floors: 1, walls: 0, openings: 0, slabs: 0, roofs: 0 },
+        warningsCount: 0,
+        traceCount: 0,
+        basedOnImportJobId: 'ij-1',
+        basedOnMapperVersion: 'm1',
+        basedOnReviewedSnapshotVersion: 'r1',
+      },
+    });
+    vi.mocked(projectsApi.getCurrentVersion).mockResolvedValue({
+      version: {
+        id: 'ver-applied',
+        projectId: 'p1',
+        versionNumber: 3,
+        schemaVersion: 2,
+        buildingModel: bm,
+        createdAt: 't',
+        createdBy: null,
+      },
+    });
+    vi.mocked(projectsApi.getImportApplyHistory).mockResolvedValue({ items: [] });
+
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const bump = vi.fn();
+
+    const { container } = render(
+      <QueryClientProvider client={qc}>
+        <ImportReviewPanel
+          projectId="p1"
+          versionMarkers={{
+            expectedCurrentVersionId: 'v-curr',
+            expectedVersionNumber: 2,
+            expectedSchemaVersion: 2,
+          }}
+          onEditorRefreshAfterApply={() =>
+            refreshEditorAfterApplyCandidate(qc, 'p1', { onCacheUpdated: bump })
+          }
+        />
+      </QueryClientProvider>
+    );
+    const v = within(container);
+
+    await waitFor(() => expect(v.queryAllByTestId('ir-job-row-ij-1').length).toBeGreaterThan(0));
+    fireEvent.click(firstJobRow(v));
+    await waitFor(() => expect(v.queryAllByTestId('ir-apply-candidate').length).toBeGreaterThan(0));
+    fireEvent.click(v.queryAllByTestId('ir-apply-candidate')[0]!);
+
+    await waitFor(() => expect(projectsApi.applyImportJobCandidateToProject).toHaveBeenCalled());
+    await waitFor(() => expect(projectsApi.getCurrentVersion).toHaveBeenCalledWith('p1'));
+    await waitFor(() => expect(bump).toHaveBeenCalled());
+  });
+
+  it('при ошибке apply-candidate refresh не вызывает getCurrentVersion', async () => {
+    const candidateJob = {
+      ...baseJob,
+      review: {
+        ...baseJob.review,
+        status: 'applied' as const,
+        applyStatus: 'applied' as const,
+        decisions: {
+          floorHeightsMmByFloorId: { f1: 2800 },
+          internalBearingWalls: { confirmed: false, wallIds: [] },
+          scale: { mode: 'confirmed' as const, mmPerPixel: null },
+        },
+        missingRequiredDecisions: [],
+        isReadyToApply: true,
+        reviewedSnapshot: {} as never,
+      },
+      editorApply: {
+        status: 'candidate_ready' as const,
+        errorMessage: null,
+        generatedAt: 't',
+        generatedBy: 'user-1',
+        mapperVersion: 'm1',
+      },
+    };
+    vi.mocked(projectsApi.listImportJobs).mockResolvedValue({ items: [candidateJob] });
+    vi.mocked(projectsApi.getImportJob).mockResolvedValue({ job: candidateJob });
+    vi.mocked(projectsApi.applyImportJobCandidateToProject).mockRejectedValue(new Error('apply failed'));
+    vi.mocked(projectsApi.getCurrentVersion).mockClear();
+
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const bump = vi.fn();
+
+    const { container } = render(
+      <QueryClientProvider client={qc}>
+        <ImportReviewPanel
+          projectId="p1"
+          versionMarkers={{
+            expectedCurrentVersionId: 'v-curr',
+            expectedVersionNumber: 2,
+            expectedSchemaVersion: 2,
+          }}
+          onEditorRefreshAfterApply={() =>
+            refreshEditorAfterApplyCandidate(qc, 'p1', { onCacheUpdated: bump })
+          }
+        />
+      </QueryClientProvider>
+    );
+    const v = within(container);
+
+    await waitFor(() => expect(v.queryAllByTestId('ir-job-row-ij-1').length).toBeGreaterThan(0));
+    fireEvent.click(firstJobRow(v));
+    await waitFor(() => expect(v.queryAllByTestId('ir-apply-candidate').length).toBeGreaterThan(0));
+    fireEvent.click(v.queryAllByTestId('ir-apply-candidate')[0]!);
+
+    await waitFor(() => expect(projectsApi.applyImportJobCandidateToProject).toHaveBeenCalled());
+    expect(projectsApi.getCurrentVersion).not.toHaveBeenCalled();
+    expect(bump).not.toHaveBeenCalled();
+  });
+
+  it('конфликт apply-candidate: ошибка, без refresh', async () => {
+    const candidateJob = {
+      ...baseJob,
+      review: {
+        ...baseJob.review,
+        status: 'applied' as const,
+        applyStatus: 'applied' as const,
+        decisions: {
+          floorHeightsMmByFloorId: { f1: 2800 },
+          internalBearingWalls: { confirmed: false, wallIds: [] },
+          scale: { mode: 'confirmed' as const, mmPerPixel: null },
+        },
+        missingRequiredDecisions: [],
+        isReadyToApply: true,
+        reviewedSnapshot: {} as never,
+      },
+      editorApply: {
+        status: 'candidate_ready' as const,
+        errorMessage: null,
+        generatedAt: 't',
+        generatedBy: 'user-1',
+        mapperVersion: 'm1',
+      },
+    };
+    vi.mocked(projectsApi.listImportJobs).mockResolvedValue({ items: [candidateJob] });
+    vi.mocked(projectsApi.getImportJob).mockResolvedValue({ job: candidateJob });
+    vi.mocked(projectsApi.applyImportJobCandidateToProject).mockRejectedValue(
+      new SipApiError(409, {
+        code: 'IMPORT_APPLY_CONCURRENCY_CONFLICT',
+        message: 'Версия изменилась',
+        status: 409,
+      })
+    );
+    vi.mocked(projectsApi.getCurrentVersion).mockClear();
+
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+
+    const { container } = render(
+      <QueryClientProvider client={qc}>
+        <ImportReviewPanel
+          projectId="p1"
+          versionMarkers={{
+            expectedCurrentVersionId: 'v-curr',
+            expectedVersionNumber: 2,
+            expectedSchemaVersion: 2,
+          }}
+          onEditorRefreshAfterApply={() =>
+            refreshEditorAfterApplyCandidate(qc, 'p1', { onCacheUpdated: () => {} })
+          }
+        />
+      </QueryClientProvider>
+    );
+    const v = within(container);
+
+    await waitFor(() => expect(v.queryAllByTestId('ir-job-row-ij-1').length).toBeGreaterThan(0));
+    fireEvent.click(firstJobRow(v));
+    await waitFor(() => expect(v.queryAllByTestId('ir-apply-candidate').length).toBeGreaterThan(0));
+    fireEvent.click(v.queryAllByTestId('ir-apply-candidate')[0]!);
+
+    await waitFor(() => expect(projectsApi.applyImportJobCandidateToProject).toHaveBeenCalled());
+    expect(projectsApi.getCurrentVersion).not.toHaveBeenCalled();
+  });
+
+  it('если apply успешен, а post-refresh падает — показывается предупреждение', async () => {
+    const candidateJob = {
+      ...baseJob,
+      review: {
+        ...baseJob.review,
+        status: 'applied' as const,
+        applyStatus: 'applied' as const,
+        decisions: {
+          floorHeightsMmByFloorId: { f1: 2800 },
+          internalBearingWalls: { confirmed: false, wallIds: [] },
+          scale: { mode: 'confirmed' as const, mmPerPixel: null },
+        },
+        missingRequiredDecisions: [],
+        isReadyToApply: true,
+        reviewedSnapshot: {} as never,
+      },
+      editorApply: {
+        status: 'candidate_ready' as const,
+        errorMessage: null,
+        generatedAt: 't',
+        generatedBy: 'user-1',
+        mapperVersion: 'm1',
+      },
+    };
+    vi.mocked(projectsApi.listImportJobs).mockResolvedValue({ items: [candidateJob] });
+    vi.mocked(projectsApi.getImportJob).mockResolvedValue({ job: candidateJob });
+    vi.mocked(projectsApi.applyImportJobCandidateToProject).mockResolvedValue({
+      job: candidateJob,
+      appliedVersionMeta: {
+        id: 'ver-applied',
+        projectId: 'p1',
+        versionNumber: 3,
+        schemaVersion: 2,
+        createdAt: 't',
+      },
+      applySummary: {
+        createdOrUpdatedVersionId: 'ver-applied',
+        appliedObjectCounts: { floors: 1, walls: 0, openings: 0, slabs: 0, roofs: 0 },
+        warningsCount: 0,
+        traceCount: 0,
+        basedOnImportJobId: 'ij-1',
+        basedOnMapperVersion: 'm1',
+        basedOnReviewedSnapshotVersion: 'r1',
+      },
+    });
+
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+
+    const { container } = render(
+      <QueryClientProvider client={qc}>
+        <ImportReviewPanel
+          projectId="p1"
+          versionMarkers={{
+            expectedCurrentVersionId: 'v-curr',
+            expectedVersionNumber: 2,
+            expectedSchemaVersion: 2,
+          }}
+          onEditorRefreshAfterApply={() => Promise.reject(new Error('sync failed'))}
+        />
+      </QueryClientProvider>
+    );
+    const v = within(container);
+
+    await waitFor(() => expect(v.queryAllByTestId('ir-job-row-ij-1').length).toBeGreaterThan(0));
+    fireEvent.click(firstJobRow(v));
+    await waitFor(() => expect(v.queryAllByTestId('ir-apply-candidate').length).toBeGreaterThan(0));
+    fireEvent.click(v.queryAllByTestId('ir-apply-candidate')[0]!);
+
+    await waitFor(() =>
+      expect(v.getByText('Candidate применён на сервере')).toBeTruthy()
+    );
+    expect(v.getByText(/sync failed/)).toBeTruthy();
   });
 });

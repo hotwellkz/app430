@@ -36,6 +36,7 @@ import {
   useSipVersionsList,
 } from '@/hooks/useSipProject';
 import { crmSipProjectsUrl } from '@/routes/crmEntry';
+import { refreshEditorAfterApplyCandidate } from '@/editor/refreshEditorAfterApplyCandidate';
 
 function isConflictDetails(v: unknown): v is VersionConflictDetails {
   if (typeof v !== 'object' || v === null) return false;
@@ -274,6 +275,13 @@ export function EditorShellPage() {
     await versionsQuery.refetch();
     setSyncToken((n) => n + 1);
   }, [versionQuery, projectQuery, versionsQuery]);
+
+  const onEditorRefreshAfterApply = useCallback(async () => {
+    setConflictDetails(null);
+    await refreshEditorAfterApplyCandidate(queryClient, projectId, {
+      onCacheUpdated: () => setSyncToken((n) => n + 1),
+    });
+  }, [queryClient, projectId]);
 
   const saveBeforeExport = useCallback(async () => {
     try {
@@ -573,6 +581,7 @@ export function EditorShellPage() {
                     }
                   : null
               }
+              onEditorRefreshAfterApply={onEditorRefreshAfterApply}
             />
             <ImportApplyHistoryPanel projectId={projectId} />
             <div

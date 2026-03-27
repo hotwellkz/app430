@@ -83,6 +83,8 @@ const defaultProps = {
   applyReviewPending: false,
   preparePending: false,
   applyCandidatePending: false,
+  applyCandidateApiPending: false,
+  postApplyEditorRefreshPending: false,
   anyMutationPending: false,
   reviewApplied: false,
   panelMessage: null,
@@ -90,6 +92,20 @@ const defaultProps = {
 };
 
 describe('ImportReviewPanelView', () => {
+  it('shows post-apply editor refresh label on button', () => {
+    render(
+      <ImportReviewPanelView
+        {...defaultProps}
+        canApplyCandidate
+        applyCandidatePending
+        applyCandidateApiPending={false}
+        postApplyEditorRefreshPending
+        anyMutationPending
+      />
+    );
+    expect(screen.getByText('Обновление редактора…')).toBeTruthy();
+  });
+
   it('shows loading jobs', () => {
     render(<ImportReviewPanelView {...defaultProps} jobsLoading listItems={[]} selectedJobId={null} />);
     expect(screen.getByText(IMPORT_REVIEW_UI.loadingJobs)).toBeTruthy();

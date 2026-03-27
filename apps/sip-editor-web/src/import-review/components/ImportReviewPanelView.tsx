@@ -60,6 +60,10 @@ export interface ImportReviewPanelViewProps {
   applyReviewPending: boolean;
   preparePending: boolean;
   applyCandidatePending: boolean;
+  /** Только запрос apply-candidate (без фазы обновления редактора) */
+  applyCandidateApiPending: boolean;
+  /** Фаза после успеха API: refetch версии / reload документа */
+  postApplyEditorRefreshPending: boolean;
   anyMutationPending: boolean;
   reviewApplied: boolean;
   panelMessage: ImportReviewPanelMessage | null;
@@ -75,12 +79,13 @@ function MessageBanner({
 }) {
   const isErr = msg.kind === 'error';
   const isOk = msg.kind === 'success';
+  const isWarn = msg.kind === 'warning';
   return (
     <div
       style={{
         ...cardStyle,
-        background: isErr ? '#fef2f2' : isOk ? '#f0fdf4' : '#f8fafc',
-        borderColor: isErr ? '#fecaca' : isOk ? '#bbf7d0' : 'var(--twix-border)',
+        background: isErr ? '#fef2f2' : isOk ? '#f0fdf4' : isWarn ? '#fffbeb' : '#f8fafc',
+        borderColor: isErr ? '#fecaca' : isOk ? '#bbf7d0' : isWarn ? '#fde68a' : 'var(--twix-border)',
         marginBottom: 10,
       }}
     >
@@ -135,7 +140,8 @@ export function ImportReviewPanelView(props: ImportReviewPanelViewProps) {
     saveReviewPending,
     applyReviewPending,
     preparePending,
-    applyCandidatePending,
+    applyCandidateApiPending,
+    postApplyEditorRefreshPending,
     anyMutationPending,
     reviewApplied,
     panelMessage,
@@ -421,7 +427,11 @@ export function ImportReviewPanelView(props: ImportReviewPanelViewProps) {
                     : undefined
                 }
               >
-                {applyCandidatePending ? 'Применение…' : IMPORT_REVIEW_UI.applyCandidate}
+                {applyCandidateApiPending
+                  ? 'Применение…'
+                  : postApplyEditorRefreshPending
+                    ? 'Обновление редактора…'
+                    : IMPORT_REVIEW_UI.applyCandidate}
               </button>
             </div>
           </div>
