@@ -5,17 +5,27 @@ import { canDeleteSelectedSpatial, isWallSelected } from '@/canvas2d/selectionGu
 
 const btn: CSSProperties = {
   fontSize: 12,
-  padding: '6px 10px',
-  border: '1px solid var(--twix-border, #e2e8f0)',
-  borderRadius: 6,
-  background: '#fff',
+  fontFamily: 'inherit',
+  padding: '5px 11px',
+  border: '1px solid rgba(0,0,0,0.1)',
+  borderRadius: 7,
+  background: 'rgba(255,255,255,0.78)',
+  backdropFilter: 'blur(8px)',
+  WebkitBackdropFilter: 'blur(8px)',
   cursor: 'pointer',
+  color: '#1d1d1f',
+  fontWeight: 400,
+  boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+  transition: 'background 0.1s, box-shadow 0.1s',
 };
 
 const btnActive: CSSProperties = {
   ...btn,
-  background: '#dbeafe',
-  borderColor: '#3b82f6',
+  background: '#007aff',
+  borderColor: 'transparent',
+  color: '#fff',
+  fontWeight: 590,
+  boxShadow: '0 1px 4px rgba(0,122,255,0.35)',
 };
 
 interface EditorToolbarProps {
@@ -93,10 +103,12 @@ export function EditorToolbar({
         display: 'flex',
         flexWrap: 'wrap',
         alignItems: 'center',
-        gap: 8,
-        padding: '8px 12px',
-        borderBottom: '1px solid var(--twix-border, #e2e8f0)',
-        background: '#fafafa',
+        gap: 6,
+        padding: '7px 16px',
+        borderBottom: '1px solid rgba(0,0,0,0.07)',
+        background: 'rgba(255,255,255,0.65)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
       }}
     >
       <span
@@ -104,19 +116,22 @@ export function EditorToolbar({
         style={{
           fontSize: 11,
           padding: '2px 8px',
-          borderRadius: 4,
-          background: document.hasUnsavedChanges ? '#fef3c7' : '#ecfdf5',
+          borderRadius: 5,
+          background: document.hasUnsavedChanges
+            ? 'rgba(255,196,0,0.18)'
+            : 'rgba(52,199,89,0.15)',
+          color: document.hasUnsavedChanges ? '#b45309' : '#166534',
         }}
       >
         {statusBadge}
       </span>
       {document.hasUnsavedChanges ? (
-        <span style={{ fontSize: 11, color: '#64748b' }}>● черновик</span>
+        <span style={{ fontSize: 11, color: '#8e8e93' }}>● черновик</span>
       ) : (
-        <span style={{ fontSize: 11, color: '#64748b' }}>○ сохранено</span>
+        <span style={{ fontSize: 11, color: '#8e8e93' }}>○ сохранено</span>
       )}
 
-      <span style={{ width: 1, height: 20, background: '#e2e8f0', margin: '0 4px' }} />
+      <span style={{ width: 1, height: 18, background: 'rgba(0,0,0,0.1)', margin: '0 2px' }} />
 
       {TOOL_MODES.map((m) => (
         <button
@@ -129,7 +144,7 @@ export function EditorToolbar({
         </button>
       ))}
 
-      <span style={{ width: 1, height: 20, background: '#e2e8f0', margin: '0 4px' }} />
+      <span style={{ width: 1, height: 18, background: 'rgba(0,0,0,0.1)', margin: '0 2px' }} />
 
       <button type="button" style={btn} disabled={!canUndo()} onClick={() => undo()}>
         Undo
@@ -157,16 +172,18 @@ export function EditorToolbar({
         Новая версия
       </button>
 
-      <span style={{ width: 1, height: 20, background: '#e2e8f0', margin: '0 4px' }} />
+      <span style={{ width: 1, height: 18, background: 'rgba(0,0,0,0.1)', margin: '0 2px' }} />
       <button
         type="button"
         style={{
           ...btn,
-          fontWeight: 600,
-          borderColor: '#6366f1',
-          color: '#4338ca',
+          background: '#007aff',
+          borderColor: 'transparent',
+          color: '#fff',
+          fontWeight: 590,
           whiteSpace: 'nowrap',
           flexShrink: 0,
+          boxShadow: '0 1px 4px rgba(0,122,255,0.4)',
         }}
         disabled={savePending || newVersionPending || !canOpenAiImport}
         onClick={() => onOpenAiImport?.()}
@@ -195,7 +212,7 @@ export function EditorToolbar({
         Удалить выбранное
       </button>
 
-      <span style={{ width: 1, height: 20, background: '#e2e8f0', margin: '0 4px' }} />
+      <span style={{ width: 1, height: 18, background: 'rgba(0,0,0,0.1)', margin: '0 2px' }} />
 
       <button type="button" style={btn} onClick={() => onFitView?.()} disabled={!onFitView}>
         Вписать вид
@@ -241,7 +258,7 @@ export function EditorToolbar({
         Привязка
       </button>
 
-      <span style={{ fontSize: 11, color: '#64748b', marginLeft: 8 }}>
+      <span style={{ fontSize: 10.5, color: '#8e8e93', marginLeft: 8, fontVariantNumeric: 'tabular-nums' }}>
         z {view.zoom.toFixed(2)} · pan {view.panX.toFixed(0)},{view.panY.toFixed(0)} · инструмент:{' '}
         {view.toolMode}
         {wallSelected ? ' · ручки стены' : ''}
