@@ -13,7 +13,7 @@ const queuedJob = {
   updatedAt: '2026-03-26T10:00:00.000Z',
   createdBy: 'u1',
   importSchemaVersion: 1,
-  sourceImages: [{ id: 'img-1', kind: 'plan' as const, fileName: 'plan.png' }],
+  sourceImages: [{ id: 'img-1', kind: 'plan' as const, fileName: 'plan.png', base64Data: 'WA==' }],
   snapshot: null,
   errorMessage: null,
 };

@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './loadEnv.js';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { isNetlifySiteOriginAllowed } from './config/corsOrigin.js';
@@ -12,8 +12,11 @@ const PORT = env.port;
 const allowedOrigins = env.corsOrigins;
 const netlifySiteSlug = env.corsNetlifySiteSlug;
 
+/** Import jobs send multi-image base64 JSON; default 1 MiB is too small. */
+const BODY_LIMIT_BYTES = 32 * 1024 * 1024;
+
 async function main() {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: true, bodyLimit: BODY_LIMIT_BYTES });
 
   registerRequestContext(app);
 

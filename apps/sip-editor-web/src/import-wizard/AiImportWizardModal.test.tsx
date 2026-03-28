@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { SipApiError } from '@/api/http';
 import { AiImportWizardModal } from './AiImportWizardModal';
 import * as projectsApi from '@/api/projectsApi';
 
@@ -8,6 +9,7 @@ vi.mock('@/api/projectsApi', () => ({
   createImportJob: vi.fn(),
   getImportJob: vi.fn(),
   saveImportJobReview: vi.fn(),
+  uploadImportSourceFile: vi.fn(),
 }));
 
 vi.mock('@/identity/sipUser', () => ({
@@ -55,6 +57,18 @@ function wizardFileInput(): HTMLInputElement {
 describe('AiImportWizardModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(projectsApi.uploadImportSourceFile).mockImplementation(async (_pid, p) => ({
+      asset: {
+        id: p.id,
+        kind: p.kind,
+        fileName: p.file.name,
+        mimeType: p.file.type || 'image/png',
+        storageProvider: 'firebase',
+        bucket: 'test-bucket',
+        storagePath: `sip-import-sources/p1/${p.id}/${p.file.name}`,
+        sizeBytes: p.file.size,
+      },
+    }));
     vi.mocked(projectsApi.createImportJob).mockResolvedValue({ job: { ...readyJob, status: 'running' as const } });
     vi.mocked(projectsApi.getImportJob).mockResolvedValue({ job: readyJob });
     vi.mocked(projectsApi.saveImportJobReview).mockResolvedValue({ ok: true } as never);
@@ -142,10 +156,38 @@ describe('AiImportWizardModal', () => {
     fireEvent.click(ws.getByTestId('ai-import-wizard-next'));
     fireEvent.click(ws.getByTestId('ai-import-wizard-submit'));
 
+    await waitFor(() => expect(projectsApi.uploadImportSourceFile).toHaveBeenCalled());
     await waitFor(() => expect(projectsApi.createImportJob).toHaveBeenCalled());
     await waitFor(() => expect(projectsApi.saveImportJobReview).toHaveBeenCalled());
     await waitFor(() => expect(onSuccess).toHaveBeenCalledWith('job-new'));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('shows error when upload fails and does not create import', async () => {
+    vi.mocked(projectsApi.uploadImportSourceFile).mockRejectedValueOnce(
+      new SipApiError(400, {
+        code: 'INTERNAL_ERROR',
+        message: 'Файл слишком больший',
+        status: 400,
+      })
+    );
+    render(
+      wrap(
+        <AiImportWizardModal open onClose={vi.fn()} projectId="p1" projectTitle="T" onSuccess={vi.fn()} />
+      )
+    );
+    fireEvent.change(wizardFileInput(), {
+      target: { files: [new File(['x'], 'a.png', { type: 'image/png' })] },
+    });
+    const ws = wizardScreen();
+    fireEvent.click(ws.getByTestId('ai-import-wizard-next'));
+    fireEvent.click(ws.getByTestId('ai-import-wizard-next'));
+    fireEvent.click(ws.getByTestId('ai-import-wizard-submit'));
+    await waitFor(() => {
+      const err = screen.queryAllByTestId('ai-import-wizard-error').pop();
+      expect(err?.textContent ?? '').toContain('больший');
+    });
+    expect(projectsApi.createImportJob).not.toHaveBeenCalled();
   });
 
   it('shows error when createImportJob fails', async () => {

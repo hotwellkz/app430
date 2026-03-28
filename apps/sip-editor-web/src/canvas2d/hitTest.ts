@@ -1,4 +1,5 @@
 import type { Point2D, Wall } from '@2wix/shared-types';
+import { endpointHandleRadiusWorldMm, hitToleranceWorldMm } from './viewMath.js';
 
 /** Расстояние от точки до отрезка в мм. */
 export function distancePointToSegmentMm(
@@ -63,4 +64,15 @@ export function hitWallEndpoint(
   if (ds <= radiusMm && ds <= de) return 'start';
   if (de <= radiusMm) return 'end';
   return null;
+}
+
+/** Клик по телу стены (перемещение целиком), не по ручкам концов. */
+export function hitWallBodyForDrag(world: Point2D, wall: Wall, zoom: number): boolean {
+  const handleR = endpointHandleRadiusWorldMm(zoom);
+  const tol = hitToleranceWorldMm(zoom);
+  const ds = Math.hypot(world.x - wall.start.x, world.y - wall.start.y);
+  const de = Math.hypot(world.x - wall.end.x, world.y - wall.end.y);
+  if (ds <= handleR || de <= handleR) return false;
+  const dLine = distancePointToWallCenterlineMm(world, wall);
+  return dLine <= tol;
 }

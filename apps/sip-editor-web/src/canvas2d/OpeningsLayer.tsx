@@ -1,11 +1,12 @@
 import type { Opening, Wall } from '@2wix/shared-types';
-import { computeOpeningFootprintCorners } from '@2wix/domain-model';
+import { computeOpeningFootprintCorners, openingCenterWorldMm } from '@2wix/domain-model';
 
 interface OpeningsLayerProps {
   openings: Opening[];
   wallById: Map<string, Wall>;
   selectedOpeningId: string | null;
   hoveredOpeningId: string | null;
+  viewZoom?: number;
 }
 
 function openingFill(o: Opening, selected: boolean, hovered: boolean): string {
@@ -37,12 +38,29 @@ function openingStroke(o: Opening, selected: boolean): string {
   }
 }
 
+function typeAbbr(o: Opening): string {
+  switch (o.openingType) {
+    case 'window':
+      return 'О';
+    case 'door':
+      return 'Д';
+    case 'portal':
+      return 'П';
+    default:
+      return '?';
+  }
+}
+
 export function OpeningsLayer({
   openings,
   wallById,
   selectedOpeningId,
   hoveredOpeningId,
+  viewZoom = 1,
 }: OpeningsLayerProps) {
+  const z = Math.max(0.15, Math.min(4, viewZoom));
+  const fontSize = Math.max(160, Math.min(650, 340 / z));
+
   return (
     <g className="sip-openings-layer">
       {openings.map((o) => {
@@ -52,17 +70,35 @@ export function OpeningsLayer({
         const pts = `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`;
         const sel = o.id === selectedOpeningId;
         const hov = o.id === hoveredOpeningId;
+        const c = openingCenterWorldMm(o, wall);
+        const label = `${typeAbbr(o)} ${Math.round(o.widthMm)}`;
+
         return (
-          <polygon
-            key={o.id}
-            data-opening-id={o.id}
-            points={pts}
-            fill={openingFill(o, sel, hov)}
-            stroke={openingStroke(o, sel)}
-            strokeWidth={sel ? 2 : 1}
-            vectorEffect="non-scaling-stroke"
-            strokeLinejoin="miter"
-          />
+          <g key={o.id} data-opening-id={o.id}>
+            <polygon
+              points={pts}
+              fill={openingFill(o, sel, hov)}
+              stroke={openingStroke(o, sel)}
+              strokeWidth={sel ? 2 : 1}
+              vectorEffect="non-scaling-stroke"
+              strokeLinejoin="miter"
+            />
+            <text
+              x={c.x}
+              y={c.y}
+              fill="#0f172a"
+              fontSize={fontSize}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              pointerEvents="none"
+              style={{ userSelect: 'none' }}
+              stroke="rgba(255,255,255,0.88)"
+              strokeWidth={Math.max(14, fontSize * 0.12)}
+              paintOrder="stroke fill"
+            >
+              {label}
+            </text>
+          </g>
         );
       })}
     </g>

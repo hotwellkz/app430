@@ -1,4 +1,5 @@
-import type { BuildingModel, Floor, FloorType } from '@2wix/shared-types';
+import type { BuildingModel, Floor, FloorType, Wall } from '@2wix/shared-types';
+import { clearWallPanelLayoutsForFloor } from './wallPanelLayoutOps.js';
 import { newDomainId } from './ids.js';
 import { getOpeningsByFloor } from './openingOps.js';
 import { getWallsByFloor } from './wallOps.js';
@@ -57,13 +58,14 @@ export function addFloorToModel(model: BuildingModel, floor: Floor): BuildingMod
 
 /** Удаляет этаж и связанные стены/проёмы (без проверки «последний этаж»). */
 export function deleteFloorFromModel(model: BuildingModel, floorId: string): BuildingModel {
-  const walls = model.walls.filter((w) => w.floorId !== floorId);
+  const withoutLayouts = clearWallPanelLayoutsForFloor(model, floorId);
+  const walls = withoutLayouts.walls.filter((w) => w.floorId !== floorId);
   const wallIds = new Set(walls.map((w) => w.id));
   return {
-    ...model,
-    floors: model.floors.filter((f) => f.id !== floorId),
+    ...withoutLayouts,
+    floors: withoutLayouts.floors.filter((f) => f.id !== floorId),
     walls,
-    openings: model.openings.filter((o) => wallIds.has(o.wallId)),
+    openings: withoutLayouts.openings.filter((o) => wallIds.has(o.wallId)),
   };
 }
 
@@ -133,11 +135,35 @@ export function duplicateFloorInModel(
     wallIdMap.set(w.id, newDomainId());
   }
 
-  const newWalls = wallsOnSrc.map((w) => ({
-    ...w,
-    id: wallIdMap.get(w.id)!,
+  const jointsOnSrc = (model.wallJoints ?? []).filter((j) => j.floorId === sourceFloorId);
+  const jointIdMap = new Map<string, string>();
+  for (const j of jointsOnSrc) {
+    jointIdMap.set(j.id, newDomainId());
+  }
+  const newJoints = jointsOnSrc.map((j) => ({
+    ...j,
+    id: jointIdMap.get(j.id)!,
     floorId: newFloorId,
   }));
+
+  const newWalls: Wall[] = wallsOnSrc.map((w) => {
+    const out: Wall = {
+      ...w,
+      id: wallIdMap.get(w.id)!,
+      floorId: newFloorId,
+    };
+    if (w.startJointId && jointIdMap.has(w.startJointId)) {
+      out.startJointId = jointIdMap.get(w.startJointId)!;
+    } else {
+      delete out.startJointId;
+    }
+    if (w.endJointId && jointIdMap.has(w.endJointId)) {
+      out.endJointId = jointIdMap.get(w.endJointId)!;
+    } else {
+      delete out.endJointId;
+    }
+    return out;
+  });
 
   const openingsOnSrc = getOpeningsByFloor(model, sourceFloorId);
   const fixedOpenings = [];
@@ -159,6 +185,7 @@ export function duplicateFloorInModel(
       ...model,
       floors: [...model.floors, newFloor],
       walls: [...model.walls, ...newWalls],
+      wallJoints: [...(model.wallJoints ?? []), ...newJoints],
       openings: [...model.openings, ...fixedOpenings],
     },
   };

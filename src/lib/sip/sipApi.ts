@@ -2,7 +2,14 @@ import { auth } from '../firebase/auth';
 import type { SipProjectRow } from './sipTypes';
 import { getSipApiBase } from './sipEnv';
 
-const SIP_API_TIMEOUT_MS = 15000;
+function parsePositiveMsEnv(raw: string | undefined, fallback: number): number {
+  if (raw == null || raw === '') return fallback;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/** Удаление проекта и тяжёлые операции могут занимать >15 с (GCS + Firestore). */
+const SIP_API_TIMEOUT_MS = parsePositiveMsEnv(import.meta.env.VITE_SIP_API_TIMEOUT_MS, 120_000);
 
 export class SipApiError extends Error {
   constructor(
@@ -101,14 +108,14 @@ async function sipFetch(path: string, init: RequestInit = {}): Promise<Response>
     }
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw new SipApiError(
-        'SIP API не ответил вовремя. Повторите позже или проверьте доступность api.2wix.ru.',
+        'SIP API не ответил вовремя. Локально: запустите API (pnpm dev:api, порт 3001), задайте VITE_SIP_API_BASE_URL=/sip-editor-api и при необходимости увеличьте VITE_SIP_API_TIMEOUT_MS. В проде проверьте VITE_SIP_API_BASE_URL и доступность хоста.',
         504,
         'GATEWAY_TIMEOUT'
       );
     }
     if (error instanceof TypeError) {
       throw new SipApiError(
-        'Нет соединения с SIP API (network/CORS/SSL). Проверьте доступность api.2wix.ru и proxy /sip-editor-api.',
+        'Нет соединения с SIP API (network/CORS/SSL). Локально: VITE_SIP_API_BASE_URL=/sip-editor-api и процесс на :3001; в проде — URL API и CORS.',
         503,
         'NETWORK_UNREACHABLE'
       );

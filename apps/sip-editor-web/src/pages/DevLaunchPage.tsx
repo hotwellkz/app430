@@ -108,6 +108,9 @@ export function DevLaunchPage() {
         >
           Открыть последние (localStorage)
         </button>
+        <Link to="/sip-editor/projects" style={{ alignSelf: 'center', fontSize: 13, color: '#2563eb' }}>
+          Список проектов
+        </Link>
         <Link to="/sip-editor" style={{ alignSelf: 'center', fontSize: 13, color: '#2563eb' }}>
           Назад
         </Link>

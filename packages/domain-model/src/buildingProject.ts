@@ -1,16 +1,28 @@
 import type {
   BuildingMeta,
+  BuildingMetaEditorUi,
   BuildingModel,
   BuildingSettings,
+  FoundationStrip,
+  GroundScreed,
   CreateProjectRequest,
   Floor,
   FloorType,
   Opening,
   OpeningType,
+  Point2D,
   Project,
   ProjectStatus,
   Roof,
+  RoofDrainDirection,
   Slab,
+  Wall,
+  WallJoint,
+  WallPanelizationUiStatus,
+  WallPanelLayoutResult,
+  WallPanelLayoutSegment,
+  WallPanelLayoutSummary,
+  WallPanelLayoutWarning,
   WallType,
 } from '@2wix/shared-types';
 import { BUILDING_MODEL_SCHEMA_VERSION } from '@2wix/shared-types';
@@ -40,6 +52,7 @@ export function createEmptyBuildingModel(): BuildingModel {
     settings,
     floors: [],
     walls: [],
+    wallJoints: [],
     openings: [],
     slabs: [],
     roofs: [],
@@ -72,6 +85,8 @@ export function createEmptyBuildingModel(): BuildingModel {
       labelPrefixRoof: 'R',
       labelPrefixSlab: 'S',
     },
+    foundations: [],
+    groundScreeds: [],
   };
 }
 
@@ -116,7 +131,146 @@ function parseFloorType(v: unknown): FloorType {
   return 'full';
 }
 
+function parseStringBooleanRecord(v: unknown): Record<string, boolean> | undefined {
+  if (typeof v !== 'object' || v === null) return undefined;
+  const o = v as Record<string, unknown>;
+  const out: Record<string, boolean> = {};
+  for (const [k, val] of Object.entries(o)) {
+    if (typeof val === 'boolean') out[k] = val;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function parseMetaEditorUi(m: Record<string, unknown>): BuildingMetaEditorUi | undefined {
+  const raw = m.editorUi;
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const u = raw as Record<string, unknown>;
+  const layerVisibility = parseStringBooleanRecord(u.layerVisibility);
+  const layerLocked = parseStringBooleanRecord(u.layerLocked);
+  const out: BuildingMetaEditorUi = {};
+  if (layerVisibility) out.layerVisibility = layerVisibility;
+  if (layerLocked) out.layerLocked = layerLocked;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function parsePoint2DList(v: unknown): Point2D[] {
+  if (!Array.isArray(v)) return [];
+  const out: Point2D[] = [];
+  for (const p of v) {
+    if (typeof p === 'object' && p !== null && isPoint2D(p)) {
+      const o = p as Point2D;
+      out.push({ x: o.x, y: o.y });
+    }
+  }
+  return out;
+}
+
 const DEFAULT_FLOOR_HEIGHT_MM = 2800;
+
+function parseWallPanelLayouts(raw: unknown): Record<string, WallPanelLayoutResult> | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const o = raw as Record<string, unknown>;
+  const out: Record<string, WallPanelLayoutResult> = {};
+  for (const [key, val] of Object.entries(o)) {
+    if (typeof val !== 'object' || val === null) continue;
+    const p = val as Record<string, unknown>;
+    const wallId = typeof p.wallId === 'string' ? p.wallId : key;
+    const floorId = asString(p.floorId, '');
+    const panelTypeId = asString(p.panelTypeId, '');
+    const dir = p.direction === 'horizontal' || p.direction === 'vertical' ? p.direction : 'vertical';
+    const computedAt = typeof p.computedAt === 'string' ? p.computedAt : new Date(0).toISOString();
+    const status =
+      p.status === 'ok' || p.status === 'partial' || p.status === 'failed' ? p.status : 'failed';
+    const panelsRaw = Array.isArray(p.panels) ? p.panels : [];
+    const panels: WallPanelLayoutSegment[] = panelsRaw
+      .map((seg, i) => {
+        if (typeof seg !== 'object' || seg === null) return null;
+        const s = seg as Record<string, unknown>;
+        const id = asString(s.id, `${wallId}-p-${i}`);
+        const index = typeof s.index === 'number' && Number.isFinite(s.index) ? Math.round(s.index) : i + 1;
+        return {
+          id,
+          index,
+          lengthAlongWallMm: asNumber(s.lengthAlongWallMm, asNumber(s.widthMm, 0)),
+          heightMm: asNumber(s.heightMm, 0),
+          startOffsetMm: asNumber(s.startOffsetMm, 0),
+          endOffsetMm: asNumber(s.endOffsetMm, 0),
+          verticalOffsetMm: asNumber(s.verticalOffsetMm, 0),
+          trimmed: Boolean(s.trimmed),
+          openingAffected: Boolean(s.openingAffected),
+        };
+      })
+      .filter((x): x is WallPanelLayoutSegment => Boolean(x));
+    const warningsRaw = Array.isArray(p.warnings) ? p.warnings : [];
+    const warnings: WallPanelLayoutWarning[] = warningsRaw
+      .map((w) => {
+        if (typeof w !== 'object' || w === null) return null;
+        const x = w as Record<string, unknown>;
+        const code = typeof x.code === 'string' ? x.code : 'NO_VALID_LAYOUT';
+        const message = asString(x.message, '');
+        const sev = x.severity === 'info' || x.severity === 'warning' || x.severity === 'error' ? x.severity : 'warning';
+        return { code: code as WallPanelLayoutWarning['code'], message, severity: sev };
+      })
+      .filter((x): x is WallPanelLayoutWarning => Boolean(x));
+    const sumRaw = p.summary;
+    const summary: WallPanelLayoutSummary =
+      typeof sumRaw === 'object' && sumRaw !== null
+        ? (() => {
+            const s = sumRaw as Record<string, unknown>;
+            const openingsCount = asNumber(s.openingsCount, 0);
+            const rawUi = s.panelizationStatus;
+            let panelizationStatus: WallPanelizationUiStatus =
+              rawUi === 'ready' || rawUi === 'partial' || rawUi === 'invalid'
+                ? rawUi
+                : status === 'failed'
+                  ? 'invalid'
+                  : status === 'partial'
+                    ? 'partial'
+                    : openingsCount > 0
+                      ? 'partial'
+                      : 'ready';
+            return {
+              wallLengthMm: asNumber(s.wallLengthMm, 0),
+              nominalModuleMm: asNumber(s.nominalModuleMm, 0),
+              panelCount: asNumber(s.panelCount, panels.length),
+              trimPanelCount: asNumber(s.trimPanelCount, 0),
+              remainderMm: asNumber(s.remainderMm, 0),
+              utilizationRatio: asNumber(s.utilizationRatio, 0),
+              openingsCount,
+              fullLayoutFraction: asNumber(s.fullLayoutFraction, 0),
+              panelizationStatus,
+            };
+          })()
+        : {
+            wallLengthMm: 0,
+            nominalModuleMm: 0,
+            panelCount: panels.length,
+            trimPanelCount: 0,
+            remainderMm: 0,
+            utilizationRatio: 0,
+            openingsCount: 0,
+            fullLayoutFraction: 0,
+            panelizationStatus:
+              status === 'failed' ? 'invalid' : status === 'partial' ? 'partial' : 'ready',
+          };
+    const geometrySignature = typeof p.geometrySignature === 'string' ? p.geometrySignature : undefined;
+    const stale = typeof p.stale === 'boolean' ? p.stale : undefined;
+    out[wallId] = {
+      wallId,
+      floorId,
+      panelTypeId,
+      direction: dir,
+      computedAt,
+      panels,
+      warnings,
+      summary,
+      status,
+      ...(geometrySignature !== undefined ? { geometrySignature } : {}),
+      ...(stale !== undefined ? { stale } : {}),
+    };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
 const DEFAULT_SLAB_THICKNESS_MM = 220;
 const DEFAULT_ROOF_OVERHANG_MM = 400;
 const DEFAULT_ROOF_SLOPE_DEG = 28;
@@ -144,6 +298,8 @@ export function normalizeBuildingModel(raw: unknown): BuildingModel {
           if (typeof m.versionNumber === 'number' && Number.isFinite(m.versionNumber)) {
             base.versionNumber = m.versionNumber;
           }
+          const editorUi = parseMetaEditorUi(m);
+          if (editorUi) base.editorUi = editorUi;
           return base;
         })()
       : empty.meta;
@@ -215,6 +371,13 @@ export function normalizeBuildingModel(raw: unknown): BuildingModel {
     const panelizationEnabled =
       typeof w.panelizationEnabled === 'boolean' ? w.panelizationEnabled : undefined;
     const panelTypeId = typeof w.panelTypeId === 'string' && w.panelTypeId.trim() ? w.panelTypeId : undefined;
+    const wp = w.wallPlacement;
+    const wallPlacement =
+      wp === 'on-axis' || wp === 'inside' || wp === 'outside' ? wp : undefined;
+    const startJointId =
+      typeof w.startJointId === 'string' && w.startJointId.trim() ? w.startJointId : undefined;
+    const endJointId =
+      typeof w.endJointId === 'string' && w.endJointId.trim() ? w.endJointId : undefined;
     return {
       ...base,
       ...(wallType !== undefined ? { wallType } : {}),
@@ -223,8 +386,11 @@ export function normalizeBuildingModel(raw: unknown): BuildingModel {
       ...(panelizationEnabled !== undefined ? { panelizationEnabled } : {}),
       ...(panelTypeId !== undefined ? { panelTypeId } : {}),
       ...(heightMm !== undefined ? { heightMm } : {}),
+      ...(wallPlacement !== undefined ? { wallPlacement } : {}),
+      ...(startJointId !== undefined ? { startJointId } : {}),
+      ...(endJointId !== undefined ? { endJointId } : {}),
     };
-  });
+  }) as Wall[];
 
   const wallById = new Map(wallsIn.map((w) => [w.id, w]));
 
@@ -270,14 +436,42 @@ export function normalizeBuildingModel(raw: unknown): BuildingModel {
     const contourWallIds = Array.isArray(s.contourWallIds)
       ? s.contourWallIds.filter((x): x is string => typeof x === 'string')
       : [];
+    const basedOnWallIds = Array.isArray(s.basedOnWallIds)
+      ? s.basedOnWallIds.filter((x): x is string => typeof x === 'string')
+      : undefined;
+    const contourMm = parsePoint2DList(s.contourMm);
+    const ak = s.assemblyKind;
+    const assemblyKind: Slab['assemblyKind'] | undefined =
+      ak === 'floor_slab' || ak === 'beam_floor' || ak === 'attic_floor' ? ak : undefined;
+    const sourceWallSignature =
+      typeof s.sourceWallSignature === 'string' ? s.sourceWallSignature : undefined;
+    const needsRecompute = typeof s.needsRecompute === 'boolean' ? s.needsRecompute : undefined;
+    const elevationMm = typeof s.elevationMm === 'number' && Number.isFinite(s.elevationMm) ? s.elevationMm : undefined;
+    const metadata =
+      typeof s.metadata === 'object' && s.metadata !== null && !Array.isArray(s.metadata)
+        ? (s.metadata as Record<string, unknown>)
+        : undefined;
+    const structuralHintsRaw = s.structuralHints;
+    const structuralHints: Slab['structuralHints'] | undefined =
+      typeof structuralHintsRaw === 'object' && structuralHintsRaw !== null
+        ? (structuralHintsRaw as Slab['structuralHints'])
+        : undefined;
     return {
       id: asString(s.id, `slab_${i}`),
       floorId: asString(s.floorId, floorsIn[0]?.id ?? ''),
       slabType,
       contourWallIds,
+      ...(basedOnWallIds && basedOnWallIds.length > 0 ? { basedOnWallIds } : {}),
       direction: dir,
       thicknessMm: asNumber(s.thicknessMm, DEFAULT_SLAB_THICKNESS_MM),
       generationMode,
+      ...(contourMm.length >= 3 ? { contourMm } : {}),
+      ...(assemblyKind !== undefined ? { assemblyKind } : {}),
+      ...(sourceWallSignature !== undefined ? { sourceWallSignature } : {}),
+      ...(needsRecompute !== undefined ? { needsRecompute } : {}),
+      ...(elevationMm !== undefined ? { elevationMm } : {}),
+      ...(metadata !== undefined ? { metadata } : {}),
+      ...(structuralHints !== undefined ? { structuralHints } : {}),
       ...(typeof s.panelizationEnabled === 'boolean'
         ? { panelizationEnabled: s.panelizationEnabled }
         : {}),
@@ -298,15 +492,55 @@ export function normalizeBuildingModel(raw: unknown): BuildingModel {
     const slopeDegrees = asNumber(ro.slopeDegrees ?? ro.pitchDeg, DEFAULT_ROOF_SLOPE_DEG);
     const ridgeDirection: Roof['ridgeDirection'] =
       ro.ridgeDirection === 'y' || ro.ridgeDirection === 'x' ? ro.ridgeDirection : 'x';
+    const drainRaw = ro.singleSlopeDrainToward;
+    const singleSlopeDrainToward: RoofDrainDirection | undefined =
+      drainRaw === '+x' || drainRaw === '-x' || drainRaw === '+y' || drainRaw === '-y' ? drainRaw : undefined;
+    const basedOnWallIds = Array.isArray(ro.basedOnWallIds)
+      ? ro.basedOnWallIds.filter((x): x is string => typeof x === 'string')
+      : undefined;
+    const footprintContourMm = parsePoint2DList(ro.footprintContourMm);
+    const eavesContourMm = parsePoint2DList(ro.eavesContourMm);
+    const ridgeLineRaw = ro.ridgeLineMm;
+    const ridgeLineMm =
+      typeof ridgeLineRaw === 'object' &&
+      ridgeLineRaw !== null &&
+      isPoint2D((ridgeLineRaw as Record<string, unknown>).a) &&
+      isPoint2D((ridgeLineRaw as Record<string, unknown>).b)
+        ? {
+            a: (ridgeLineRaw as { a: Point2D }).a,
+            b: (ridgeLineRaw as { b: Point2D }).b,
+          }
+        : undefined;
+    const sourceWallSignature =
+      typeof ro.sourceWallSignature === 'string' ? ro.sourceWallSignature : undefined;
+    const needsRecompute = typeof ro.needsRecompute === 'boolean' ? ro.needsRecompute : undefined;
+    const metadata =
+      typeof ro.metadata === 'object' && ro.metadata !== null
+        ? (ro.metadata as Record<string, unknown>)
+        : undefined;
+    const structuralHintsRaw = ro.structuralHints;
+    const structuralHints =
+      typeof structuralHintsRaw === 'object' && structuralHintsRaw !== null
+        ? (structuralHintsRaw as Roof['structuralHints'])
+        : undefined;
     return {
       id: asString(ro.id, `roof_${i}`),
       floorId: asString(ro.floorId, topFloorId),
       roofType,
       slopeDegrees,
       ridgeDirection,
+      ...(singleSlopeDrainToward ? { singleSlopeDrainToward } : {}),
       overhangMm: asNumber(ro.overhangMm, DEFAULT_ROOF_OVERHANG_MM),
       baseElevationMm: asNumber(ro.baseElevationMm, 0),
       generationMode: 'auto',
+      ...(basedOnWallIds && basedOnWallIds.length > 0 ? { basedOnWallIds } : {}),
+      ...(footprintContourMm.length >= 3 ? { footprintContourMm } : {}),
+      ...(eavesContourMm.length >= 3 ? { eavesContourMm } : {}),
+      ...(ridgeLineMm ? { ridgeLineMm } : {}),
+      ...(sourceWallSignature !== undefined ? { sourceWallSignature } : {}),
+      ...(needsRecompute !== undefined ? { needsRecompute } : {}),
+      ...(metadata ? { metadata } : {}),
+      ...(structuralHints ? { structuralHints } : {}),
       ...(typeof ro.panelizationEnabled === 'boolean'
         ? { panelizationEnabled: ro.panelizationEnabled }
         : {}),
@@ -366,16 +600,76 @@ export function normalizeBuildingModel(raw: unknown): BuildingModel {
     return o;
   });
 
+  const wallJointsIn: WallJoint[] = Array.isArray(r.wallJoints)
+    ? (r.wallJoints as unknown[]).map((j, i) => {
+        const o = typeof j === 'object' && j !== null ? (j as Record<string, unknown>) : {};
+        return {
+          id: asString(o.id, `joint_${i}`),
+          floorId: asString(o.floorId, ''),
+          x: asNumber(o.x, 0),
+          y: asNumber(o.y, 0),
+        };
+      })
+    : [];
+
+  const foundationsIn: FoundationStrip[] = Array.isArray(r.foundations)
+    ? (r.foundations as unknown[]).map((raw, i) => {
+        const o = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+        return {
+          id: asString(o.id, `foundation_${i}`),
+          floorId: asString(o.floorId, ''),
+          kind: 'strip' as const,
+          basedOnWallIds: Array.isArray(o.basedOnWallIds)
+            ? o.basedOnWallIds.filter((x): x is string => typeof x === 'string')
+            : [],
+          outerContourMm: parsePoint2DList(o.outerContourMm),
+          innerContourMm: parsePoint2DList(o.innerContourMm),
+          widthMm: asNumber(o.widthMm, 300),
+          heightMm: asNumber(o.heightMm, 400),
+          outerOffsetMm: asNumber(o.outerOffsetMm, 50),
+          innerOffsetMm: asNumber(o.innerOffsetMm, 0),
+          sourceWallSignature: asString(o.sourceWallSignature, ''),
+          needsRecompute: typeof o.needsRecompute === 'boolean' ? o.needsRecompute : false,
+          ...(typeof o.metadata === 'object' && o.metadata !== null
+            ? { metadata: o.metadata as Record<string, unknown> }
+            : {}),
+        };
+      })
+    : [];
+
+  const groundScreedsIn: GroundScreed[] = Array.isArray(r.groundScreeds)
+    ? (r.groundScreeds as unknown[]).map((raw, i) => {
+        const o = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+        return {
+          id: asString(o.id, `screed_${i}`),
+          floorId: asString(o.floorId, ''),
+          foundationId: asString(o.foundationId, ''),
+          contourMm: parsePoint2DList(o.contourMm),
+          thicknessMm: asNumber(o.thicknessMm, 80),
+          needsRecompute: typeof o.needsRecompute === 'boolean' ? o.needsRecompute : false,
+          ...(typeof o.metadata === 'object' && o.metadata !== null
+            ? { metadata: o.metadata as Record<string, unknown> }
+            : {}),
+        };
+      })
+    : [];
+
+  const wallPanelLayouts = parseWallPanelLayouts(r.wallPanelLayouts);
+
   return {
     meta,
     settings,
     floors: floorsIn,
     walls: wallsIn,
+    wallJoints: wallJointsIn,
     openings: openingsSynced,
     slabs: slabsIn,
     roofs: roofsIn,
+    foundations: foundationsIn,
+    groundScreeds: groundScreedsIn,
     panelLibrary: libIn,
     panelSettings,
+    ...(wallPanelLayouts ? { wallPanelLayouts } : {}),
   };
 }
 

@@ -14,7 +14,7 @@ import {
 } from '@/api/projectsApi';
 import { getSipUserId } from '@/identity/sipUser';
 import { SipApiError } from '@/api/http';
-import { buildCreateImportJobRequest } from './buildCreateImportRequest';
+import { buildCreateImportJobRequestWithUploads } from './buildCreateImportRequest';
 import { formatImportWizardSummary } from './formatImportWizardSummary';
 import {
   defaultImportWizardForm,
@@ -148,7 +148,7 @@ export function AiImportWizardModal({
     setBusy(true);
     setError(null);
     try {
-      const body = await buildCreateImportJobRequest(files, projectTitle);
+      const body = await buildCreateImportJobRequestWithUploads(projectId, files, projectTitle);
       const { job } = await createImportJob(projectId, body);
       const poll = await waitForImportJobReviewable(projectId, job.id, getImportJob, {
         maxMs: 120_000,
@@ -217,8 +217,8 @@ export function AiImportWizardModal({
             Импорт по фото / планам
           </h2>
           <p className="twix-muted" style={{ margin: '6px 0 0', fontSize: 12 }}>
-            Шаг {step} из 3 · файлы остаются локальными до создания job; на сервер уходят только
-            метаданные и ссылки-заглушки для MVP pipeline.
+            Шаг {step} из 3 · перед созданием job файлы загружаются в хранилище проекта; в запросе
+            create-import передаются только ссылки на объекты (без base64 в JSON).
           </p>
         </div>
 

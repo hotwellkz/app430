@@ -11,7 +11,7 @@ function item(overrides?: Partial<ImportApplyHistoryViewItem>): ImportApplyHisto
     appliedAt: '2026-03-26T12:00:00.000Z',
     appliedBy: 'u1',
     importJobId: 'ij-1234',
-    mapperVersion: 'import-candidate-v1',
+    mapperVersion: 'import-candidate-v2',
     reviewedSnapshotVersion: 'r1',
     warningsCount: 1,
     traceCount: 2,
@@ -22,7 +22,7 @@ function item(overrides?: Partial<ImportApplyHistoryViewItem>): ImportApplyHisto
     missingFieldsCompact: '',
     badgeKind: 'neutral',
     badgeLabel: 'AI import',
-    subtitle: 'by u1 · mapper import-candidate-v1 · warnings 1',
+    subtitle: 'by u1 · mapper import-candidate-v2 · warnings 1',
     isInspectable: false,
     ...overrides,
   };
@@ -90,7 +90,7 @@ describe('ImportApplyHistoryPanelView', () => {
       />
     );
     expect(screen.getByText(/AI import/i)).toBeTruthy();
-    expect(screen.getByText(/mapper: import-candidate-v1/i)).toBeTruthy();
+    expect(screen.getByText(/mapper: import-candidate-v2/i)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'all (1)' })).toBeTruthy();
   });
 

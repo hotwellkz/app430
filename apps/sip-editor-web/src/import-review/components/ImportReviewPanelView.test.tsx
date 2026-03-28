@@ -115,6 +115,9 @@ const defaultProps = {
   panelMessage: null,
   onDismissMessage: vi.fn(),
   summaryVm: mapImportSummaryViewModel(minimalJobForSummary()),
+  geometryDiagnostics: null,
+  rawImportSnapshot: null,
+  candidateModelForDebug: null,
 };
 
 describe('ImportReviewPanelView', () => {

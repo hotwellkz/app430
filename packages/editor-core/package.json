@@ -12,6 +12,7 @@
   "types": "./src/index.ts",
   "dependencies": {
     "@2wix/domain-model": "workspace:*",
+    "@2wix/panel-engine": "workspace:*",
     "@2wix/shared-types": "workspace:*",
     "zustand": "^4.5.5"
   },

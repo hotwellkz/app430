@@ -4,6 +4,18 @@ import type {
   ArchitecturalExtractorAdapter,
 } from './extractorAdapter.js';
 
+/** Прямоугольный контур ~12×10 м (мм) — после normalize строится оболочка из 4 внешних сегментов. */
+const MOCK_OUTER_RECT_MM: NonNullable<ArchitecturalImportSnapshot['outerContour']> = {
+  kind: 'polygon',
+  points: [
+    { x: 0, y: 0 },
+    { x: 12_000, y: 0 },
+    { x: 12_000, y: 10_000 },
+    { x: 0, y: 10_000 },
+  ],
+  confidence: { score: 0.35, level: 'low' },
+};
+
 export function createMockArchitecturalImportSnapshot(input?: {
   projectName?: string;
 }): ArchitecturalImportSnapshot {
@@ -16,7 +28,7 @@ export function createMockArchitecturalImportSnapshot(input?: {
     floors: [
       {
         id: 'floor-1',
-        label: 'Floor 1 (mock)',
+        label: 'Floor 1',
         elevationHintMm: null,
         confidence: {
           score: 0.2,
@@ -24,19 +36,9 @@ export function createMockArchitecturalImportSnapshot(input?: {
         },
       },
     ],
-    outerContour: null,
-    walls: [
-      {
-        id: 'mock-wall-internal-1',
-        floorId: 'floor-1',
-        points: [
-          { x: 0, y: 0 },
-          { x: 100, y: 0 },
-        ],
-        typeHint: 'internal',
-        thicknessHintMm: 200,
-      },
-    ],
+    outerContour: MOCK_OUTER_RECT_MM,
+    /** Пусто: normalize построит оболочку по outerContour только если после filter/refine нет сегментов (FOOTPRINT_SHELL_NO_AI_SEGMENTS). */
+    walls: [],
     openings: [],
     stairs: [],
     roofHints: {

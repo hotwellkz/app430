@@ -9,6 +9,8 @@ interface PanelOverlayLayerProps {
   selectedSlabId: string | null;
   selectedRoofId: string | null;
   showLabels: boolean;
+  /** Масштаб вида (для dash trim в мировых мм). */
+  viewZoom?: number;
 }
 
 function axisPoint(wallStart: { x: number; y: number }, wallEnd: { x: number; y: number }, t: number) {
@@ -27,6 +29,7 @@ export function PanelOverlayLayer({
   selectedSlabId,
   selectedRoofId,
   showLabels,
+  viewZoom = 1,
 }: PanelOverlayLayerProps) {
   return (
     <g>
@@ -80,6 +83,7 @@ export function PanelOverlayLayer({
         const y2 = b.y + ny * offset;
         const selected = selectedWallId === p.sourceId;
         const stroke = selected ? '#7c3aed' : '#64748b';
+        const trimDash = p.trimmed ? `${420 / viewZoom} ${240 / viewZoom}` : undefined;
         return (
           <g key={p.id}>
             <line
@@ -87,7 +91,8 @@ export function PanelOverlayLayer({
               y1={y1}
               x2={x2}
               y2={y2}
-              stroke={stroke}
+              stroke={p.trimmed ? (selected ? '#6d28d9' : '#94a3b8') : stroke}
+              strokeDasharray={trimDash}
               strokeWidth={selected ? 110 : 70}
               vectorEffect="non-scaling-stroke"
             />

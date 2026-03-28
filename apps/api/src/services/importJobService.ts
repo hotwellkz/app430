@@ -48,6 +48,7 @@ import {
   IMPORT_CANDIDATE_MAPPER_VERSION,
 } from './import/buildBuildingModelCandidate.js';
 import { classifyImportApplyHistoryVersion } from './import/historyClassifier.js';
+import { hydrateImportAssetsForExtraction } from './import/importSourceHydration.js';
 import { logObservabilityEvent } from '../utils/observability.js';
 import { omitUndefinedDeep } from '../utils/omitUndefinedForFirestore.js';
 
@@ -56,6 +57,11 @@ export const IMPORT_SCHEMA_VERSION = 1;
 interface ImportPipelineDeps {
   resolveAdapter?: () => ArchitecturalExtractorAdapter;
   resolveRunner?: () => ImportJobRunner;
+  /** Override storage hydration (tests); default loads bytes from Firebase Storage when using refs. */
+  hydrateImportAssets?: (
+    projectId: string,
+    sourceImages: CreateImportJobRequest['sourceImages']
+  ) => Promise<CreateImportJobRequest['sourceImages']>;
 }
 
 function nowIso(): string {
@@ -121,13 +127,7 @@ function computeReviewReadiness(
     const candidates = getInternalWallCandidatesFromSnapshot(snapshot);
     const allowed = new Set(candidates.map((w) => w.id));
     const selected = (decisions.internalBearingWalls.wallIds ?? []).filter((id) => allowed.has(id));
-    if (candidates.length === 0) {
-      missing.push({
-        code: 'INTERNAL_BEARING_WALL_CANDIDATES_UNAVAILABLE',
-        message: 'В snapshot нет стен для выбора внутренних несущих',
-        satisfied: false,
-      });
-    } else if (selected.length === 0) {
+    if (candidates.length > 0 && selected.length === 0) {
       missing.push({
         code: 'INTERNAL_BEARING_WALL_IDS_REQUIRED',
         message: 'Выберите хотя бы одну стену',
@@ -424,10 +424,12 @@ export async function runImportJobPipeline(
   await updateImportJobStatus(job.id, 'running');
   try {
     const adapter = deps?.resolveAdapter?.() ?? resolveExtractorAdapter();
+    const hydrate = deps?.hydrateImportAssets ?? hydrateImportAssetsForExtraction;
+    const sourceImages = await hydrate(job.projectId, input.sourceImages);
     const snapshot = await adapter.extractArchitecturalSnapshot({
       projectId: job.projectId,
       jobId: job.id,
-      sourceImages: input.sourceImages,
+      sourceImages,
       projectName: input.projectName,
     });
     return await completeImportJobWithSnapshot(job.id, snapshot);
@@ -456,6 +458,7 @@ export async function createImportJob(
     runPipeline: (jobForRun, reqForRun) =>
       runImportJobPipeline(jobForRun, reqForRun, {
         resolveAdapter: deps?.resolveAdapter,
+        hydrateImportAssets: deps?.hydrateImportAssets,
       }),
   });
   return { job };

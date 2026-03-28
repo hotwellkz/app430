@@ -53,6 +53,10 @@ function objectExistsInModel(
       return model.slabs.some((s) => s.id === id);
     case 'roof':
       return model.roofs.some((r) => r.id === id);
+    case 'foundation':
+      return (model.foundations ?? []).some((f) => f.id === id);
+    case 'groundScreed':
+      return (model.groundScreeds ?? []).some((s) => s.id === id);
     default:
       return false;
   }

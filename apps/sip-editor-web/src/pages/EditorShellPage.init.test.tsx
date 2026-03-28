@@ -18,15 +18,48 @@ vi.mock('@/api/projectsApi', () => ({
   patchCurrentVersion: vi.fn(),
 }));
 
+/** Минимальный ProjectVersion без dynamic import (vi.hoisted до ESM domain-model). */
+const refreshAfterApplyMockVersion: ProjectVersion = {
+  id: 'v-current',
+  projectId: 'p1',
+  versionNumber: 1,
+  schemaVersion: 2,
+  buildingModel: {
+    meta: { id: 'm-mock', name: 'Mock' },
+    settings: { units: 'mm', defaultWallThicknessMm: 163, gridStepMm: 100 },
+    floors: [],
+    walls: [],
+    openings: [],
+    slabs: [],
+    roofs: [],
+    panelLibrary: [],
+    panelSettings: {
+      defaultPanelTypeId: null,
+      allowTrimmedPanels: true,
+      minTrimWidthMm: 250,
+      preferFullPanels: true,
+      labelPrefixWall: 'W',
+      labelPrefixRoof: 'R',
+      labelPrefixSlab: 'S',
+    },
+  },
+  createdAt: '2026-01-01T00:00:00.000Z',
+  createdBy: null,
+};
+
 vi.mock('@/editor/refreshEditorAfterApplyCandidate', () => ({
-  refreshEditorAfterApplyCandidate: vi.fn(async () => undefined),
+  refreshEditorAfterApplyCandidate: vi.fn(async () => refreshAfterApplyMockVersion),
 }));
 
 vi.mock('@/components/VersionsPanel', () => ({ VersionsPanel: () => <div>VersionsPanel</div> }));
-vi.mock('@/components/EditorLeftSidebar', () => ({ EditorLeftSidebar: () => <div>EditorLeftSidebar</div> }));
+vi.mock('@/components/EditorLeftSidebar', () => ({
+  EditorLeftSidebar: () => <div>EditorLeftSidebar</div>,
+  EditorLeftSidebarBody: () => <div>EditorLeftSidebarBody</div>,
+}));
 vi.mock('@/components/BuildingSummaryPanel', () => ({ BuildingSummaryPanel: () => <div>BuildingSummaryPanel</div> }));
 vi.mock('@/components/BuildingWarningsPanel', () => ({ BuildingWarningsPanel: () => <div>BuildingWarningsPanel</div> }));
 vi.mock('@/components/PanelizationPanel', () => ({ PanelizationPanel: () => <div>PanelizationPanel</div> }));
+vi.mock('@/components/DraftSipBomPanel', () => ({ DraftSipBomPanel: () => <div>DraftSipBomPanel</div> }));
 vi.mock('@/components/SpecPanel', () => ({ SpecPanel: () => <div>SpecPanel</div> }));
 vi.mock('@/components/ExportPanel', () => ({ ExportPanel: () => <div>ExportPanel</div> }));
 vi.mock('@/components/ImportApplyHistoryPanel', () => ({ ImportApplyHistoryPanel: () => <div>ImportApplyHistoryPanel</div> }));

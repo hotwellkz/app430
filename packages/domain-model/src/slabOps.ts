@@ -1,7 +1,10 @@
 import type { BuildingModel, Slab } from '@2wix/shared-types';
+import { polygonAreaSigned, polygonSelfIntersects } from './foundationStripBuild.js';
 import { newDomainId } from './ids.js';
 import { getFloorsSorted } from './modelUtils.js';
 import { getWallsByFloor } from './wallOps.js';
+
+const MIN_SLAB_CONTOUR_AREA_MM2 = 250_000;
 
 export const DEFAULT_SLAB_THICKNESS_MM = 220;
 export const DEFAULT_SLAB_DIRECTION: Slab['direction'] = 'x';
@@ -34,6 +37,28 @@ export function validateSlab(
   const wallIds = new Set(model.walls.map((w) => w.id));
   for (const id of slab.contourWallIds) {
     if (!wallIds.has(id)) return { ok: false, reason: 'Контур перекрытия содержит несуществующую стену' };
+  }
+  if (slab.basedOnWallIds) {
+    for (const id of slab.basedOnWallIds) {
+      if (!wallIds.has(id)) return { ok: false, reason: 'Контур перекрытия содержит несуществующую стену' };
+    }
+  }
+  if (slab.assemblyKind !== undefined) {
+    const k = slab.assemblyKind;
+    if (k !== 'floor_slab' && k !== 'beam_floor' && k !== 'attic_floor') {
+      return { ok: false, reason: 'Некорректный assemblyKind перекрытия' };
+    }
+  }
+  if (slab.elevationMm !== undefined && !Number.isFinite(slab.elevationMm)) {
+    return { ok: false, reason: 'Некорректная отметка перекрытия' };
+  }
+  if (slab.contourMm && slab.contourMm.length >= 3) {
+    if (polygonSelfIntersects(slab.contourMm)) {
+      return { ok: false, reason: 'Контур перекрытия самопересекается' };
+    }
+    if (Math.abs(polygonAreaSigned(slab.contourMm)) < MIN_SLAB_CONTOUR_AREA_MM2) {
+      return { ok: false, reason: 'Площадь контура перекрытия слишком мала' };
+    }
   }
   return { ok: true };
 }
@@ -72,6 +97,14 @@ export function createSlab(input: Partial<Slab> & Pick<Slab, 'floorId'>): Slab {
     direction: input.direction ?? DEFAULT_SLAB_DIRECTION,
     thicknessMm: input.thicknessMm ?? DEFAULT_SLAB_THICKNESS_MM,
     generationMode: input.generationMode ?? 'auto',
+    ...(input.basedOnWallIds !== undefined ? { basedOnWallIds: input.basedOnWallIds } : {}),
+    ...(input.contourMm !== undefined ? { contourMm: input.contourMm } : {}),
+    ...(input.assemblyKind !== undefined ? { assemblyKind: input.assemblyKind } : {}),
+    ...(input.sourceWallSignature !== undefined ? { sourceWallSignature: input.sourceWallSignature } : {}),
+    ...(input.needsRecompute !== undefined ? { needsRecompute: input.needsRecompute } : {}),
+    ...(input.elevationMm !== undefined ? { elevationMm: input.elevationMm } : {}),
+    ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
+    ...(input.structuralHints !== undefined ? { structuralHints: input.structuralHints } : {}),
     ...(input.panelizationEnabled !== undefined ? { panelizationEnabled: input.panelizationEnabled } : {}),
     ...(input.panelTypeId !== undefined ? { panelTypeId: input.panelTypeId } : {}),
   };
@@ -97,12 +130,20 @@ export function updateSlabInModel(
       Slab,
       | 'slabType'
       | 'contourWallIds'
+      | 'basedOnWallIds'
       | 'direction'
       | 'thicknessMm'
       | 'generationMode'
       | 'floorId'
       | 'panelizationEnabled'
       | 'panelTypeId'
+      | 'contourMm'
+      | 'assemblyKind'
+      | 'sourceWallSignature'
+      | 'needsRecompute'
+      | 'elevationMm'
+      | 'metadata'
+      | 'structuralHints'
     >
   >
 ): { ok: true; model: BuildingModel } | { ok: false; reason: string } {

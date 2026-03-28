@@ -63,6 +63,11 @@ export function ImportReviewPanel({
       reviewApplied={reviewApplied}
       panelMessage={p.panelMessage}
       onDismissMessage={p.dismissMessage}
+      geometryDiagnostics={p.job?.editorApply?.candidate?.geometryDiagnostics ?? null}
+      rawImportSnapshot={p.job?.snapshot ?? null}
+      transformedSnapshotForDebug={p.job?.review?.reviewedSnapshot?.transformedSnapshot ?? null}
+      planImageUrlForDebug={p.job?.sourceImages?.find((i) => i.kind === 'plan')?.fileUrl ?? null}
+      candidateModelForDebug={p.job?.editorApply?.candidate?.model ?? null}
     />
   );
 }

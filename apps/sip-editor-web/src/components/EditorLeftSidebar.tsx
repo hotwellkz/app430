@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  createRoof,
   getDefaultSlabForFloor,
   createFloor,
   getFloorsSorted,
@@ -9,11 +8,10 @@ import {
   getSlabsByFloor,
   getTopFloor,
   getWallsByFloor,
-  suggestRoofBaseElevation,
   suggestNextFloor,
 } from '@2wix/domain-model';
 import type { ActivePanel } from '@2wix/editor-core';
-import { useEditorStore } from '@2wix/editor-core';
+import { EDITOR_LAYER_ROOF, useEditorStore } from '@2wix/editor-core';
 import { Sidebar, SidebarNavButton } from '@2wix/ui-kit';
 import type { FloorType } from '@2wix/shared-types';
 
@@ -36,7 +34,12 @@ function floorTypeShort(t: FloorType): string {
   return 'подв.';
 }
 
-export function EditorLeftSidebar() {
+/** Содержимое левой навигации без обёртки — для встраивания в CAD-shell. */
+export function EditorLeftSidebarBody() {
+  return <EditorLeftSidebarInner />;
+}
+
+function EditorLeftSidebarInner() {
   const draft = useEditorStore((s) => s.document.draftModel);
   const view = useEditorStore((s) => s.view);
   const selection = useEditorStore((s) => s.selection);
@@ -44,6 +47,7 @@ export function EditorLeftSidebar() {
   const setActivePanel = useEditorStore((s) => s.setActivePanel);
   const setActiveFloor = useEditorStore((s) => s.setActiveFloor);
   const selectObject = useEditorStore((s) => s.selectObject);
+  const setActiveEditorLayer = useEditorStore((s) => s.setActiveEditorLayer);
 
   const [menuFloorId, setMenuFloorId] = useState<string | null>(null);
 
@@ -105,19 +109,18 @@ export function EditorLeftSidebar() {
   };
   const createRoofAction = () => {
     if (!draft || !topFloor) return;
-    const roofDraft = createRoof({
-      floorId: topFloor.id,
-      baseElevationMm: suggestRoofBaseElevation(draft, topFloor.id),
-    });
-    const r = applyCommand({ type: 'addRoof', roof: roofDraft });
+    const r = applyCommand({ type: 'createRoofFromContour', floorId: topFloor.id });
     if (r.ok) {
-      selectObject(roofDraft.id, 'roof');
+      const m = useEditorStore.getState().document.draftModel;
+      const roofNew = m ? getRoofForTopFloor(m) : null;
+      if (roofNew) selectObject(roofNew.id, 'roof');
       setActivePanel('roof');
+      setActiveEditorLayer(EDITOR_LAYER_ROOF);
     }
   };
 
   return (
-    <Sidebar>
+    <>
       {SECTIONS.map((s) => (
         <SidebarNavButton
           key={s.id}
@@ -373,6 +376,14 @@ export function EditorLeftSidebar() {
           )}
         </div>
       ) : null}
+    </>
+  );
+}
+
+export function EditorLeftSidebar() {
+  return (
+    <Sidebar>
+      <EditorLeftSidebarInner />
     </Sidebar>
   );
 }

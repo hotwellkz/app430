@@ -1,11 +1,12 @@
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import { DevLaunchPage } from '@/pages/DevLaunchPage';
 import { EditorShellPage } from '@/pages/EditorShellPage';
+import { SipProjectsListPage } from '@/pages/SipProjectsListPage';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route path="/" element={<Navigate to="/sip-editor" replace />} />
         <Route
@@ -23,6 +24,11 @@ export default function App() {
                 </code>
               </p>
               <p style={{ marginTop: 12 }}>
+                <Link to="/sip-editor/projects" style={{ color: '#2563eb' }}>
+                  Список SIP-проектов (шаблоны и фильтр)
+                </Link>
+              </p>
+              <p style={{ marginTop: 8 }}>
                 <Link to="/sip-editor/dev-launch" style={{ color: '#2563eb' }}>
                   Dev-launch — ввести projectId и uid вручную
                 </Link>
@@ -31,6 +37,7 @@ export default function App() {
           }
         />
         <Route path="/sip-editor/dev-launch" element={<DevLaunchPage />} />
+        <Route path="/sip-editor/projects" element={<SipProjectsListPage />} />
         <Route
           path="/sip-editor/:projectId"
           element={

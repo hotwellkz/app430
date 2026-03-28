@@ -47,13 +47,7 @@ export function computeImportReviewReadiness(
     const candidates = getInternalWallCandidatesFromSnapshot(snapshot);
     const allowed = new Set(candidates.map((w) => w.id));
     const selected = (decisions.internalBearingWalls.wallIds ?? []).filter((id) => allowed.has(id));
-    if (candidates.length === 0) {
-      missing.push({
-        code: 'INTERNAL_BEARING_WALL_CANDIDATES_UNAVAILABLE',
-        message: 'В snapshot нет стен для выбора внутренних несущих',
-        satisfied: false,
-      });
-    } else if (selected.length === 0) {
+    if (candidates.length > 0 && selected.length === 0) {
       missing.push({
         code: 'INTERNAL_BEARING_WALL_IDS_REQUIRED',
         message: 'Выберите хотя бы одну стену',

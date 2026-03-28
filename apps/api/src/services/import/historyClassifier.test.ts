@@ -9,7 +9,7 @@ describe('classifyImportApplyHistoryVersion', () => {
       importProvenanceRaw: {
         sourceKind: 'ai_import',
         importJobId: 'ij-1',
-        mapperVersion: 'import-candidate-v1',
+        mapperVersion: 'import-candidate-v2',
         reviewedSnapshotVersion: 'r1',
         appliedBy: 'u1',
         appliedAt: '2026-03-26T12:00:00.000Z',

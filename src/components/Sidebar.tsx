@@ -38,6 +38,7 @@ import { useMobileSidebar } from '../contexts/MobileSidebarContext';
 import { useMobileWhatsAppChat } from '../contexts/MobileWhatsAppChatContext';
 import { useCurrentCompanyUser } from '../hooks/useCurrentCompanyUser';
 import type { MenuSectionId } from '../types/menuAccess';
+import { isTransactionsFloatingBurgerRoute } from './navigation/crmRouteMatchers';
 
 interface MenuItem {
   icon: React.ReactNode;
@@ -125,12 +126,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onPageChange, currentPage }) =
   const mobileWhatsApp = useMobileWhatsAppChat();
   const navigate = useNavigate();
   const location = useLocation();
-  /** WhatsApp: бургер в шапке страницы. Аналитика: своя шапка — плавающую кнопку не показываем */
-  const hideFloatingBurgerOnWhatsApp = location.pathname === '/whatsapp';
-  const hideFloatingBurgerOnAnalytics = location.pathname === '/analytics';
+  /** Плавающий ☰ слева — только на экранах транзакций; на WhatsApp/прочих — бургер в шапке страницы или в контенте */
   const hideBurgerInChat = location.pathname === '/whatsapp' && (mobileWhatsApp?.isMobileWhatsAppChatOpen ?? false);
-  const hideFloatingBurger =
-    hideFloatingBurgerOnWhatsApp || hideFloatingBurgerOnAnalytics;
+  const hideFloatingBurger = !isTransactionsFloatingBurgerRoute(location.pathname) || hideBurgerInChat;
   const [isAdmin, setIsAdmin] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isApprovedEmail, setIsApprovedEmail] = useState(false);
@@ -147,6 +145,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ onPageChange, currentPage }) =
   const { isMenuVisible } = useMenuVisibility();
   const whatsAppBadge = useWhatsAppFloatingButtonState(true);
   const whatsAppBadgeCount = whatsAppBadge.unreadChatsCount + whatsAppBadge.awaitingReplyChatsCount;
+
+  // Ушли со страницы транзакций — закрываем drawer, чтобы не оставался overlay без кнопки ☰
+  useEffect(() => {
+    if (!isTransactionsFloatingBurgerRoute(location.pathname) && isMobileMenuOpen) {
+      setMobileMenuOpenFalse();
+    }
+  }, [location.pathname, isMobileMenuOpen, setMobileMenuOpenFalse]);
 
   useEffect(() => {
     const checkAdminStatus = async () => {

@@ -28,3 +28,21 @@ export type {
   ViewState,
 } from './types/state.js';
 export { DEFAULT_HISTORY_LIMIT } from './types/state.js';
+export {
+  DEFAULT_NEW_WALL_PLACEMENT,
+  EDITOR_LAYER_FOUNDATION,
+  EDITOR_LAYER_GROUND_SCREED,
+  EDITOR_LAYER_ROOF,
+  EDITOR_LAYER_SLABS,
+  editorLayerFloorOpenings,
+  editorLayerFloorWalls,
+  isEditorLayerLocked,
+  isEditorLayerVisible,
+  isFloorOpeningsLayer,
+  isFloorPlanEditorLayer,
+  isStructuralEditorLayer,
+  isWallDrawingLayer,
+  parseFloorIdFromEditorLayer,
+  parseFloorOpeningsLayer,
+  parseFloorWallsLayer,
+} from './editorLayers.js';

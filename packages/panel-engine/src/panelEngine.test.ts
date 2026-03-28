@@ -95,7 +95,7 @@ describe('panel-engine wall-first', () => {
     model.walls = [wall()];
     model.openings = [opening({ positionAlongWall: 300 })];
     const r = buildPanelizationSnapshot(model);
-    expect(r.warnings.some((w) => w.code === 'OPENING_TOO_CLOSE_TO_WALL_START')).toBe(true);
+    expect(r.warnings.some((w) => w.code === 'OPENING_TOO_CLOSE_TO_EDGE')).toBe(true);
   });
 
   it('supports horizontal direction', () => {

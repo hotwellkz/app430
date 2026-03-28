@@ -154,6 +154,18 @@ function candidateCountsLines(candidate: BuildingModelCandidate): ImportSummaryK
       label: IMPORT_SUMMARY_UI.candidateStatusLabel,
       value: candidate.status === 'partial' ? 'Частичный' : candidate.status === 'ready' ? 'Готов' : '—',
     },
+    ...(candidate.geometryDiagnostics
+      ? ([
+          {
+            label: 'Качество extraction',
+            value: `${candidate.geometryDiagnostics.qualityLevel} · стены: ${
+              candidate.geometryDiagnostics.normalizationWallStrategy ?? '?'
+            } · контур shell: ${candidate.geometryDiagnostics.usedFootprintShell ? 'да' : 'нет'} · крыша: ${
+              candidate.geometryDiagnostics.roofIncluded ? 'да' : 'нет'
+            }`,
+          },
+        ] as ImportSummaryKeyValueLine[])
+      : []),
     {
       label: IMPORT_SUMMARY_UI.countsLabel,
       value: `этажей ${m.floors.length}, стен ${m.walls.length}, проёмов ${m.openings.length}, плит ${m.slabs.length}, крыш ${m.roofs.length}`,

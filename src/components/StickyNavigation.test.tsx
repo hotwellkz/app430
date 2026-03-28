@@ -38,13 +38,13 @@ describe('StickyNavigation', () => {
     document.body.classList.remove('attachment-preview-open');
   });
 
-  it('не отображается вне transaction роутов', () => {
+  it('отображается на странице клиентов (глобальный правый сайдбар)', () => {
     render(
       <MemoryRouter initialEntries={['/clients']}>
         <StickyNavigation onNavigate={vi.fn()} />
       </MemoryRouter>
     );
-    expect(screen.queryByTestId('sticky-navigation-root')).toBeNull();
+    expect(screen.getByTestId('sticky-navigation-root')).toBeTruthy();
   });
 
   it('отображается на странице транзакций', () => {

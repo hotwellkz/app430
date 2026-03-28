@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const store = new Map<string, Record<string, any>>();
+/** Hoisted so vi.mock('./sipProjectService') видит тот же Map, что и тесты. */
+const store = vi.hoisted(() => new Map<string, Record<string, any>>());
 
 function assertNoFirestoreUndefined(value: unknown, path = 'root'): void {
   if (value === undefined) {
@@ -81,7 +82,7 @@ function resetStore() {
     createdAt: '2026-03-25T10:00:00.000Z',
     updatedAt: '2026-03-25T10:00:00.000Z',
     importSchemaVersion: 1,
-    sourceImages: [{ id: 'img-old', kind: 'plan', fileName: 'old.png' }],
+    sourceImages: [{ id: 'img-old', kind: 'plan', fileName: 'old.png', base64Data: 'WA==' }],
     snapshot: null,
     errorMessage: null,
   });
@@ -92,7 +93,7 @@ function resetStore() {
     createdAt: '2026-03-26T10:00:00.000Z',
     updatedAt: '2026-03-26T10:00:00.000Z',
     importSchemaVersion: 1,
-    sourceImages: [{ id: 'img-new', kind: 'facade', fileName: 'new.png' }],
+    sourceImages: [{ id: 'img-new', kind: 'facade', fileName: 'new.png', base64Data: 'WA==' }],
     snapshot: null,
     errorMessage: null,
   });
@@ -164,17 +165,25 @@ vi.mock('./sipProjectService.js', () => ({
   getProject: vi.fn(async (projectId: string) => ({
     id: projectId,
   })),
-  patchCurrentVersion: vi.fn(async (_projectId: string, body: { buildingModel: unknown }) => ({
-    id: 'v-current',
-    projectId: 'p1',
-    versionNumber: 1,
-    schemaVersion: 2,
-    buildingModel: body.buildingModel,
-    createdAt: new Date('2026-03-26T10:00:00.000Z').toISOString(),
-    createdBy: 'u1',
-    basedOnVersionId: null,
-    isSnapshot: false,
-  })),
+  patchCurrentVersion: vi.fn(async (_projectId: string, body: { buildingModel: unknown }) => {
+    const key = 'sipEditor_projectVersions/v-current';
+    const prev = store.get(key) ?? {};
+    store.set(key, {
+      ...prev,
+      buildingModel: body.buildingModel,
+    });
+    return {
+      id: 'v-current',
+      projectId: 'p1',
+      versionNumber: 1,
+      schemaVersion: 2,
+      buildingModel: body.buildingModel,
+      createdAt: new Date('2026-03-26T10:00:00.000Z').toISOString(),
+      createdBy: 'u1',
+      basedOnVersionId: null,
+      isSnapshot: false,
+    };
+  }),
   getCurrentVersion: vi.fn(async () => ({
     id: 'v-current',
     projectId: 'p1',
@@ -233,7 +242,7 @@ describe('importJobService', () => {
     const res = await createImportJob(
       'p1',
       {
-        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }],
         projectName: 'My Project',
       },
       'u1'
@@ -250,7 +259,7 @@ describe('importJobService', () => {
     const res = await createImportJob(
       'p1',
       {
-        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }],
         projectName: 'Async Demo',
       },
       'u1',
@@ -276,11 +285,11 @@ describe('importJobService', () => {
     const queued = await createImportJobRecord(
       'p1',
       'u1',
-      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] }
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }] }
     );
     const failed = await runImportJobPipeline(
       queued,
-      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }] },
       {
         resolveAdapter: () => ({
           mode: 'mock',
@@ -295,6 +304,84 @@ describe('importJobService', () => {
     expect(failed.errorMessage).toContain('Extractor crash');
   });
 
+  it('runImportJobPipeline передаёт base64Data в extractor (in-memory request)', async () => {
+    let capturedBase64: string | undefined;
+    const queued = await createImportJobRecord('p1', 'u1', {
+      sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }],
+    });
+    await runImportJobPipeline(
+      queued,
+      {
+        sourceImages: [
+          {
+            id: 'img-1',
+            kind: 'plan',
+            fileName: 'plan.png',
+            mimeType: 'image/png',
+            base64Data: 'pixel-payload',
+          },
+        ],
+      },
+      {
+        resolveAdapter: () => ({
+          mode: 'mock',
+          async extractArchitecturalSnapshot(input) {
+            capturedBase64 = input.sourceImages[0]?.base64Data;
+            return createMockArchitecturalImportSnapshot({ projectName: 'P' });
+          },
+        }),
+      }
+    );
+    expect(capturedBase64).toBe('pixel-payload');
+  });
+
+  it('runImportJobPipeline может гидратить storage refs (deps.hydrateImportAssets)', async () => {
+    const queued = await createImportJobRecord('p1', 'u1', {
+      sourceImages: [
+        {
+          id: 'img-1',
+          kind: 'plan',
+          fileName: 'a.png',
+          storageProvider: 'firebase',
+          storagePath: 'sip-import-sources/p1/img-1/a.png',
+        },
+      ],
+    });
+    let seen = '';
+    await runImportJobPipeline(
+      queued,
+      {
+        sourceImages: [
+          {
+            id: 'img-1',
+            kind: 'plan',
+            fileName: 'a.png',
+            storageProvider: 'firebase',
+            storagePath: 'sip-import-sources/p1/img-1/a.png',
+          },
+        ],
+      },
+      {
+        hydrateImportAssets: async () => [
+          {
+            id: 'img-1',
+            kind: 'plan',
+            fileName: 'a.png',
+            base64Data: 'hydrated-b64',
+          },
+        ],
+        resolveAdapter: () => ({
+          mode: 'mock',
+          async extractArchitecturalSnapshot(input) {
+            seen = input.sourceImages[0]?.base64Data ?? '';
+            return createMockArchitecturalImportSnapshot();
+          },
+        }),
+      }
+    );
+    expect(seen).toBe('hydrated-b64');
+  });
+
   it('list сортируется по createdAt (newest first)', async () => {
     const res = await listImportJobs('p1', 'u1');
     expect(res.items[0]?.id).toBe('ij-newer');
@@ -304,10 +391,9 @@ describe('importJobService', () => {
   it('mock snapshot создаётся предсказуемо', () => {
     const s = createMockArchitecturalImportSnapshot({ projectName: 'Demo' });
     expect(s.projectMeta.name).toBe('Demo');
-    expect(s.outerContour).toBeNull();
-    expect(s.walls).toHaveLength(1);
-    expect(s.walls[0]?.id).toBe('mock-wall-internal-1');
-    expect(s.walls[0]?.typeHint).toBe('internal');
+    expect(s.outerContour?.points?.length).toBeGreaterThanOrEqual(3);
+    expect(s.walls).toHaveLength(0);
+    expect(s.floors[0]?.label).toBe('Floor 1');
     expect(s.unresolved[0]?.severity).toBe('blocking');
     expect(s.notes[0]).toContain('mock import snapshot generated without AI extractor');
   });
@@ -354,7 +440,7 @@ describe('importJobService', () => {
     const created = await createImportJob(
       'p1',
       {
-        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }],
         projectName: 'Review Test',
       },
       'u1'
@@ -380,7 +466,7 @@ describe('importJobService', () => {
       {
         updatedBy: 'u1',
         decisions: {
-          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
+          internalBearingWalls: { confirmed: true, wallIds: [] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -395,7 +481,7 @@ describe('importJobService', () => {
     const created = await createImportJob(
       'p1',
       {
-        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }],
       },
       'u1'
     );
@@ -408,7 +494,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 3000 },
           roofTypeConfirmed: 'single-slope',
-          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
+          internalBearingWalls: { confirmed: true, wallIds: [] },
           scale: { mode: 'override', mmPerPixel: 2.5 },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'override' }],
         },
@@ -430,7 +516,7 @@ describe('importJobService', () => {
     const created = await createImportJob(
       'p1',
       {
-        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }],
       },
       'u1'
     );
@@ -443,7 +529,7 @@ describe('importJobService', () => {
     const created = await createImportJob(
       'p1',
       {
-        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+        sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }],
       },
       'u1'
     );
@@ -455,7 +541,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 2800 },
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
+          internalBearingWalls: { confirmed: true, wallIds: [] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -470,7 +556,7 @@ describe('importJobService', () => {
   it('cannot prepare candidate before review.apply', async () => {
     const created = await createImportJob(
       'p1',
-      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }] },
       'u1'
     );
     await expect(
@@ -486,7 +572,7 @@ describe('importJobService', () => {
   it('builds and stores candidate from reviewed snapshot', async () => {
     const created = await createImportJob(
       'p1',
-      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }] },
       'u1'
     );
     await saveImportJobReview(
@@ -497,7 +583,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 2800 },
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
+          internalBearingWalls: { confirmed: true, wallIds: [] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -518,7 +604,7 @@ describe('importJobService', () => {
   it('repeat prepare recalculates candidate predictably', async () => {
     const created = await createImportJob(
       'p1',
-      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }] },
       'u1'
     );
     await saveImportJobReview(
@@ -529,7 +615,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 2800 },
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
+          internalBearingWalls: { confirmed: true, wallIds: [] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -557,7 +643,7 @@ describe('importJobService', () => {
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const created = await createImportJob(
       'p1',
-      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }] },
       'u1'
     );
     await saveImportJobReview(
@@ -568,7 +654,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 2800 },
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
+          internalBearingWalls: { confirmed: true, wallIds: [] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -594,7 +680,11 @@ describe('importJobService', () => {
     expect(result.applySummary.warningsCount).toBeGreaterThanOrEqual(0);
     const versionDoc = store.get('sipEditor_projectVersions/v-current');
     expect(versionDoc?.importProvenance?.importJobId).toBe(created.job.id);
-    expect(versionDoc?.importProvenance?.mapperVersion).toBe('import-candidate-v1');
+    expect(versionDoc?.importProvenance?.mapperVersion).toBe('import-candidate-v2');
+    const jobAfterPrepare = store.get(`sipEditor_importJobs/${created.job.id}`);
+    const expectedModel = jobAfterPrepare?.editorApply?.candidate?.model;
+    expect(expectedModel).toBeTruthy();
+    expect(versionDoc?.buildingModel).toEqual(expectedModel);
     expect(infoSpy).toHaveBeenCalled();
     expect(infoSpy.mock.calls.some((call) => String(call[0]).includes('import_apply_candidate_success'))).toBe(
       true
@@ -605,7 +695,7 @@ describe('importJobService', () => {
   it('cannot apply candidate before review is applied', async () => {
     const created = await createImportJob(
       'p1',
-      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }] },
       'u1'
     );
     await expect(
@@ -626,7 +716,7 @@ describe('importJobService', () => {
   it('cannot apply candidate before candidate_ready', async () => {
     const created = await createImportJob(
       'p1',
-      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }] },
       'u1'
     );
     await saveImportJobReview(
@@ -637,7 +727,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 2800 },
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
+          internalBearingWalls: { confirmed: true, wallIds: [] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -664,7 +754,7 @@ describe('importJobService', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const created = await createImportJob(
       'p1',
-      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }] },
       'u1'
     );
     await saveImportJobReview(
@@ -675,7 +765,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 2800 },
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
+          internalBearingWalls: { confirmed: true, wallIds: [] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -707,7 +797,7 @@ describe('importJobService', () => {
   it('repeated apply returns previously applied summary', async () => {
     const created = await createImportJob(
       'p1',
-      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }] },
+      { sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }] },
       'u1'
     );
     await saveImportJobReview(
@@ -718,7 +808,7 @@ describe('importJobService', () => {
         decisions: {
           floorHeightsMmByFloorId: { 'floor-1': 2800 },
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
+          internalBearingWalls: { confirmed: true, wallIds: [] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -763,7 +853,7 @@ describe('importJobService', () => {
       importProvenance: {
         sourceKind: 'ai_import',
         importJobId: 'ij-old',
-        mapperVersion: 'import-candidate-v1',
+        mapperVersion: 'import-candidate-v2',
         reviewedSnapshotVersion: 'rev-old',
         appliedBy: 'u1',
         appliedAt: '2026-03-24T11:00:00.000Z',
@@ -781,7 +871,7 @@ describe('importJobService', () => {
       importProvenance: {
         sourceKind: 'ai_import',
         importJobId: 'ij-new',
-        mapperVersion: 'import-candidate-v1',
+        mapperVersion: 'import-candidate-v2',
         reviewedSnapshotVersion: 'rev-new',
         appliedBy: 'u1',
         appliedAt: '2026-03-26T11:00:00.000Z',
@@ -807,7 +897,7 @@ describe('importJobService', () => {
       importProvenance: {
         sourceKind: 'ai_import',
         importJobId: 'ij-legacy',
-        mapperVersion: 'import-candidate-v1',
+        mapperVersion: 'import-candidate-v2',
       },
     });
     const result = await listImportApplyHistory('p1', 'u1');
@@ -826,7 +916,7 @@ describe('importJobService', () => {
   it('integration happy-path: create -> review -> apply-review -> prepare -> apply-candidate -> history', async () => {
     const created = await createImportJob(
       'p1',
-      { sourceImages: [{ id: 'img-100', kind: 'plan', fileName: 'plan.png' }] },
+      { sourceImages: [{ id: 'img-100', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }] },
       'u1'
     );
     const jobId = created.job.id;
@@ -852,7 +942,7 @@ describe('importJobService', () => {
         updatedBy: 'u1',
         decisions: {
           roofTypeConfirmed: 'gabled',
-          internalBearingWalls: { confirmed: true, wallIds: ['mock-wall-internal-1'] },
+          internalBearingWalls: { confirmed: true, wallIds: [] },
           scale: { mode: 'confirmed' },
           issueResolutions: [{ issueId: 'mock-extractor-not-connected', action: 'confirm' }],
         },
@@ -881,14 +971,14 @@ describe('importJobService', () => {
 
     const versionDoc = store.get('sipEditor_projectVersions/v-current');
     expect(versionDoc?.importProvenance?.importJobId).toBe(jobId);
-    expect(versionDoc?.importProvenance?.mapperVersion).toBe('import-candidate-v1');
+    expect(versionDoc?.importProvenance?.mapperVersion).toBe('import-candidate-v2');
     expect(versionDoc?.importProvenance?.reviewedSnapshotVersion).toBeTruthy();
     expect(versionDoc?.importProvenance?.appliedBy).toBe('u1');
     expect(versionDoc?.importProvenance?.appliedAt).toBeTruthy();
 
     const history = await listImportApplyHistory('p1', 'u1');
     const applied = history.items.find((x) => x.importJobId === jobId);
-    expect(applied?.mapperVersion).toBe('import-candidate-v1');
+    expect(applied?.mapperVersion).toBe('import-candidate-v2');
     expect(applied?.reviewedSnapshotVersion).toBeTruthy();
     expect(applied?.appliedBy).toBe('u1');
     expect(applied?.appliedAt).toBeTruthy();

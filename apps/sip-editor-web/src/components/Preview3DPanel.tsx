@@ -1,12 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { Canvas, type ThreeEvent, useThree } from '@react-three/fiber';
-import { useEditorStore } from '@2wix/editor-core';
+import {
+  EDITOR_LAYER_FOUNDATION,
+  EDITOR_LAYER_GROUND_SCREED,
+  EDITOR_LAYER_ROOF,
+  EDITOR_LAYER_SLABS,
+  useEditorStore,
+} from '@2wix/editor-core';
 import type { BuildingModel } from '@2wix/shared-types';
+import { getFloorsSorted } from '@2wix/domain-model';
+import {
+  editorLayerFloorOpenings,
+  editorLayerFloorWalls,
+} from '@2wix/editor-core';
 import {
   buildPreviewSceneModel,
   getSelectedObjectFloorId,
 } from '../preview3d/buildPreviewSceneModel';
+import { RoofSurfaceMeshes } from '../preview3d/RoofSurfaceMeshes';
+import { SlabExtrusionMeshes } from '../preview3d/SlabExtrusionMeshes';
 import type {
   PreviewBoxMesh,
   PreviewBuildOptions,
@@ -17,6 +30,8 @@ import type {
 interface Preview3DPanelProps {
   model: BuildingModel;
   activeFloorId: string | null;
+  /** Синхронизация с панелью слоёв 2D (видимость). */
+  layerVisibility: Record<string, boolean>;
 }
 
 interface SceneMeshesProps {
@@ -99,16 +114,16 @@ function FrameCamera({
   );
 }
 
-export function Preview3DPanel({ model, activeFloorId }: Preview3DPanelProps) {
+export function Preview3DPanel({ model, activeFloorId, layerVisibility }: Preview3DPanelProps) {
   const selectObject = useEditorStore((s) => s.selectObject);
   const selection = useEditorStore((s) => s.selection);
-  // Локальное состояние для 3D UI хранится в компоненте (не влияет на доменную модель/undo).
-  const [layers, setLayers] = useState<PreviewLayerVisibility>({
+  const setLayerVisibility = useEditorStore((s) => s.setLayerVisibility);
+  const layersDefault: PreviewLayerVisibility = {
     walls: true,
     openings: true,
     slabs: true,
     roof: true,
-  });
+  };
   const [floorMode, setFloorMode] = useState<PreviewFloorMode>('all');
   const [fitNonce, setFitNonce] = useState(0);
 
@@ -122,12 +137,36 @@ export function Preview3DPanel({ model, activeFloorId }: Preview3DPanelProps) {
     () => ({
       activeFloorId,
       floorMode,
-      layers,
+      layers: layersDefault,
+      layerVisibilityKeys: layerVisibility,
     }),
-    [activeFloorId, floorMode, layers]
+    [activeFloorId, floorMode, layerVisibility]
   );
   const snapshot = useMemo(() => buildPreviewSceneModel(model, options), [model, options]);
   const selectedId = selection.selectedObjectId;
+
+  const floorsSorted = useMemo(() => getFloorsSorted(model), [model]);
+  const allWallsVisible = floorsSorted.every(
+    (f) => layerVisibility[editorLayerFloorWalls(f.id)] !== false
+  );
+  const allOpeningsVisible = floorsSorted.every(
+    (f) => layerVisibility[editorLayerFloorOpenings(f.id)] !== false
+  );
+  const slabsVisible = layerVisibility[EDITOR_LAYER_SLABS] !== false;
+  const roofVis = layerVisibility[EDITOR_LAYER_ROOF] !== false;
+  const foundationVis = layerVisibility[EDITOR_LAYER_FOUNDATION] !== false;
+  const screedVis = layerVisibility[EDITOR_LAYER_GROUND_SCREED] !== false;
+
+  const setAllWalls = (visible: boolean) => {
+    for (const f of floorsSorted) {
+      setLayerVisibility(editorLayerFloorWalls(f.id), visible);
+    }
+  };
+  const setAllOpenings = (visible: boolean) => {
+    for (const f of floorsSorted) {
+      setLayerVisibility(editorLayerFloorOpenings(f.id), visible);
+    }
+  };
 
   if (snapshot.bounds === null) {
     return (
@@ -152,34 +191,50 @@ export function Preview3DPanel({ model, activeFloorId }: Preview3DPanelProps) {
         <label style={{ fontSize: 12 }}>
           <input
             type="checkbox"
-            checked={layers.walls}
-            onChange={(e) => setLayers({ ...layers, walls: e.target.checked })}
+            checked={allWallsVisible}
+            onChange={(e) => setAllWalls(e.target.checked)}
           />{' '}
-          Walls
+          Стены
         </label>
         <label style={{ fontSize: 12 }}>
           <input
             type="checkbox"
-            checked={layers.openings}
-            onChange={(e) => setLayers({ ...layers, openings: e.target.checked })}
+            checked={allOpeningsVisible}
+            onChange={(e) => setAllOpenings(e.target.checked)}
           />{' '}
-          Openings
+          Проёмы
         </label>
         <label style={{ fontSize: 12 }}>
           <input
             type="checkbox"
-            checked={layers.slabs}
-            onChange={(e) => setLayers({ ...layers, slabs: e.target.checked })}
+            checked={slabsVisible}
+            onChange={(e) => setLayerVisibility(EDITOR_LAYER_SLABS, e.target.checked)}
           />{' '}
-          Slabs
+          Перекрытия
         </label>
         <label style={{ fontSize: 12 }}>
           <input
             type="checkbox"
-            checked={layers.roof}
-            onChange={(e) => setLayers({ ...layers, roof: e.target.checked })}
+            checked={roofVis}
+            onChange={(e) => setLayerVisibility(EDITOR_LAYER_ROOF, e.target.checked)}
           />{' '}
-          Roof
+          Крыша
+        </label>
+        <label style={{ fontSize: 12 }}>
+          <input
+            type="checkbox"
+            checked={foundationVis}
+            onChange={(e) => setLayerVisibility(EDITOR_LAYER_FOUNDATION, e.target.checked)}
+          />{' '}
+          Фундамент
+        </label>
+        <label style={{ fontSize: 12 }}>
+          <input
+            type="checkbox"
+            checked={screedVis}
+            onChange={(e) => setLayerVisibility(EDITOR_LAYER_GROUND_SCREED, e.target.checked)}
+          />{' '}
+          Стяжка
         </label>
         <label style={{ fontSize: 12 }}>
           Floors:
@@ -211,6 +266,12 @@ export function Preview3DPanel({ model, activeFloorId }: Preview3DPanelProps) {
             onSelect={(item) => selectObject(item.sourceId, item.objectType)}
           />
           <SceneMeshes
+            items={snapshot.wallPanelJoints ?? []}
+            color="#475569"
+            selectedObjectId={selectedId}
+            onSelect={(item) => selectObject(item.sourceId, item.objectType)}
+          />
+          <SceneMeshes
             items={snapshot.openings}
             color="#0f172a"
             selectedObjectId={selectedId}
@@ -219,6 +280,28 @@ export function Preview3DPanel({ model, activeFloorId }: Preview3DPanelProps) {
           <SceneMeshes
             items={snapshot.slabs}
             color="#0ea5e9"
+            selectedObjectId={selectedId}
+            onSelect={(item) => selectObject(item.sourceId, item.objectType)}
+          />
+          <SlabExtrusionMeshes
+            items={snapshot.slabExtrusions ?? []}
+            selectedObjectId={selectedId}
+            onSelectSlab={(slabId) => selectObject(slabId, 'slab')}
+          />
+          <RoofSurfaceMeshes
+            items={snapshot.roofSurfaces ?? []}
+            selectedObjectId={selectedId}
+            onSelectRoof={(roofId) => selectObject(roofId, 'roof')}
+          />
+          <SceneMeshes
+            items={snapshot.foundations}
+            color="#78716c"
+            selectedObjectId={selectedId}
+            onSelect={(item) => selectObject(item.sourceId, item.objectType)}
+          />
+          <SceneMeshes
+            items={snapshot.groundScreeds}
+            color="#a8a29e"
             selectedObjectId={selectedId}
             onSelect={(item) => selectObject(item.sourceId, item.objectType)}
           />
@@ -238,6 +321,10 @@ export function Preview3DPanel({ model, activeFloorId }: Preview3DPanelProps) {
           <div>walls rendered: {snapshot.stats.wallsRendered}</div>
           <div>openings rendered: {snapshot.stats.openingsRendered}</div>
           <div>slabs rendered: {snapshot.stats.slabsRendered}</div>
+          <div>slab extrusions: {snapshot.stats.slabExtrusionsRendered ?? 0}</div>
+          <div>roof surfaces: {snapshot.stats.roofSurfacesRendered ?? 0}</div>
+          <div>foundations: {snapshot.stats.foundationsRendered}</div>
+          <div>ground screeds: {snapshot.stats.groundScreedsRendered}</div>
           <div>roof rendered: {snapshot.stats.roofRendered ? 'yes' : 'no'}</div>
           <div>floor filter mode: {floorMode}</div>
           <div>

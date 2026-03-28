@@ -1,6 +1,8 @@
 import type { BuildingModel, Point2D, Wall } from '@2wix/shared-types';
-import { getFloorById } from './modelUtils.js';
+import { findWallById, getFloorById } from './modelUtils.js';
 import { newDomainId } from './ids.js';
+import { applyWallGeometryPatch, pruneUnusedWallJoints } from './wallJointOps.js';
+import { clearWallPanelLayout } from './wallPanelLayoutOps.js';
 
 const LENGTH_EPS_MM = 1e-3;
 
@@ -50,6 +52,12 @@ export function validateWall(wall: Wall, model: BuildingModel): WallValidationRe
       return { ok: false, reason: 'Некорректное направление панелизации стены' };
     }
   }
+  if (wall.wallPlacement !== undefined) {
+    const p = wall.wallPlacement;
+    if (p !== 'on-axis' && p !== 'inside' && p !== 'outside') {
+      return { ok: false, reason: 'Некорректный wallPlacement' };
+    }
+  }
   return { ok: true };
 }
 
@@ -65,6 +73,7 @@ export function createWall(input: {
   panelDirection?: Wall['panelDirection'];
   panelTypeId?: Wall['panelTypeId'];
   heightMm?: number;
+  wallPlacement?: Wall['wallPlacement'];
 }): Wall {
   const w: Wall = {
     id: input.id ?? newDomainId(),
@@ -79,6 +88,7 @@ export function createWall(input: {
   if (input.panelDirection !== undefined) w.panelDirection = input.panelDirection;
   if (input.panelTypeId !== undefined) w.panelTypeId = input.panelTypeId;
   if (input.heightMm !== undefined) w.heightMm = input.heightMm;
+  if (input.wallPlacement !== undefined) w.wallPlacement = input.wallPlacement;
   return w;
 }
 
@@ -113,31 +123,54 @@ export function updateWallInModel(
       | 'panelDirection'
       | 'panelTypeId'
       | 'heightMm'
+      | 'wallPlacement'
     >
   >
 ): UpdateWallResult {
-  const idx = model.walls.findIndex((w) => w.id === wallId);
-  if (idx < 0) {
+  const prev = findWallById(model, wallId);
+  if (!prev) {
     return { ok: false, reason: 'Стена не найдена' };
   }
-  const prev = model.walls[idx]!;
+
+  let m = model;
+  if (patch.start !== undefined || patch.end !== undefined) {
+    const geo: Partial<Pick<Wall, 'start' | 'end'>> = {};
+    if (patch.start !== undefined) geo.start = patch.start;
+    if (patch.end !== undefined) geo.end = patch.end;
+    const r = applyWallGeometryPatch(m, wallId, geo);
+    if ('ok' in r && (r as { ok?: boolean }).ok === false) {
+      return r as { ok: false; reason: string };
+    }
+    m = r as BuildingModel;
+  }
+
+  const { start: _ps, end: _pe, ...rest } = patch;
+  if (Object.keys(rest).length === 0) {
+    const cur = findWallById(m, wallId)!;
+    const v = validateWall(cur, m);
+    if (!v.ok) return v;
+    return m;
+  }
+
+  const cur = findWallById(m, wallId)!;
   const next: Wall = {
-    ...prev,
-    ...patch,
-    start: patch.start ? { ...patch.start } : prev.start,
-    end: patch.end ? { ...patch.end } : prev.end,
+    ...cur,
+    ...rest,
+    start: { ...cur.start },
+    end: { ...cur.end },
   };
-  const v = validateWall(next, model);
+  const v = validateWall(next, m);
   if (!v.ok) return v;
-  const walls = [...model.walls];
-  walls[idx] = next;
-  return { ...model, walls };
+  const walls = m.walls.map((w) => (w.id === wallId ? next : w));
+  return { ...m, walls };
 }
 
 export function deleteWallFromModel(model: BuildingModel, wallId: string): BuildingModel {
-  return {
-    ...model,
-    walls: model.walls.filter((w) => w.id !== wallId),
-    openings: model.openings.filter((o) => o.wallId !== wallId),
+  const withoutLayout = clearWallPanelLayout(model, wallId);
+  const next: BuildingModel = {
+    ...withoutLayout,
+    walls: withoutLayout.walls.filter((w) => w.id !== wallId),
+    openings: withoutLayout.openings.filter((o) => o.wallId !== wallId),
   };
+  return pruneUnusedWallJoints(next);
 }

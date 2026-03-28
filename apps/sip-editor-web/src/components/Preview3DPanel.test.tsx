@@ -19,14 +19,14 @@ vi.mock('@react-three/drei', () => ({
 
 describe('Preview3DPanel', () => {
   it('рендерит empty state для пустой модели', () => {
-    const model = createEmptyBuildingModel('m');
-    render(<Preview3DPanel model={model} activeFloorId={null} />);
+    const model = createEmptyBuildingModel();
+    render(<Preview3DPanel model={model} activeFloorId={null} layerVisibility={{}} />);
     expect(screen.getByText(/Пустая модель/i)).toBeTruthy();
   });
 
   it('показывает переключатели слоев и режим этажей', () => {
     useEditorStore.getState().reset();
-    const model = createEmptyBuildingModel('m');
+    const model = createEmptyBuildingModel();
     const floor = createFloor({
       label: '1',
       level: 1,
@@ -45,11 +45,11 @@ describe('Preview3DPanel', () => {
         wallType: 'external',
       })
     );
-    render(<Preview3DPanel model={model} activeFloorId={floor.id} />);
-    expect(screen.getByLabelText(/Walls/i)).toBeTruthy();
-    expect(screen.getByLabelText(/Openings/i)).toBeTruthy();
-    expect(screen.getByLabelText(/Slabs/i)).toBeTruthy();
-    expect(screen.getByLabelText(/Roof/i)).toBeTruthy();
+    render(<Preview3DPanel model={model} activeFloorId={floor.id} layerVisibility={{}} />);
+    expect(screen.getByLabelText(/Стены/i)).toBeTruthy();
+    expect(screen.getByLabelText(/Проёмы/i)).toBeTruthy();
+    expect(screen.getByLabelText(/Перекрытия/i)).toBeTruthy();
+    expect(screen.getByLabelText(/Крыша/i)).toBeTruthy();
     expect(screen.getByDisplayValue('all floors')).toBeTruthy();
   });
 });

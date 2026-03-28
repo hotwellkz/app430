@@ -5,24 +5,42 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
-  type WheelEvent as ReactWheelEvent,
 } from 'react';
 import {
   clampEditorZoom,
+  EDITOR_LAYER_FOUNDATION,
+  EDITOR_LAYER_GROUND_SCREED,
+  EDITOR_LAYER_ROOF,
+  EDITOR_LAYER_SLABS,
+  editorLayerFloorOpenings,
+  editorLayerFloorWalls,
+  isEditorLayerLocked,
+  isEditorLayerVisible,
+  isFloorOpeningsLayer,
+  isWallDrawingLayer,
+  parseFloorOpeningsLayer,
+  parseFloorWallsLayer,
   useEditorStore,
 } from '@2wix/editor-core';
 import {
+  baselineSegmentToCenterline,
   buildOpeningOnWallClick,
   createWall,
+  findFoundationByFloor,
+  findGroundScreedByFloor,
   findWallById,
+  rectangleOppositeCornerFromSize,
+  wallsOnFloorAfterJointMove,
   getOpeningById,
   getOpeningsByFloor,
   getRoofForTopFloor,
   getSlabsByFloor,
   getTopFloor,
+  getFloorById,
   getWallsByFloor,
+  wallPolygonPointsMm,
 } from '@2wix/domain-model';
-import type { Opening, OpeningType, Point2D, Wall } from '@2wix/shared-types';
+import type { Opening, OpeningType, Point2D, Wall, WallType } from '@2wix/shared-types';
 import { GridLayer } from './GridLayer.js';
 import { WallsLayer } from './WallsLayer.js';
 import { WallLengthLabel } from './WallLengthLabel.js';
@@ -44,6 +62,7 @@ import {
 } from './drawWallGesture.js';
 import {
   findClosestWallAtPoint,
+  hitWallBodyForDrag,
   hitWallEndpoint,
   type WallEndpoint,
 } from './hitTest.js';
@@ -52,14 +71,49 @@ import { findClosestOpeningAtPoint } from './openingHitTest.js';
 import { proposeOpeningDragAlongWall } from './openingDrag.js';
 import { computeFitViewTransform, computeWallsBoundingBoxMm } from './viewFit.js';
 import { snapPointToNearbyWallJoints } from './endpointJointSnap.js';
+import { FoundationPlanLayer } from './FoundationPlanLayer.js';
+import { SlabPlanLayer } from './SlabPlanLayer.js';
 import { PanelOverlayLayer } from './PanelOverlayLayer.js';
+import { RectangleDrawHud } from './RectangleDrawHud.js';
+import { wallLayoutResultToGeneratedPanels } from '@2wix/panel-engine';
+import type { GeneratedPanel } from '@2wix/panel-engine';
 import { usePanelizationSnapshot } from '../panelization/usePanelizationSnapshot';
+import {
+  drawRectangleCancel,
+  drawRectangleOnPointerDown,
+  drawRectangleOnPointerMove,
+  type DrawRectangleGestureState,
+} from './drawRectangleGesture.js';
+import { translateWallByDelta } from './wallTranslate.js';
 
 const MAJOR_GRID_MM = 5000;
 
 type PanSession = { pointerId: number; lastX: number; lastY: number };
 type DragSession = { wallId: string; endpoint: WallEndpoint; pointerId: number };
 type OpeningDragSession = { openingId: string; pointerId: number };
+type WallBodyDragSession = {
+  wallId: string;
+  pointerId: number;
+  startPointerWorld: Point2D;
+  baseWall: Wall;
+};
+
+const MIN_RECT_EDGE_MM = 50;
+
+function inferPanelDirection(start: Point2D, end: Point2D): 'horizontal' | 'vertical' {
+  const dx = Math.abs(end.x - start.x);
+  const dy = Math.abs(end.y - start.y);
+  return dx >= dy ? 'horizontal' : 'vertical';
+}
+
+function newWallOptions(wt: WallType, start: Point2D, end: Point2D) {
+  return {
+    wallType: wt,
+    structuralRole: wt === 'internal' ? ('partition' as const) : ('bearing' as const),
+    panelizationEnabled: wt === 'external',
+    panelDirection: inferPanelDirection(start, end),
+  };
+}
 
 function openingToolFromMode(
   mode: string
@@ -90,6 +144,9 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
   const clearSelection = useEditorStore((s) => s.clearSelection);
 
   const [drawState, setDrawState] = useState<DrawWallGestureState>({ kind: 'idle' });
+  const [rectDrawState, setRectDrawState] = useState<DrawRectangleGestureState>({ kind: 'idle' });
+  const wallBodyDragRef = useRef<WallBodyDragSession | null>(null);
+  const [wallBodyPreview, setWallBodyPreview] = useState<Wall | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
   const [hoveredOpeningId, setHoveredOpeningId] = useState<string | null>(null);
@@ -106,23 +163,127 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
   const initialFitKeyRef = useRef<string | null>(null);
 
   const activeFloorId = view.activeFloorId;
+
+  const panelOverlayPanels = useMemo((): GeneratedPanel[] => {
+    if (!draft || !activeFloorId || !panelization) return [];
+    const floor = getFloorById(draft, activeFloorId);
+    if (!floor) return [];
+    const floorWallsList = getWallsByFloor(draft, activeFloorId);
+    const wallPanels: GeneratedPanel[] = [];
+    for (let i = 0; i < floorWallsList.length; i += 1) {
+      const w = floorWallsList[i]!;
+      const stored = draft.wallPanelLayouts?.[w.id];
+      if (!stored || stored.panels.length === 0) continue;
+      wallPanels.push(...wallLayoutResultToGeneratedPanels(stored, w, floor.level, i + 1, draft));
+    }
+    const slabRoofFromSnapshot = panelization.generatedPanels.filter((p) => {
+      if (p.floorId !== activeFloorId) return false;
+      return p.sourceType === 'slab' || p.sourceType === 'roof';
+    });
+    return [...wallPanels, ...slabRoofFromSnapshot];
+  }, [draft, activeFloorId, panelization]);
+
+  const newWallWallType = view.newWallWallType ?? 'external';
+  const newWallPlacement = view.newWallPlacement ?? 'on-axis';
+  const activeEditorLayerId = view.activeEditorLayerId ?? null;
+  const wallLayerKey = activeFloorId ? editorLayerFloorWalls(activeFloorId) : '';
+  const openLayerKey = activeFloorId ? editorLayerFloorOpenings(activeFloorId) : '';
+  const wallsVisible = wallLayerKey ? isEditorLayerVisible(view.layerVisibility, wallLayerKey) : true;
+  const openingsVisible = openLayerKey
+    ? isEditorLayerVisible(view.layerVisibility, openLayerKey)
+    : true;
+  const wallsLocked = wallLayerKey ? isEditorLayerLocked(view.layerLocked, wallLayerKey) : false;
+  const openingsLocked = openLayerKey ? isEditorLayerLocked(view.layerLocked, openLayerKey) : false;
+
+  const wallLayerActive =
+    Boolean(activeFloorId) &&
+    isWallDrawingLayer(activeEditorLayerId) &&
+    parseFloorWallsLayer(activeEditorLayerId) === activeFloorId;
+  const openingsLayerActive =
+    Boolean(activeFloorId) &&
+    isFloorOpeningsLayer(activeEditorLayerId) &&
+    parseFloorOpeningsLayer(activeEditorLayerId) === activeFloorId;
+
+  const canDrawWalls = wallLayerActive && wallsVisible && !wallsLocked;
+  const canPlaceOpenings = openingsLayerActive && openingsVisible && !openingsLocked;
+  const canMutateWalls = wallLayerActive && wallsVisible && !wallsLocked;
+  const canMutateOpenings = openingsLayerActive && openingsVisible && !openingsLocked;
+
+  const slabsLayerVisible = isEditorLayerVisible(view.layerVisibility, EDITOR_LAYER_SLABS);
+  const slabsLayerLocked = isEditorLayerLocked(view.layerLocked, EDITOR_LAYER_SLABS);
+  const roofLayerVisible = isEditorLayerVisible(view.layerVisibility, EDITOR_LAYER_ROOF);
+  const roofLayerLocked = isEditorLayerLocked(view.layerLocked, EDITOR_LAYER_ROOF);
+  const roofLayerActive = view.activeEditorLayerId === EDITOR_LAYER_ROOF;
+  const foundationLayerVisible = isEditorLayerVisible(view.layerVisibility, EDITOR_LAYER_FOUNDATION);
+  const groundScreedLayerVisible = isEditorLayerVisible(view.layerVisibility, EDITOR_LAYER_GROUND_SCREED);
+  const foundationLayerLocked = isEditorLayerLocked(view.layerLocked, EDITOR_LAYER_FOUNDATION);
+  const groundScreedLayerLocked = isEditorLayerLocked(view.layerLocked, EDITOR_LAYER_GROUND_SCREED);
+
   const gridStep = draft?.settings.gridStepMm ?? 100;
 
-  const floorWalls = useMemo(() => {
+  const allFloorWallsForBounds = useMemo(() => {
     if (!draft || !activeFloorId) return [];
     return getWallsByFloor(draft, activeFloorId);
   }, [draft, activeFloorId]);
 
+  const floorWalls = useMemo(() => {
+    if (!draft || !activeFloorId || !wallsVisible) return [];
+    return getWallsByFloor(draft, activeFloorId);
+  }, [draft, activeFloorId, wallsVisible]);
+
+  const drawWallPreviewPolygon = useMemo(() => {
+    if (view.toolMode !== 'draw-wall' || drawState.kind !== 'drawing' || !draft || !activeFloorId) {
+      return null;
+    }
+    const t = draft.settings.defaultWallThicknessMm;
+    const center = baselineSegmentToCenterline(
+      drawState.start,
+      drawState.cursor,
+      t,
+      newWallPlacement
+    );
+    const pw: Wall = {
+      id: '__preview__',
+      floorId: activeFloorId,
+      start: center.start,
+      end: center.end,
+      thicknessMm: t,
+      wallType: newWallWallType,
+    };
+    return wallPolygonPointsMm(pw);
+  }, [
+    view.toolMode,
+    drawState.kind,
+    drawState.kind === 'drawing' ? drawState.start.x : 0,
+    drawState.kind === 'drawing' ? drawState.start.y : 0,
+    drawState.kind === 'drawing' ? drawState.cursor.x : 0,
+    drawState.kind === 'drawing' ? drawState.cursor.y : 0,
+    draft,
+    activeFloorId,
+    newWallPlacement,
+    newWallWallType,
+  ]);
+
   const floorOpenings = useMemo(() => {
-    if (!draft || !activeFloorId) return [];
+    if (!draft || !activeFloorId || !openingsVisible) return [];
     return getOpeningsByFloor(draft, activeFloorId);
-  }, [draft, activeFloorId]);
+  }, [draft, activeFloorId, openingsVisible]);
   const floorSlabs = useMemo(() => {
     if (!draft || !activeFloorId) return [];
     return getSlabsByFloor(draft, activeFloorId);
   }, [draft, activeFloorId]);
   const topFloor = useMemo(() => (draft ? getTopFloor(draft) : null), [draft]);
   const roof = useMemo(() => (draft ? getRoofForTopFloor(draft) : null), [draft]);
+
+  const floorFoundation = useMemo(() => {
+    if (!draft || !activeFloorId) return null;
+    return findFoundationByFloor(draft, activeFloorId) ?? null;
+  }, [draft, activeFloorId]);
+
+  const floorGroundScreed = useMemo(() => {
+    if (!draft || !activeFloorId) return null;
+    return findGroundScreedByFloor(draft, activeFloorId) ?? null;
+  }, [draft, activeFloorId]);
 
   const wallById = useMemo(() => {
     if (!draft) return new Map<string, Wall>();
@@ -139,6 +300,29 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
     endpoint: WallEndpoint;
     point: Point2D;
   } | null>(null);
+
+  const wallsForDisplay = useMemo(() => {
+    let base = floorWalls;
+    if (wallBodyPreview) {
+      base = base.map((w) => (w.id === wallBodyPreview.id ? wallBodyPreview : w));
+    }
+    if (dragPreview && draft && activeFloorId) {
+      const w = findWallById(draft, dragPreview.wallId);
+      if (w) {
+        const jid = dragPreview.endpoint === 'start' ? w.startJointId : w.endJointId;
+        if (jid) {
+          const moved = wallsOnFloorAfterJointMove(draft, activeFloorId, jid, dragPreview.point);
+          return base.map((bw) => moved.find((mw) => mw.id === bw.id) ?? bw);
+        }
+        return base.map((bw) =>
+          bw.id === dragPreview.wallId
+            ? wallWithEndpointMoved(w, dragPreview.endpoint, dragPreview.point)
+            : bw
+        );
+      }
+    }
+    return base;
+  }, [floorWalls, wallBodyPreview, dragPreview, draft, activeFloorId]);
 
   const [openingDragPreview, setOpeningDragPreview] = useState<{
     openingId: string;
@@ -171,7 +355,7 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
   }, []);
 
   const runFitView = useCallback(() => {
-    const bb = computeWallsBoundingBoxMm(floorWalls);
+    const bb = computeWallsBoundingBoxMm(allFloorWallsForBounds);
     if (!bb) {
       setZoom(1);
       setPan(0, 0);
@@ -180,7 +364,7 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
     const t = computeFitViewTransform(bb, size.w, size.h, 1500);
     setZoom(t.zoom);
     setPan(t.panX, t.panY);
-  }, [floorWalls, setPan, setZoom, size.h, size.w]);
+  }, [allFloorWallsForBounds, setPan, setZoom, size.h, size.w]);
 
   useEffect(() => {
     onRegisterFitView?.(runFitView);
@@ -192,10 +376,10 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
     const vid = documentState.currentVersionId ?? '';
     const fid = activeFloorId ?? '';
     const key = `${pid}|${vid}|${fid}`;
-    if (!floorWalls.length || !pid) return;
+    if (!allFloorWallsForBounds.length || !pid) return;
     if (initialFitKeyRef.current === key) return;
     initialFitKeyRef.current = key;
-    const bb = computeWallsBoundingBoxMm(floorWalls);
+    const bb = computeWallsBoundingBoxMm(allFloorWallsForBounds);
     if (!bb) return;
     const t = computeFitViewTransform(bb, size.w, size.h, 1500);
     setZoom(t.zoom);
@@ -204,7 +388,7 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
     activeFloorId,
     documentState.currentVersionId,
     documentState.projectId,
-    floorWalls,
+    allFloorWallsForBounds,
     setPan,
     setZoom,
     size.h,
@@ -215,7 +399,10 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setDrawState(drawWallCancel());
+        setRectDrawState(drawRectangleCancel());
         setDragPreview(null);
+        setWallBodyPreview(null);
+        wallBodyDragRef.current = null;
         setOpeningDragPreview(null);
         openingDragPreviewRef.current = null;
         dragSessionRef.current = null;
@@ -227,9 +414,11 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
           return;
         }
         if (selection.selectedObjectType === 'wall' && selection.selectedObjectId) {
+          if (!canMutateWalls) return;
           e.preventDefault();
           applyCommand({ type: 'deleteWall', wallId: selection.selectedObjectId });
         } else if (selection.selectedObjectType === 'opening' && selection.selectedObjectId) {
+          if (!canMutateOpenings) return;
           e.preventDefault();
           applyCommand({ type: 'deleteOpening', openingId: selection.selectedObjectId });
         }
@@ -237,7 +426,7 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [applyCommand, selection.selectedObjectId, selection.selectedObjectType]);
+  }, [applyCommand, canMutateOpenings, canMutateWalls, selection.selectedObjectId, selection.selectedObjectType]);
 
   const worldFromEvent = useCallback(
     (e: ReactPointerEvent<Element>) => {
@@ -259,7 +448,7 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
   );
 
   const handleWheel = useCallback(
-    (e: ReactWheelEvent<SVGSVGElement>) => {
+    (e: WheelEvent) => {
       e.preventDefault();
       const svg = svgRef.current;
       if (!svg) return;
@@ -276,6 +465,13 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
     [setPan, setZoom, view.panX, view.panY, view.zoom]
   );
 
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    svg.addEventListener('wheel', handleWheel, { passive: false });
+    return () => svg.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
+
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>) => {
     if (e.button === 1) e.preventDefault();
     const svg = svgRef.current;
@@ -287,15 +483,24 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
     const world = snap(raw);
 
     if (view.toolMode === 'draw-wall') {
-      const res = drawWallOnPointerDown(drawState, world);
+      if (!canDrawWalls) {
+        showToast('Выберите слой «Стены … этажа» в структуре проекта');
+        return;
+      }
+      const worldSnapped = snap(raw);
+      const jointed = snapPointToNearbyWallJoints(worldSnapped, draft, activeFloorId, '');
+      const res = drawWallOnPointerDown(drawState, jointed);
       if (res.committed) {
         const { start, end } = res.committed;
+        const t = draft.settings.defaultWallThicknessMm;
+        const center = baselineSegmentToCenterline(start, end, t, newWallPlacement);
         const w = createWall({
           floorId: activeFloorId,
-          start,
-          end,
-          thicknessMm: draft.settings.defaultWallThicknessMm,
-          wallType: 'external',
+          start: center.start,
+          end: center.end,
+          thicknessMm: t,
+          wallPlacement: newWallPlacement,
+          ...newWallOptions(newWallWallType, center.start, center.end),
         });
         const r = applyCommand({ type: 'addWall', wall: w });
         if (!r.ok) {
@@ -311,8 +516,62 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
       return;
     }
 
+    if (view.toolMode === 'draw-rectangle') {
+      if (!canDrawWalls) {
+        showToast('Выберите слой «Стены … этажа» в структуре проекта');
+        return;
+      }
+      const res = drawRectangleOnPointerDown(rectDrawState, world);
+      if (res.committed) {
+        const { minX, minY, maxX, maxY } = res.committed;
+        if (maxX - minX < MIN_RECT_EDGE_MM || maxY - minY < MIN_RECT_EDGE_MM) {
+          showToast(`Сторона прямоугольника должна быть ≥ ${MIN_RECT_EDGE_MM} мм`);
+          setRectDrawState(res.next);
+          return;
+        }
+        const corners: [Point2D, Point2D, Point2D, Point2D] = [
+          { x: minX, y: minY },
+          { x: maxX, y: minY },
+          { x: maxX, y: maxY },
+          { x: minX, y: maxY },
+        ];
+        let lastId: string | null = null;
+        const t = draft.settings.defaultWallThicknessMm;
+        const placement = newWallPlacement;
+        for (let i = 0; i < 4; i += 1) {
+          const a = corners[i]!;
+          const b = corners[(i + 1) % 4]!;
+          const center = baselineSegmentToCenterline(a, b, t, placement);
+          const w = createWall({
+            floorId: activeFloorId,
+            start: center.start,
+            end: center.end,
+            thicknessMm: t,
+            wallPlacement: placement,
+            ...newWallOptions(newWallWallType, center.start, center.end),
+          });
+          const r = applyCommand({ type: 'addWall', wall: w });
+          if (!r.ok) {
+            showToast(r.error);
+            break;
+          }
+          lastId = w.id;
+        }
+        if (lastId) selectObject(lastId, 'wall');
+        setRectDrawState(res.next);
+        return;
+      }
+      setRectDrawState(res.next);
+      svg.setPointerCapture(e.pointerId);
+      return;
+    }
+
     const openingType = openingToolFromMode(view.toolMode);
     if (openingType) {
+      if (!canPlaceOpenings) {
+        showToast('Активируйте слой «Проёмы» этажа слева (слой видим и не заблокирован)');
+        return;
+      }
       const tol = hitToleranceWorldMm(view.zoom);
       const hitWall = findClosestWallAtPoint(raw, floorWalls, tol);
       if (!hitWall) {
@@ -341,7 +600,7 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
       const tol = hitToleranceWorldMm(view.zoom);
       const handleR = endpointHandleRadiusWorldMm(view.zoom);
 
-      if (selectedWall) {
+      if (selectedWall && canMutateWalls) {
         const h = (e.target as HTMLElement).dataset?.handle as WallEndpoint | undefined;
         if (h === 'start' || h === 'end') {
           dragSessionRef.current = { wallId: selectedWall.id, endpoint: h, pointerId: e.pointerId };
@@ -356,16 +615,29 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
           svg.setPointerCapture(e.pointerId);
           return;
         }
+        if (hitWallBodyForDrag(raw, selectedWall, view.zoom)) {
+          wallBodyDragRef.current = {
+            wallId: selectedWall.id,
+            pointerId: e.pointerId,
+            startPointerWorld: world,
+            baseWall: selectedWall,
+          };
+          setWallBodyPreview(selectedWall);
+          svg.setPointerCapture(e.pointerId);
+          return;
+        }
       }
 
       const hitOp = findClosestOpeningAtPoint(floorOpenings, wallById, raw, tol);
       if (hitOp) {
         selectObject(hitOp.id, 'opening');
-        openingDragRef.current = { openingId: hitOp.id, pointerId: e.pointerId };
-        const startPreview = { openingId: hitOp.id, positionAlongWall: hitOp.positionAlongWall };
-        openingDragPreviewRef.current = startPreview;
-        setOpeningDragPreview(startPreview);
-        svg.setPointerCapture(e.pointerId);
+        if (canMutateOpenings) {
+          openingDragRef.current = { openingId: hitOp.id, pointerId: e.pointerId };
+          const startPreview = { openingId: hitOp.id, positionAlongWall: hitOp.positionAlongWall };
+          openingDragPreviewRef.current = startPreview;
+          setOpeningDragPreview(startPreview);
+          svg.setPointerCapture(e.pointerId);
+        }
         return;
       }
 
@@ -379,6 +651,21 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
   };
 
   const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const bodyDrag = wallBodyDragRef.current;
+    if (bodyDrag && bodyDrag.pointerId === e.pointerId && draft) {
+      const cur = snap(worldFromEvent(e));
+      let dx = cur.x - bodyDrag.startPointerWorld.x;
+      let dy = cur.y - bodyDrag.startPointerWorld.y;
+      if (e.shiftKey) {
+        dy = 0;
+      }
+      if (e.altKey) {
+        dx = 0;
+      }
+      setWallBodyPreview(translateWallByDelta(bodyDrag.baseWall, dx, dy));
+      return;
+    }
+
     const panS = panSessionRef.current;
     if (panS && panS.pointerId === e.pointerId) {
       const dx = e.clientX - panS.lastX;
@@ -405,17 +692,32 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
 
     const dragS = dragSessionRef.current;
     if (dragS && dragS.pointerId === e.pointerId && draft) {
-      const w = snap(worldFromEvent(e));
+      let w = snap(worldFromEvent(e));
+      if (view.snapEnabled) {
+        w = snapPointToNearbyWallJoints(w, draft, activeFloorId, dragS.wallId);
+      }
       setDragPreview({ wallId: dragS.wallId, endpoint: dragS.endpoint, point: w });
       return;
     }
 
     if (view.toolMode === 'draw-wall' && drawState.kind === 'drawing') {
-      setDrawState(drawWallOnPointerMove(drawState, snap(worldFromEvent(e))));
+      const ws = snap(worldFromEvent(e));
+      const j = snapPointToNearbyWallJoints(ws, draft, activeFloorId, '');
+      setDrawState(drawWallOnPointerMove(drawState, j));
       return;
     }
 
-    if (view.toolMode === 'select' && !dragSessionRef.current && !openingDragRef.current) {
+    if (view.toolMode === 'draw-rectangle' && rectDrawState.kind === 'drawing') {
+      setRectDrawState(drawRectangleOnPointerMove(rectDrawState, snap(worldFromEvent(e))));
+      return;
+    }
+
+    if (
+      view.toolMode === 'select' &&
+      !dragSessionRef.current &&
+      !openingDragRef.current &&
+      !wallBodyDragRef.current
+    ) {
       const raw = worldFromEvent(e);
       const tol = hitToleranceWorldMm(view.zoom);
       const op = findClosestOpeningAtPoint(floorOpenings, wallById, raw, tol);
@@ -432,6 +734,41 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
 
   const onPointerUp = (e: ReactPointerEvent<SVGSVGElement>) => {
     const svg = svgRef.current;
+
+    const bodyDrag = wallBodyDragRef.current;
+    if (bodyDrag && bodyDrag.pointerId === e.pointerId && draft) {
+      wallBodyDragRef.current = null;
+      const cur = snap(worldFromEvent(e));
+      let dx = cur.x - bodyDrag.startPointerWorld.x;
+      let dy = cur.y - bodyDrag.startPointerWorld.y;
+      if (e.shiftKey) {
+        dy = 0;
+      }
+      if (e.altKey) {
+        dx = 0;
+      }
+      setWallBodyPreview(null);
+      let s = { x: bodyDrag.baseWall.start.x + dx, y: bodyDrag.baseWall.start.y + dy };
+      let en = { x: bodyDrag.baseWall.end.x + dx, y: bodyDrag.baseWall.end.y + dy };
+      s = snap(s);
+      en = snap(en);
+      if (view.snapEnabled) {
+        s = snapPointToNearbyWallJoints(s, draft, activeFloorId, bodyDrag.wallId);
+        en = snapPointToNearbyWallJoints(en, draft, activeFloorId, bodyDrag.wallId);
+      }
+      const r = applyCommand({
+        type: 'updateWall',
+        wallId: bodyDrag.wallId,
+        patch: { start: s, end: en },
+      });
+      if (!r.ok) showToast(r.error);
+      try {
+        if (svg?.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
 
     const panS = panSessionRef.current;
     if (panS && panS.pointerId === e.pointerId) {
@@ -460,12 +797,9 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
     const dragS = dragSessionRef.current;
     if (dragS && dragS.pointerId === e.pointerId && draft) {
       const prev = findWallById(draft, dragS.wallId);
-      let pt =
-        dragPreview && dragPreview.wallId === dragS.wallId
-          ? dragPreview.point
-          : snap(worldFromEvent(e));
+      let pt = snap(worldFromEvent(e));
       if (view.snapEnabled) {
-        pt = snapPointToNearbyWallJoints(pt, floorWalls, dragS.wallId);
+        pt = snapPointToNearbyWallJoints(pt, draft, activeFloorId, dragS.wallId);
       }
       setDragPreview(null);
       dragSessionRef.current = null;
@@ -487,7 +821,16 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
 
   const wallForDisplay = (w: typeof selectedWall) => {
     if (!w) return null;
-    if (dragPreview && dragPreview.wallId === w.id) {
+    if (wallBodyPreview && wallBodyPreview.id === w.id) {
+      return wallBodyPreview;
+    }
+    if (dragPreview && dragPreview.wallId === w.id && draft && activeFloorId) {
+      const jid = dragPreview.endpoint === 'start' ? w.startJointId : w.endJointId;
+      if (jid) {
+        const moved = wallsOnFloorAfterJointMove(draft, activeFloorId, jid, dragPreview.point);
+        const one = moved.find((x) => x.id === w.id);
+        if (one) return one;
+      }
       return wallWithEndpointMoved(w, dragPreview.endpoint, dragPreview.point);
     }
     return w;
@@ -497,7 +840,7 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
 
   let cursor = 'default';
   if (view.toolMode === 'pan') cursor = 'grab';
-  if (view.toolMode === 'draw-wall') cursor = 'crosshair';
+  if (view.toolMode === 'draw-wall' || view.toolMode === 'draw-rectangle') cursor = 'crosshair';
   if (openingToolFromMode(view.toolMode)) cursor = 'crosshair';
   if (view.toolMode === 'select' && (hoveredWallId || hoveredOpeningId)) cursor = 'pointer';
 
@@ -508,9 +851,9 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
         position: 'relative',
         flex: 1,
         minHeight: 0,
-        background: '#f1f5f9',
-        border: '1px solid var(--twix-border, #e2e8f0)',
-        borderRadius: 8,
+        background: '#e8e8ea',
+        border: '1px solid #b8c0cc',
+        borderRadius: 2,
         overflow: 'hidden',
       }}
     >
@@ -597,7 +940,6 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
           width={size.w}
           height={size.h}
           style={{ display: 'block', cursor, touchAction: 'none' }}
-          onWheel={handleWheel}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -613,80 +955,174 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
               minorStepMm={gridStep}
               majorStepMm={MAJOR_GRID_MM}
             />
+            <FoundationPlanLayer
+              foundation={floorFoundation}
+              screed={floorGroundScreed}
+              zoom={view.zoom}
+              foundationVisible={foundationLayerVisible}
+              screedVisible={groundScreedLayerVisible}
+              foundationLayerActive={view.activeEditorLayerId === EDITOR_LAYER_FOUNDATION}
+              screedLayerActive={view.activeEditorLayerId === EDITOR_LAYER_GROUND_SCREED}
+              selectedFoundationId={
+                selection.selectedObjectType === 'foundation' ? selection.selectedObjectId : null
+              }
+              selectedScreedId={
+                selection.selectedObjectType === 'groundScreed' ? selection.selectedObjectId : null
+              }
+              onSelectFoundation={
+                foundationLayerLocked
+                  ? undefined
+                  : (id) => {
+                      selectObject(id, 'foundation');
+                    }
+              }
+              onSelectScreed={
+                groundScreedLayerLocked
+                  ? undefined
+                  : (id) => {
+                      selectObject(id, 'groundScreed');
+                    }
+              }
+            />
+            {slabsLayerVisible ? (
+              <SlabPlanLayer
+                slabs={floorSlabs}
+                zoom={view.zoom}
+                layerActive={view.activeEditorLayerId === EDITOR_LAYER_SLABS}
+                selectedSlabId={selection.selectedObjectType === 'slab' ? selection.selectedObjectId : null}
+                onSelectSlab={
+                  slabsLayerLocked
+                    ? undefined
+                    : (id) => {
+                        selectObject(id, 'slab');
+                      }
+                }
+              />
+            ) : null}
             <WallsLayer
-              walls={floorWalls}
+              walls={wallsForDisplay}
               selectedWallId={
                 selection.selectedObjectType === 'wall' ? selection.selectedObjectId : null
               }
               hoveredWallId={hoveredWallId}
             />
-            {floorSlabs.map((slab) => {
-              const bb = computeWallsBoundingBoxMm(floorWalls);
+            {slabsLayerVisible &&
+              floorSlabs
+                .filter((slab) => !slab.contourMm || slab.contourMm.length < 3)
+                .map((slab) => {
+                  const bb = computeWallsBoundingBoxMm(allFloorWallsForBounds);
+                  if (!bb) return null;
+                  const cx = (bb.minX + bb.maxX) / 2;
+                  const cy = (bb.minY + bb.maxY) / 2;
+                  const arrow =
+                    slab.direction === 'x'
+                      ? { x1: bb.minX, y1: cy, x2: bb.maxX, y2: cy }
+                      : { x1: cx, y1: bb.minY, x2: cx, y2: bb.maxY };
+                  return (
+                    <g key={slab.id}>
+                      <rect
+                        x={bb.minX}
+                        y={bb.minY}
+                        width={bb.maxX - bb.minX}
+                        height={bb.maxY - bb.minY}
+                        fill="rgba(2,132,199,0.08)"
+                        stroke="rgba(2,132,199,0.8)"
+                        strokeDasharray={`${500 / view.zoom} ${250 / view.zoom}`}
+                        strokeWidth={Math.max(2, 60 / view.zoom)}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <line
+                        x1={arrow.x1}
+                        y1={arrow.y1}
+                        x2={arrow.x2}
+                        y2={arrow.y2}
+                        stroke="rgba(2,132,199,0.95)"
+                        strokeWidth={Math.max(2, 80 / view.zoom)}
+                        markerEnd="url(#slabArrow)"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <text
+                        x={cx}
+                        y={cy - 200 / view.zoom}
+                        textAnchor="middle"
+                        fontSize={Math.max(120, 240 / view.zoom)}
+                        fill="#0369a1"
+                      >
+                        slab: {slab.slabType}
+                      </text>
+                    </g>
+                  );
+                })}
+            {roofLayerVisible && roof && topFloor?.id === activeFloorId ? (() => {
+              const bb = computeWallsBoundingBoxMm(allFloorWallsForBounds);
               if (!bb) return null;
-              const cx = (bb.minX + bb.maxX) / 2;
-              const cy = (bb.minY + bb.maxY) / 2;
-              const arrow = slab.direction === 'x'
-                ? { x1: bb.minX, y1: cy, x2: bb.maxX, y2: cy }
-                : { x1: cx, y1: bb.minY, x2: cx, y2: bb.maxY };
-              return (
-                <g key={slab.id}>
-                  <rect
-                    x={bb.minX}
-                    y={bb.minY}
-                    width={bb.maxX - bb.minX}
-                    height={bb.maxY - bb.minY}
-                    fill="rgba(2,132,199,0.08)"
-                    stroke="rgba(2,132,199,0.8)"
-                    strokeDasharray={`${500 / view.zoom} ${250 / view.zoom}`}
-                    strokeWidth={Math.max(2, 60 / view.zoom)}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <line
-                    x1={arrow.x1}
-                    y1={arrow.y1}
-                    x2={arrow.x2}
-                    y2={arrow.y2}
-                    stroke="rgba(2,132,199,0.95)"
-                    strokeWidth={Math.max(2, 80 / view.zoom)}
-                    markerEnd="url(#slabArrow)"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <text
-                    x={cx}
-                    y={cy - 200 / view.zoom}
-                    textAnchor="middle"
-                    fontSize={Math.max(120, 240 / view.zoom)}
-                    fill="#0369a1"
-                  >
-                    slab: {slab.slabType}
-                  </text>
-                </g>
-              );
-            })}
-            {roof && topFloor?.id === activeFloorId ? (() => {
-              const bb = computeWallsBoundingBoxMm(floorWalls);
-              if (!bb) return null;
-              const cx = (bb.minX + bb.maxX) / 2;
-              const cy = (bb.minY + bb.maxY) / 2;
+              const eaves = roof.eavesContourMm;
+              const strokeRoof = roofLayerActive ? 'rgba(127,29,29,0.92)' : 'rgba(185,28,28,0.78)';
+              const fillRoof = roofLayerActive ? 'rgba(185,28,28,0.14)' : 'rgba(185,28,28,0.06)';
               const horizontal = (roof.ridgeDirection ?? 'x') === 'x';
-              const ridge = horizontal
-                ? { x1: bb.minX, y1: cy, x2: bb.maxX, y2: cy }
-                : { x1: cx, y1: bb.minY, x2: cx, y2: bb.maxY };
-              const slopeArrow = horizontal
-                ? { x1: cx, y1: cy, x2: cx, y2: bb.maxY }
-                : { x1: cx, y1: cy, x2: bb.maxX, y2: cy };
+              let minPx = bb.minX - roof.overhangMm;
+              let maxPx = bb.maxX + roof.overhangMm;
+              let minPy = bb.minY - roof.overhangMm;
+              let maxPy = bb.maxY + roof.overhangMm;
+              if (eaves && eaves.length >= 3) {
+                minPx = Math.min(...eaves.map((p) => p.x));
+                maxPx = Math.max(...eaves.map((p) => p.x));
+                minPy = Math.min(...eaves.map((p) => p.y));
+                maxPy = Math.max(...eaves.map((p) => p.y));
+              }
+              const rcx = (minPx + maxPx) / 2;
+              const rcy = (minPy + maxPy) / 2;
+              const ridge =
+                roof.ridgeLineMm && roof.roofType === 'gable'
+                  ? { x1: roof.ridgeLineMm.a.x, y1: roof.ridgeLineMm.a.y, x2: roof.ridgeLineMm.b.x, y2: roof.ridgeLineMm.b.y }
+                  : horizontal
+                    ? { x1: minPx, y1: rcy, x2: maxPx, y2: rcy }
+                    : { x1: rcx, y1: minPy, x2: rcx, y2: maxPy };
+              const drain = roof.singleSlopeDrainToward ?? (horizontal ? '+y' : '+x');
+              const al = 1800;
+              let sax1 = rcx;
+              let say1 = rcy;
+              let sax2 = rcx;
+              let say2 = rcy;
+              if (roof.roofType === 'single_slope') {
+                if (drain === '+y') {
+                  say1 = rcy - al / 2;
+                  say2 = rcy + al / 2;
+                } else if (drain === '-y') {
+                  say1 = rcy + al / 2;
+                  say2 = rcy - al / 2;
+                } else if (drain === '+x') {
+                  sax1 = rcx - al / 2;
+                  sax2 = rcx + al / 2;
+                } else {
+                  sax1 = rcx + al / 2;
+                  sax2 = rcx - al / 2;
+                }
+              }
+              const eavesPoints =
+                eaves && eaves.length >= 3 ? eaves.map((p) => `${p.x},${p.y}`).join(' ') : null;
               return (
-                <g>
-                  <rect
-                    x={bb.minX - roof.overhangMm}
-                    y={bb.minY - roof.overhangMm}
-                    width={bb.maxX - bb.minX + roof.overhangMm * 2}
-                    height={bb.maxY - bb.minY + roof.overhangMm * 2}
-                    fill="rgba(185,28,28,0.05)"
-                    stroke="rgba(185,28,28,0.75)"
-                    strokeWidth={Math.max(2, 60 / view.zoom)}
-                    vectorEffect="non-scaling-stroke"
-                  />
+                <g pointerEvents="none" opacity={roofLayerLocked ? 0.45 : 1}>
+                  {eavesPoints ? (
+                    <polygon
+                      points={eavesPoints}
+                      fill={fillRoof}
+                      stroke={strokeRoof}
+                      strokeWidth={Math.max(2, 60 / view.zoom)}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ) : (
+                    <rect
+                      x={minPx}
+                      y={minPy}
+                      width={maxPx - minPx}
+                      height={maxPy - minPy}
+                      fill={fillRoof}
+                      stroke={strokeRoof}
+                      strokeWidth={Math.max(2, 60 / view.zoom)}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  )}
                   <line
                     x1={ridge.x1}
                     y1={ridge.y1}
@@ -699,10 +1135,10 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
                   />
                   {roof.roofType === 'single_slope' ? (
                     <line
-                      x1={slopeArrow.x1}
-                      y1={slopeArrow.y1}
-                      x2={slopeArrow.x2}
-                      y2={slopeArrow.y2}
+                      x1={sax1}
+                      y1={say1}
+                      x2={sax2}
+                      y2={say2}
                       stroke="rgba(220,38,38,0.95)"
                       strokeWidth={Math.max(2, 80 / view.zoom)}
                       markerEnd="url(#roofArrow)"
@@ -710,13 +1146,14 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
                     />
                   ) : null}
                   <text
-                    x={cx}
-                    y={bb.minY - 250 / view.zoom}
+                    x={rcx}
+                    y={minPy - 250 / view.zoom}
                     textAnchor="middle"
                     fontSize={Math.max(120, 240 / view.zoom)}
-                    fill="#991b1b"
+                    fill={roofLayerActive ? '#7f1d1d' : '#991b1b'}
                   >
-                    roof: {roof.roofType} {roof.slopeDegrees}°
+                    {roofLayerActive ? 'Крыша · ' : ''}
+                    {roof.roofType === 'gable' ? 'двускатная' : 'односкатная'} {roof.slopeDegrees}°
                   </text>
                 </g>
               );
@@ -728,11 +1165,13 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
                 selection.selectedObjectType === 'opening' ? selection.selectedObjectId : null
               }
               hoveredOpeningId={hoveredOpeningId}
+              viewZoom={view.zoom}
             />
             {showPanels && panelization ? (
               <PanelOverlayLayer
                 model={draft}
-                panels={panelization.generatedPanels.filter((p) => {
+                viewZoom={view.zoom}
+                panels={panelOverlayPanels.filter((p) => {
                   if (p.floorId !== activeFloorId) return false;
                   if (p.sourceType === 'wall') return showWallPanels;
                   if (p.sourceType === 'slab') return showSlabPanels;
@@ -751,25 +1190,70 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
                 showLabels
               />
             ) : null}
-            {view.toolMode === 'draw-wall' && drawState.kind === 'drawing' ? (
-              <line
-                x1={drawState.start.x}
-                y1={drawState.start.y}
-                x2={drawState.cursor.x}
-                y2={drawState.cursor.y}
+            {drawWallPreviewPolygon ? (
+              <polygon
+                points={drawWallPreviewPolygon}
+                fill="rgba(37,99,235,0.12)"
                 stroke="#2563eb"
-                strokeWidth={Math.max(2, 80 / view.zoom)}
+                strokeWidth={Math.max(1, 40 / view.zoom)}
                 strokeDasharray={`${400 / view.zoom} ${200 / view.zoom}`}
                 vectorEffect="non-scaling-stroke"
               />
             ) : null}
+            {view.toolMode === 'draw-rectangle' && rectDrawState.kind === 'drawing' ? (() => {
+              const ax = rectDrawState.cornerA.x;
+              const ay = rectDrawState.cornerA.y;
+              const bx = rectDrawState.cursor.x;
+              const by = rectDrawState.cursor.y;
+              const minX = Math.min(ax, bx);
+              const maxX = Math.max(ax, bx);
+              const minY = Math.min(ay, by);
+              const maxY = Math.max(ay, by);
+              const rw = maxX - minX;
+              const rh = maxY - minY;
+              const z = Math.max(0.15, Math.min(4, view.zoom));
+              const fs = Math.max(200, Math.min(800, 400 / z));
+              const cx = (minX + maxX) / 2;
+              const cy = (minY + maxY) / 2;
+              return (
+                <g pointerEvents="none">
+                  <rect
+                    x={minX}
+                    y={minY}
+                    width={rw}
+                    height={rh}
+                    fill="none"
+                    stroke="#7c3aed"
+                    strokeWidth={Math.max(2, 80 / view.zoom)}
+                    strokeDasharray={`${400 / view.zoom} ${200 / view.zoom}`}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <text
+                    x={cx}
+                    y={cy}
+                    fill="#5b21b6"
+                    fontSize={fs}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    stroke="rgba(255,255,255,0.92)"
+                    strokeWidth={Math.max(16, fs * 0.1)}
+                    paintOrder="stroke fill"
+                    style={{ userSelect: 'none' }}
+                  >
+                    {Math.round(rw)} × {Math.round(rh)} мм
+                  </text>
+                </g>
+              );
+            })() : null}
             {displaySelected && view.toolMode === 'select' ? (
               <>
-                <WallLengthLabel wall={displaySelected} visible />
-                <SelectionHandles
-                  wall={displaySelected}
-                  radiusMm={endpointHandleRadiusWorldMm(view.zoom)}
-                />
+                <WallLengthLabel wall={displaySelected} visible viewZoom={view.zoom} />
+                {canMutateWalls ? (
+                  <SelectionHandles
+                    wall={displaySelected}
+                    radiusMm={endpointHandleRadiusWorldMm(view.zoom)}
+                  />
+                ) : null}
               </>
             ) : null}
             <defs>
@@ -782,6 +1266,26 @@ export function EditorCanvas2D({ onRegisterFitView }: EditorCanvas2DProps) {
             </defs>
           </g>
         </svg>
+        {view.toolMode === 'draw-rectangle' && rectDrawState.kind === 'drawing' ? (
+          <RectangleDrawHud
+            cornerA={rectDrawState.cornerA}
+            cursor={rectDrawState.cursor}
+            onApplySizeMm={(widthMm, heightMm) => {
+              const nc = rectangleOppositeCornerFromSize(
+                rectDrawState.cornerA,
+                rectDrawState.cursor,
+                widthMm,
+                heightMm
+              );
+              if (!nc) return;
+              setRectDrawState({
+                kind: 'drawing',
+                cornerA: rectDrawState.cornerA,
+                cursor: nc,
+              });
+            }}
+          />
+        ) : null}
         </>
       )}
     </div>

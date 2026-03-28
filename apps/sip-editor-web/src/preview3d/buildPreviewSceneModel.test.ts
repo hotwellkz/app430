@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptyBuildingModel, createFloor, createOpening, createSlab, createWall } from '@2wix/domain-model';
+import {
+  buildFoundationAndScreedForFloor,
+  createEmptyBuildingModel,
+  createFloor,
+  createOpening,
+  createSlab,
+  createWall,
+  upsertFoundationInModel,
+} from '@2wix/domain-model';
 import type { Roof } from '@2wix/shared-types';
 import { buildPreviewSceneModel } from './buildPreviewSceneModel';
 
 function baseModel() {
-  const model = createEmptyBuildingModel('preview');
+  const model = createEmptyBuildingModel();
   const floor = createFloor({
     label: '1 этаж',
     level: 1,
@@ -146,5 +154,51 @@ describe('buildPreviewSceneModel', () => {
       layers: { walls: false, openings: false, slabs: true, roof: false },
     });
     expect(scene.slabs.length).toBe(1);
+  });
+
+  it('строит foundations и groundScreeds в 3D snapshot', () => {
+    const { model, floor } = baseModel();
+    model.walls.push(
+      createWall({
+        floorId: floor.id,
+        start: { x: 0, y: 0 },
+        end: { x: 5000, y: 0 },
+        thicknessMm: 200,
+        wallType: 'external',
+      }),
+      createWall({
+        floorId: floor.id,
+        start: { x: 5000, y: 0 },
+        end: { x: 5000, y: 5000 },
+        thicknessMm: 200,
+        wallType: 'external',
+      }),
+      createWall({
+        floorId: floor.id,
+        start: { x: 5000, y: 5000 },
+        end: { x: 0, y: 5000 },
+        thicknessMm: 200,
+        wallType: 'external',
+      }),
+      createWall({
+        floorId: floor.id,
+        start: { x: 0, y: 5000 },
+        end: { x: 0, y: 0 },
+        thicknessMm: 200,
+        wallType: 'external',
+      })
+    );
+    const built = buildFoundationAndScreedForFloor(model, floor.id);
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const withF = upsertFoundationInModel(model, built.foundation, built.screed);
+    const scene = buildPreviewSceneModel(withF, {
+      activeFloorId: floor.id,
+      floorMode: 'all',
+      layers: { walls: false, openings: false, slabs: false, roof: false },
+    });
+    expect(scene.foundations.length).toBeGreaterThan(0);
+    expect(scene.groundScreeds.length).toBe(1);
+    expect(scene.stats.foundationsRendered).toBeGreaterThan(0);
   });
 });

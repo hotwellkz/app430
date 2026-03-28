@@ -38,7 +38,24 @@ export const zCreateProjectBody = z.object({
   title: z.string().max(500).optional(),
   createdBy: z.string().min(1).max(128),
   allowedEditorIds: z.array(z.string().min(1)).max(64).optional(),
+  isTemplate: z.boolean().optional(),
 });
+
+export const zDuplicateProjectBody = z.object({
+  title: z.string().min(1).max(500),
+  createdBy: z.string().min(1).max(128),
+  markAsTemplate: z.boolean().optional(),
+});
+
+export const zPatchProjectBody = z
+  .object({
+    updatedBy: z.string().min(1).max(128),
+    title: z.string().max(500).optional(),
+    isTemplate: z.boolean().optional(),
+  })
+  .refine((d) => d.title !== undefined || d.isTemplate !== undefined, {
+    message: 'Укажите title и/или isTemplate',
+  });
 
 export const zPatchCurrentBody = z.object({
   buildingModel: zBuildingModelPayload,
@@ -109,17 +126,36 @@ export const zImportUserDecisionSet = z
   })
   .strict();
 
-export const zImportAssetRef = z.object({
-  id: z.string().min(1),
-  kind: z.enum(['plan', 'facade', 'other']),
-  fileName: z.string().min(1),
-  mimeType: z.string().min(1).optional(),
-  widthPx: z.number().int().positive().optional(),
-  heightPx: z.number().int().positive().optional(),
-  storagePath: z.string().min(1).optional(),
-  fileUrl: z.string().min(1).optional(),
-  base64Data: z.string().optional(),
-});
+export const zImportAssetRef = z
+  .object({
+    id: z.string().min(1),
+    kind: z.enum(['plan', 'facade', 'other']),
+    fileName: z.string().min(1),
+    mimeType: z.string().min(1).optional(),
+    widthPx: z.number().int().positive().optional(),
+    heightPx: z.number().int().positive().optional(),
+    storageProvider: z.enum(['firebase']).optional(),
+    bucket: z.string().min(1).optional(),
+    storagePath: z.string().min(1).optional(),
+    sizeBytes: z.number().int().positive().optional(),
+    checksumSha256: z.string().min(16).optional(),
+    fileUrl: z.string().min(1).optional(),
+    base64Data: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const hasBase64 = typeof data.base64Data === 'string' && data.base64Data.length > 0;
+    const hasFirebaseStorage =
+      data.storageProvider === 'firebase' &&
+      typeof data.storagePath === 'string' &&
+      data.storagePath.length > 0;
+    if (!hasBase64 && !hasFirebaseStorage) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'Каждое изображение: укажите base64Data или storageProvider=firebase с storagePath',
+      });
+    }
+  });
 
 export const zArchitecturalImportSnapshot = z.object({
   projectMeta: z
@@ -275,6 +311,55 @@ export const zCandidateTrace = z.object({
   notes: z.array(z.string()).optional(),
 });
 
+export const zImportGeometryDiagnostics = z.object({
+  pipelineVersion: z.string().min(1),
+  sourceWallSegmentCount: z.number().int().min(0),
+  sourceOuterContourPointCount: z.number().int().min(0),
+  segmentsAfterFilterAndRefine: z.number().int().min(0).optional(),
+  normalizationWallStrategy: z
+    .enum(['footprint_shell', 'preserve_ai_walls', 'mixed_contour_plus_ai_internals'])
+    .optional(),
+  footprintAreaMm2: z.number().nullable(),
+  boundingBoxMm: z
+    .object({
+      minX: z.number(),
+      minY: z.number(),
+      maxX: z.number(),
+      maxY: z.number(),
+    })
+    .nullable(),
+  usedFootprintShell: z.boolean(),
+  roofIncluded: z.boolean(),
+  roofSuppressedReason: z.string().nullable(),
+  qualityLevel: z.enum(['good', 'degraded', 'minimal']),
+  fallbacks: z.array(z.string()),
+  notes: z.array(z.string()),
+  geometryReasonCodes: z.array(z.string()).optional(),
+  openingsCountIn: z.number().int().min(0).optional(),
+  openingsCountOut: z.number().int().min(0).optional(),
+  externalWallSegmentsBeforeRescue: z.number().int().min(0).optional(),
+  internalWallSegmentsBeforeRescue: z.number().int().min(0).optional(),
+  externalWallSegmentsAfterRescue: z.number().int().min(0).optional(),
+  internalWallSegmentsAfterRescue: z.number().int().min(0).optional(),
+  rescuePassApplied: z.boolean().optional(),
+  geometryPipelineStages: z
+    .object({
+      minSegmentMmFirstPass: z.number(),
+      segmentsAfterShortFilter: z.number(),
+      segmentsAfterRefine: z.number(),
+      segmentsAfterRescueBeforeShell: z.number(),
+      lenientRetryUsed: z.boolean(),
+      minSegmentMmLenientPass: z.number().nullable(),
+      segmentsAfterShortFilterAfterLenient: z.number().nullable(),
+      segmentsAfterRefineAfterLenient: z.number().nullable(),
+      segmentsAfterRescueAfterLenient: z.number().nullable(),
+    })
+    .optional(),
+  strategyExplanation: z.string().optional(),
+  outerContourClosed: z.boolean().optional(),
+  candidateWallCount: z.number().int().min(0).optional(),
+});
+
 export const zBuildingModelCandidate = z.object({
   model: zBuildingModelPayload,
   warnings: z.array(zCandidateWarning),
@@ -284,6 +369,7 @@ export const zBuildingModelCandidate = z.object({
   basedOnImportJobId: z.string().min(1),
   basedOnReviewedSnapshotVersion: z.string().min(1),
   status: z.enum(['partial', 'ready']).optional(),
+  geometryDiagnostics: zImportGeometryDiagnostics.optional(),
 });
 
 export const zImportEditorApplyState = z.object({

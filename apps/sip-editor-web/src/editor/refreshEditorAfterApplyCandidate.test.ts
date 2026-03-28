@@ -31,10 +31,12 @@ describe('refreshEditorAfterApplyCandidate', () => {
     });
     vi.mocked(projectsApi.getImportApplyHistory).mockResolvedValue({ items: [] });
 
-    await refreshEditorAfterApplyCandidate(qc, 'p1', { onCacheUpdated: bump });
+    const returned = await refreshEditorAfterApplyCandidate(qc, 'p1', { onCacheUpdated: bump });
 
     expect(projectsApi.getCurrentVersion).toHaveBeenCalledWith('p1');
     expect(projectsApi.getImportApplyHistory).toHaveBeenCalledWith('p1');
     expect(bump).toHaveBeenCalledTimes(1);
+    expect(returned.id).toBe('v-new');
+    expect(returned.versionNumber).toBe(3);
   });
 });

@@ -97,7 +97,7 @@ describe('computeImportReviewReadiness', () => {
     expect(r.isReadyToApply).toBe(true);
   });
 
-  it('fails when internal bearing true but no walls in snapshot', () => {
+  it('passes when internal bearing true but no internal wall candidates (outline-only)', () => {
     const snap = baseSnapshot({ walls: [] });
     const d: ImportUserDecisionSet = {
       floorHeightsMmByFloorId: { f1: 2800 },
@@ -105,10 +105,7 @@ describe('computeImportReviewReadiness', () => {
       scale: { mode: 'confirmed', mmPerPixel: null },
     };
     const r = computeImportReviewReadiness(snap, d);
-    expect(r.isReadyToApply).toBe(false);
-    expect(
-      r.missingRequiredDecisions.some((m) => m.code === 'INTERNAL_BEARING_WALL_CANDIDATES_UNAVAILABLE')
-    ).toBe(true);
+    expect(r.isReadyToApply).toBe(true);
   });
 
   it('requires blocking issue resolutions', () => {

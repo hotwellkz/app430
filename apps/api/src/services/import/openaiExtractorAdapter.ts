@@ -8,7 +8,7 @@ const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const MODEL = 'gpt-4o';
 
 const SYSTEM_PROMPT = `You are an expert architectural plan analyzer specializing in SIP (Structural Insulated Panel) construction.
-Analyze the provided floor plan image(s) and extract structural information.
+Analyze the provided floor plan image(s) and extract structural 2D geometry. Priority: accurate walls and outer boundary over a quick guess.
 
 Return ONLY valid JSON — no markdown, no explanation, no code blocks — matching this exact structure:
 
@@ -66,19 +66,21 @@ Return ONLY valid JSON — no markdown, no explanation, no code blocks — match
 
 IMPORTANT RULES:
 1. ALL measurements must be in MILLIMETERS (mm).
-2. Look for dimension labels/annotations on the plan (e.g. "5287", "14600") — these are usually in mm.
-3. Use wall centerlines for point coordinates.
-4. Place the origin (0,0) at the bottom-left corner of the outer contour.
-5. For walls: trace each wall segment as a series of {x,y} points (polyline).
-6. External walls form the building perimeter; internal walls divide rooms.
-7. SIP panel walls are typically 163mm thick (exterior) or 114mm (interior).
-8. If dimension labels are present, use them to establish the coordinate scale.
-9. Mark doors as type "door" and windows as type "window".
-10. If you cannot determine a value with confidence, set it to null.
+2. Look for dimension labels/annotations on the plan (e.g. "5287", "14600") — these are usually in mm. Use them to calibrate scale; never shrink the whole drawing to a random box without reading dimensions.
+3. Use wall CENTERLINES for coordinates (midline between wall faces).
+4. Place the origin (0,0) at the bottom-left corner of the outer contour bounding box of the building.
+5. For walls: EVERY visible wall line must become a polyline with points at every corner and junction. Do NOT output a single long wall for the whole floor unless it is truly one straight segment. Typical houses have many segments (often 15–80+).
+6. "outerContour" must follow the OUTER perimeter of the heated envelope (follow setbacks/L-shape/U-shape — NOT a loose bounding rectangle unless the building is strictly rectangular).
+7. External walls: typeHint "external". Internal partitions and load-bearing interior walls: typeHint "internal".
+8. SIP panel walls are typically 163mm thick (exterior) or 114mm (interior) — use as thicknessHintMm when unknown.
+9. Mark doors as type "door" and windows as type "window"; link openings to the nearest wall id when possible.
+10. If you cannot determine a value with confidence, set it to null and lower confidence scores.
 11. "confidence.level": "high" if score >= 0.75, "medium" if >= 0.5, else "low".
 12. For multi-floor plans, create separate floor entries and assign walls to their floor.
-13. The "unresolved" array should list any issues blocking a complete extraction.
-14. If no scale can be determined, add an unresolved issue with code "SCALE_UNKNOWN".`;
+13. The "unresolved" array should list blocking issues (e.g. unreadable scale, raster too low).
+14. If no scale can be determined, add an unresolved issue with code "SCALE_UNKNOWN".
+15. Do NOT simplify the floor plan to a rectangle when the drawing shows rooms, corridors, or multiple wings — preserve topology.
+16. Furniture, fixtures, and text are not walls — ignore them except for scale labels.`;
 
 interface OpenAiMessage {
   role: 'system' | 'user';
@@ -194,7 +196,7 @@ export class OpenAiExtractorAdapter implements ArchitecturalExtractorAdapter {
       body: JSON.stringify({
         model: MODEL,
         messages,
-        max_tokens: 4096,
+        max_tokens: 12000,
         temperature: 0,
         response_format: { type: 'json_object' },
       }),

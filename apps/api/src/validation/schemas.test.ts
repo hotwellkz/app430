@@ -8,6 +8,8 @@ import {
   zCreateImportJobBody,
   zPrepareEditorApplyBody,
   zCreateProjectBody,
+  zDuplicateProjectBody,
+  zPatchProjectBody,
   zPatchCurrentBody,
   zImportAssetRef,
   zSaveImportReviewBody,
@@ -39,6 +41,29 @@ describe('zCreateProjectBody', () => {
   it('requires createdBy', () => {
     expect(zCreateProjectBody.safeParse({}).success).toBe(false);
     expect(zCreateProjectBody.safeParse({ createdBy: 'u1' }).success).toBe(true);
+  });
+
+  it('accepts optional isTemplate', () => {
+    const r = zCreateProjectBody.safeParse({ createdBy: 'u1', isTemplate: true });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.isTemplate).toBe(true);
+  });
+});
+
+describe('zDuplicateProjectBody', () => {
+  it('requires title and createdBy', () => {
+    expect(zDuplicateProjectBody.safeParse({ createdBy: 'u1' }).success).toBe(false);
+    expect(
+      zDuplicateProjectBody.safeParse({ title: 'Копия', createdBy: 'u1' }).success
+    ).toBe(true);
+  });
+});
+
+describe('zPatchProjectBody', () => {
+  it('requires updatedBy and at least one of title / isTemplate', () => {
+    expect(zPatchProjectBody.safeParse({ updatedBy: 'u1' }).success).toBe(false);
+    expect(zPatchProjectBody.safeParse({ updatedBy: 'u1', title: 'X' }).success).toBe(true);
+    expect(zPatchProjectBody.safeParse({ updatedBy: 'u1', isTemplate: true }).success).toBe(true);
   });
 });
 
@@ -110,8 +135,31 @@ describe('import schemas', () => {
         fileName: 'plan.png',
         widthPx: 1920,
         heightPx: 1080,
+        base64Data: 'QQ==',
       }).success
     ).toBe(true);
+  });
+
+  it('accepts ImportAssetRef with firebase storage ref only', () => {
+    expect(
+      zImportAssetRef.safeParse({
+        id: 'img-1',
+        kind: 'plan',
+        fileName: 'f.png',
+        storageProvider: 'firebase',
+        storagePath: 'sip-import-sources/p1/asset-id/f.png',
+      }).success
+    ).toBe(true);
+  });
+
+  it('rejects ImportAssetRef without base64 or firebase storage', () => {
+    expect(
+      zImportAssetRef.safeParse({
+        id: 'img-1',
+        kind: 'plan',
+        fileName: 'f.png',
+      }).success
+    ).toBe(false);
   });
 
   it('rejects invalid ImportAssetRef kind', () => {
@@ -141,9 +189,29 @@ describe('import schemas', () => {
   it('accepts create import body', () => {
     expect(
       zCreateImportJobBody.safeParse({
-        sourceImages: [{ id: 'img-1', kind: 'facade', fileName: 'f.png' }],
+        sourceImages: [{ id: 'img-1', kind: 'facade', fileName: 'f.png', base64Data: 'QQ==' }],
       }).success
     ).toBe(true);
+  });
+
+  it('accepts create import body with base64Data on assets', () => {
+    expect(
+      zCreateImportJobBody.safeParse({
+        sourceImages: [
+          {
+            id: 'img-1',
+            kind: 'plan',
+            fileName: 'f.png',
+            mimeType: 'image/png',
+            base64Data: 'aGVsbG8=',
+          },
+        ],
+      }).success
+    ).toBe(true);
+  });
+
+  it('rejects empty sourceImages array', () => {
+    expect(zCreateImportJobBody.safeParse({ sourceImages: [] }).success).toBe(false);
   });
 
   it('accepts valid review payload and partial payload', () => {
@@ -226,7 +294,7 @@ describe('import schemas', () => {
             versionNumber: 1,
             sourceKind: 'ai_import',
             importJobId: 'ij-1',
-            mapperVersion: 'import-candidate-v1',
+            mapperVersion: 'import-candidate-v2',
             reviewedSnapshotVersion: 'rev-1',
             appliedBy: 'u1',
             appliedAt: new Date().toISOString(),

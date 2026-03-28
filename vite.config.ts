@@ -48,6 +48,34 @@ function netlifyLocalStubsPlugin(): Plugin {
           res.end(JSON.stringify({ status: 'disconnected' }));
           return;
         }
+        /** Без `netlify dev` (:8888) — чтобы CRM не сыпал 500 в консоль (useAIConfigured и т.д.) */
+        if (pathOnly === '/.netlify/functions/openai-integration' || pathOnly.startsWith('/.netlify/functions/openai-integration?')) {
+          if (req.method === 'OPTIONS') {
+            Object.entries(cors).forEach(([k, v]) => res.setHeader(k, v));
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+            res.statusCode = 204;
+            res.end();
+            return;
+          }
+          if (req.method === 'GET') {
+            res.setHeader('Content-Type', 'application/json');
+            Object.entries(cors).forEach(([k, v]) => res.setHeader(k, v));
+            res.end(JSON.stringify({ configured: false, apiKeyMasked: null }));
+            return;
+          }
+          if (req.method === 'POST') {
+            res.setHeader('Content-Type', 'application/json');
+            Object.entries(cors).forEach(([k, v]) => res.setHeader(k, v));
+            res.statusCode = 503;
+            res.end(
+              JSON.stringify({
+                error:
+                  'Локально без Netlify Dev: сохранение ключа OpenAI недоступно. Используйте pnpm dev:full или прод.',
+              })
+            );
+            return;
+          }
+        }
         next();
       });
     },

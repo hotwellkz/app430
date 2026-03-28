@@ -1,4 +1,13 @@
 import {
+  EDITOR_LAYER_FOUNDATION,
+  EDITOR_LAYER_GROUND_SCREED,
+  EDITOR_LAYER_ROOF,
+  EDITOR_LAYER_SLABS,
+  editorLayerFloorOpenings,
+  editorLayerFloorWalls,
+  isEditorLayerVisible,
+} from '@2wix/editor-core';
+import {
   getEffectiveWallHeight,
   getFloorById,
   getFloorsSorted,
@@ -6,12 +15,23 @@ import {
   getSlabsByFloor,
   getWallsByFloor,
 } from '@2wix/domain-model';
-import type { BuildingModel, Opening, Roof, Wall } from '@2wix/shared-types';
+import type {
+  BuildingModel,
+  FoundationStrip,
+  Opening,
+  Point2D,
+  Roof,
+  Wall,
+  WallPanelLayoutResult,
+} from '@2wix/shared-types';
+import { buildRoofSurfacePositionsMeters } from './roofSurfaceGeometry';
 import type {
   PreviewBoxMesh,
   PreviewBuildOptions,
+  PreviewRoofSurface,
   PreviewSceneBounds,
   PreviewSceneSnapshot,
+  PreviewSlabExtrusion,
 } from './types';
 
 const MM_TO_M = 1 / 1000;
@@ -61,7 +81,7 @@ function makeMesh(
   };
 }
 
-function collectWallOpeningSpans(wall: Wall, openings: Opening[], wallLengthMm: number, wallHeightMm: number): OpeningSpan[] {
+function collectWallOpeningSpans(_wall: Wall, openings: Opening[], wallLengthMm: number, wallHeightMm: number): OpeningSpan[] {
   const spans: OpeningSpan[] = [];
   for (const opening of openings) {
     const half = opening.widthMm / 2;
@@ -92,7 +112,7 @@ function mergeVerticalRanges(ranges: Array<{ from: number; to: number }>): Array
 }
 
 function buildWallMeshes(
-  model: BuildingModel,
+  _model: BuildingModel,
   wall: Wall,
   floorElevationMm: number,
   floorHeightMm: number,
@@ -219,6 +239,49 @@ function buildWallMeshes(
   return { wallMeshes, openingMeshes };
 }
 
+function buildWallPanelJointMeshes(
+  wall: Wall,
+  layout: WallPanelLayoutResult,
+  floorElevationMm: number,
+  wallHeightMm: number
+): PreviewBoxMesh[] {
+  if (layout.direction !== 'vertical' || layout.panels.length <= 1) return [];
+  const dx = wall.end.x - wall.start.x;
+  const dy = wall.end.y - wall.start.y;
+  const length = Math.hypot(dx, dy);
+  if (length < MIN_SEGMENT_MM) return [];
+  const dirX = dx / length;
+  const dirY = dy / length;
+  const angle = Math.atan2(dirY, dirX);
+  const thickness = Math.max(wall.thicknessMm, 50);
+  const jointW = Math.min(90, thickness * 0.22);
+  const boundaries = new Set<number>();
+  for (const p of layout.panels) {
+    boundaries.add(p.startOffsetMm);
+    boundaries.add(p.endOffsetMm);
+  }
+  const sorted = [...boundaries]
+    .filter((t) => t > MIN_SEGMENT_MM && t < length - MIN_SEGMENT_MM)
+    .sort((a, b) => a - b);
+  const meshes: PreviewBoxMesh[] = [];
+  for (const t of sorted) {
+    const cx = wall.start.x + dirX * t;
+    const cy = wall.start.y + dirY * t;
+    meshes.push(
+      makeMesh(
+        `wall:${wall.id}:sipJoint:${Math.round(t)}`,
+        'wall',
+        wall.id,
+        wall.floorId,
+        { x: cx, y: floorElevationMm + wallHeightMm / 2, z: cy },
+        { x: jointW, y: wallHeightMm, z: thickness },
+        angle
+      )
+    );
+  }
+  return meshes;
+}
+
 function computeFloorBoundingBox(walls: Wall[]): { minX: number; minY: number; maxX: number; maxY: number } | null {
   if (walls.length === 0) return null;
   let minX = Number.POSITIVE_INFINITY;
@@ -324,6 +387,110 @@ function shouldIncludeFloor(floorId: string, options: PreviewBuildOptions): bool
   return options.activeFloorId === floorId;
 }
 
+function useLayerKeys(options: PreviewBuildOptions): boolean {
+  const k = options.layerVisibilityKeys;
+  return Boolean(k && Object.keys(k).length > 0);
+}
+
+function wallLayerShown(options: PreviewBuildOptions, floorId: string): boolean {
+  if (useLayerKeys(options)) {
+    return isEditorLayerVisible(options.layerVisibilityKeys, editorLayerFloorWalls(floorId));
+  }
+  return options.layers.walls;
+}
+
+function openingsLayerShown(options: PreviewBuildOptions, floorId: string): boolean {
+  if (useLayerKeys(options)) {
+    return isEditorLayerVisible(options.layerVisibilityKeys, editorLayerFloorOpenings(floorId));
+  }
+  return options.layers.openings;
+}
+
+function slabsLayerShown(options: PreviewBuildOptions): boolean {
+  if (useLayerKeys(options)) {
+    return isEditorLayerVisible(options.layerVisibilityKeys, EDITOR_LAYER_SLABS);
+  }
+  return options.layers.slabs;
+}
+
+function roofLayerShown(options: PreviewBuildOptions): boolean {
+  if (useLayerKeys(options)) {
+    return isEditorLayerVisible(options.layerVisibilityKeys, EDITOR_LAYER_ROOF);
+  }
+  return options.layers.roof;
+}
+
+function foundationLayerShown(options: PreviewBuildOptions): boolean {
+  if (useLayerKeys(options)) {
+    return isEditorLayerVisible(options.layerVisibilityKeys, EDITOR_LAYER_FOUNDATION);
+  }
+  return true;
+}
+
+function groundScreedLayerShown(options: PreviewBuildOptions): boolean {
+  if (useLayerKeys(options)) {
+    return isEditorLayerVisible(options.layerVisibilityKeys, EDITOR_LAYER_GROUND_SCREED);
+  }
+  return true;
+}
+
+function bboxContourMm(pts: Point2D[]): { cx: number; cz: number; w: number; h: number } | null {
+  if (pts.length < 3) return null;
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const p of pts) {
+    minX = Math.min(minX, p.x);
+    maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y);
+    maxY = Math.max(maxY, p.y);
+  }
+  return {
+    cx: (minX + maxX) / 2,
+    cz: (minY + maxY) / 2,
+    w: Math.max(maxX - minX, 100),
+    h: Math.max(maxY - minY, 100),
+  };
+}
+
+function buildFoundationStripMeshes(foundation: FoundationStrip, floorElevationMm: number): PreviewBoxMesh[] {
+  const out = foundation.outerContourMm;
+  const n = out.length;
+  if (n < 3) return [];
+  const meshes: PreviewBoxMesh[] = [];
+  const h = foundation.heightMm;
+  const w = foundation.widthMm;
+  for (let i = 0; i < n; i++) {
+    const p0 = out[i]!;
+    const p1 = out[(i + 1) % n]!;
+    const dx = p1.x - p0.x;
+    const dz = p1.y - p0.y;
+    const len = Math.hypot(dx, dz);
+    if (len < MIN_SEGMENT_MM) continue;
+    const mx = (p0.x + p1.x) / 2;
+    const mz = (p0.y + p1.y) / 2;
+    const nx = -dz / len;
+    const nz = dx / len;
+    const cx = mx + nx * (w / 2);
+    const cz = mz + nz * (w / 2);
+    const angle = Math.atan2(dz, dx);
+    const yCenter = floorElevationMm - h / 2;
+    meshes.push(
+      makeMesh(
+        `foundation:${foundation.id}:seg:${i}`,
+        'foundation',
+        foundation.id,
+        foundation.floorId,
+        { x: cx, y: yCenter, z: cz },
+        { x: len, y: h, z: w },
+        angle
+      )
+    );
+  }
+  return meshes;
+}
+
 function calcBounds(meshes: PreviewBoxMesh[]): PreviewSceneBounds | null {
   if (meshes.length === 0) return null;
   const min = { x: Number.POSITIVE_INFINITY, y: Number.POSITIVE_INFINITY, z: Number.POSITIVE_INFINITY };
@@ -342,12 +509,74 @@ function calcBounds(meshes: PreviewBoxMesh[]): PreviewSceneBounds | null {
   return { min, max };
 }
 
+function mergeBoundsPair(a: PreviewSceneBounds | null, b: PreviewSceneBounds | null): PreviewSceneBounds | null {
+  if (!a) return b;
+  if (!b) return a;
+  return {
+    min: {
+      x: Math.min(a.min.x, b.min.x),
+      y: Math.min(a.min.y, b.min.y),
+      z: Math.min(a.min.z, b.min.z),
+    },
+    max: {
+      x: Math.max(a.max.x, b.max.x),
+      y: Math.max(a.max.y, b.max.y),
+      z: Math.max(a.max.z, b.max.z),
+    },
+  };
+}
+
+function boundsFromRoofSurfacePositions(pos: Float32Array): PreviewSceneBounds | null {
+  if (pos.length < 9) return null;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let minZ = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  let maxZ = Number.NEGATIVE_INFINITY;
+  for (let i = 0; i < pos.length; i += 3) {
+    const x = pos[i]!;
+    const y = pos[i + 1]!;
+    const z = pos[i + 2]!;
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+    minZ = Math.min(minZ, z);
+    maxZ = Math.max(maxZ, z);
+  }
+  return { min: { x: minX, y: minY, z: minZ }, max: { x: maxX, y: maxY, z: maxZ } };
+}
+
+function boundsFromSlabExtrusion(e: PreviewSlabExtrusion): PreviewSceneBounds {
+  const y0 = toMeters(e.bottomElevationMm);
+  const y1 = y0 + toMeters(e.thicknessMm);
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minZ = Number.POSITIVE_INFINITY;
+  let maxZ = Number.NEGATIVE_INFINITY;
+  for (const p of e.contourMm) {
+    const x = toMeters(p.x);
+    const z = toMeters(p.y);
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minZ = Math.min(minZ, z);
+    maxZ = Math.max(maxZ, z);
+  }
+  return { min: { x: minX, y: y0, z: minZ }, max: { x: maxX, y: y1, z: maxZ } };
+}
+
 export function buildPreviewSceneModel(model: BuildingModel, options: PreviewBuildOptions): PreviewSceneSnapshot {
   const warnings: string[] = [];
   const walls: PreviewBoxMesh[] = [];
+  const wallPanelJoints: PreviewBoxMesh[] = [];
   const openings: PreviewBoxMesh[] = [];
   const slabs: PreviewBoxMesh[] = [];
+  const slabExtrusions: PreviewSlabExtrusion[] = [];
+  const roofSurfaces: PreviewRoofSurface[] = [];
   const roof: PreviewBoxMesh[] = [];
+  const foundations: PreviewBoxMesh[] = [];
+  const groundScreeds: PreviewBoxMesh[] = [];
 
   const floors = getFloorsSorted(model);
   for (const floor of floors) {
@@ -361,7 +590,9 @@ export function buildPreviewSceneModel(model: BuildingModel, options: PreviewBui
       openingByWall.set(opening.wallId, list);
     }
 
-    if (options.layers.walls || options.layers.openings) {
+    const showWallsHere = wallLayerShown(options, floor.id);
+    const showOpeningsHere = openingsLayerShown(options, floor.id);
+    if (showWallsHere || showOpeningsHere) {
       for (const wall of floorWalls) {
         const built = buildWallMeshes(
           model,
@@ -371,17 +602,41 @@ export function buildPreviewSceneModel(model: BuildingModel, options: PreviewBui
           openingByWall.get(wall.id) ?? [],
           warnings
         );
-        if (options.layers.walls) walls.push(...built.wallMeshes);
-        if (options.layers.openings) openings.push(...built.openingMeshes);
+        if (showWallsHere) {
+          walls.push(...built.wallMeshes);
+          const layout = model.wallPanelLayouts?.[wall.id];
+          if (layout && layout.panels.length > 0) {
+            const wh = getEffectiveWallHeight(wall, floor);
+            wallPanelJoints.push(
+              ...buildWallPanelJointMeshes(wall, layout, floor.elevationMm, wh)
+            );
+          }
+        }
+        if (showOpeningsHere) openings.push(...built.openingMeshes);
       }
     }
 
-    if (options.layers.slabs) {
+    if (slabsLayerShown(options)) {
       const floorSlabs = getSlabsByFloor(model, floor.id);
       const bb = computeFloorBoundingBox(floorWalls);
-      if (bb) {
-        for (const slab of floorSlabs) {
-          const thickness = slab.thicknessMm ?? 200;
+      for (const slab of floorSlabs) {
+        const thickness = slab.thicknessMm ?? 200;
+        const bottomEl =
+          slab.elevationMm !== undefined && Number.isFinite(slab.elevationMm)
+            ? slab.elevationMm
+            : slab.slabType === 'ground'
+              ? floor.elevationMm
+              : floor.elevationMm + floor.heightMm - thickness;
+        if (slab.contourMm && slab.contourMm.length >= 3) {
+          slabExtrusions.push({
+            id: `slab-ex:${slab.id}`,
+            slabId: slab.id,
+            floorId: floor.id,
+            contourMm: slab.contourMm,
+            thicknessMm: thickness,
+            bottomElevationMm: bottomEl,
+          });
+        } else if (bb) {
           const elevation =
             slab.slabType === 'ground' ? floor.elevationMm : floor.elevationMm + floor.heightMm;
           slabs.push(
@@ -406,37 +661,94 @@ export function buildPreviewSceneModel(model: BuildingModel, options: PreviewBui
         }
       }
     }
+
+    const fStrip = (model.foundations ?? []).find((x) => x.floorId === floor.id);
+    if (fStrip && foundationLayerShown(options)) {
+      foundations.push(...buildFoundationStripMeshes(fStrip, floor.elevationMm));
+    }
+    const gScreed = (model.groundScreeds ?? []).find((s) => s.floorId === floor.id);
+    if (gScreed && groundScreedLayerShown(options)) {
+      const bb = bboxContourMm(gScreed.contourMm);
+      if (bb) {
+        groundScreeds.push(
+          makeMesh(
+            `screed:${gScreed.id}`,
+            'groundScreed',
+            gScreed.id,
+            floor.id,
+            { x: bb.cx, y: floor.elevationMm - gScreed.thicknessMm / 2, z: bb.cz },
+            { x: bb.w, y: Math.max(gScreed.thicknessMm, 40), z: bb.h },
+            0
+          )
+        );
+      }
+    }
   }
 
-  if (options.layers.roof) {
+  if (roofLayerShown(options)) {
     const topRoof = getRoofForTopFloor(model);
     if (topRoof) {
       if (options.floorMode === 'all' || options.activeFloorId === topRoof.floorId) {
-        const roofFloorWalls = getWallsByFloor(model, topRoof.floorId);
-        const bb = computeFloorBoundingBox(roofFloorWalls);
-        if (bb) {
-          roof.push(...buildRoofMeshes(topRoof, bb));
+        const surf = buildRoofSurfacePositionsMeters(topRoof);
+        if (surf && surf.length > 0) {
+          roofSurfaces.push({
+            id: `roof-surf:${topRoof.id}`,
+            roofId: topRoof.id,
+            floorId: topRoof.floorId,
+            positions: surf,
+          });
         } else {
-          warnings.push('Невозможно построить крышу: отсутствуют стены верхнего этажа.');
+          const roofFloorWalls = getWallsByFloor(model, topRoof.floorId);
+          const bb = computeFloorBoundingBox(roofFloorWalls);
+          if (bb) {
+            roof.push(...buildRoofMeshes(topRoof, bb));
+          } else {
+            warnings.push('Невозможно построить крышу: отсутствуют стены верхнего этажа.');
+          }
         }
       }
     }
   }
 
-  const allMeshes = [...walls, ...openings, ...slabs, ...roof];
+  const allMeshes = [
+    ...walls,
+    ...wallPanelJoints,
+    ...openings,
+    ...slabs,
+    ...roof,
+    ...foundations,
+    ...groundScreeds,
+  ];
+  let bounds = calcBounds(allMeshes);
+  for (const se of slabExtrusions) {
+    bounds = mergeBoundsPair(bounds, boundsFromSlabExtrusion(se));
+  }
+  for (const rs of roofSurfaces) {
+    const b = boundsFromRoofSurfacePositions(rs.positions);
+    if (b) bounds = mergeBoundsPair(bounds, b);
+  }
   return {
     walls,
+    wallPanelJoints,
     openings,
     slabs,
+    slabExtrusions,
+    roofSurfaces,
     roof,
+    foundations,
+    groundScreeds,
     warnings,
-    bounds: calcBounds(allMeshes),
+    bounds,
     stats: {
       floorsCount: floors.length,
       wallsRendered: walls.length,
       openingsRendered: openings.length,
-      slabsRendered: slabs.length,
-      roofRendered: roof.length > 0,
+      slabsRendered: slabs.length + slabExtrusions.length,
+      slabExtrusionsRendered: slabExtrusions.length,
+      roofSurfacesRendered: roofSurfaces.length,
+      roofRendered: roof.length > 0 || roofSurfaces.length > 0,
+      foundationsRendered: foundations.length,
+      groundScreedsRendered: groundScreeds.length,
     },
   };
 }
@@ -457,5 +769,7 @@ export function getSelectedObjectFloorId(model: BuildingModel, type: string | nu
   if (type === 'slab') return model.slabs.find((s) => s.id === id)?.floorId ?? null;
   if (type === 'roof') return model.roofs.find((r) => r.id === id)?.floorId ?? null;
   if (type === 'floor') return getFloorById(model, id)?.id ?? null;
+  if (type === 'foundation') return model.foundations?.find((f) => f.id === id)?.floorId ?? null;
+  if (type === 'groundScreed') return model.groundScreeds?.find((s) => s.id === id)?.floorId ?? null;
   return null;
 }

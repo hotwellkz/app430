@@ -1,4 +1,5 @@
 import {
+  buildDraftSipBomSnapshot,
   getFloorsSorted,
   getFloorById,
   getOpeningsByFloor,
@@ -7,6 +8,7 @@ import {
   getWallsByFloor,
 } from '@2wix/domain-model';
 import { useEditorStore } from '@2wix/editor-core';
+import { useMemo } from 'react';
 
 const saveRu: Record<string, string> = {
   idle: 'ожидание',
@@ -17,7 +19,7 @@ const saveRu: Record<string, string> = {
   error: 'ошибка',
 };
 
-export function BuildingSummaryPanel() {
+export function BuildingSummaryPanel({ projectIsTemplate }: { projectIsTemplate?: boolean } = {}) {
   const draft = useEditorStore((s) => s.document.draftModel);
   const document = useEditorStore((s) => s.document);
   const view = useEditorStore((s) => s.view);
@@ -32,6 +34,7 @@ export function BuildingSummaryPanel() {
   const totalSlabs = draft.slabs.length;
   const roof = getRoofForTopFloor(draft);
   const floorsSorted = getFloorsSorted(draft);
+  const draftBom = useMemo(() => buildDraftSipBomSnapshot(draft), [draft]);
 
   return (
     <div
@@ -48,6 +51,12 @@ export function BuildingSummaryPanel() {
         Объект
       </p>
       <dl style={{ margin: 0, display: 'grid', gap: 6 }}>
+        {projectIsTemplate ? (
+          <>
+            <dt className="twix-muted">Тип в каталоге</dt>
+            <dd style={{ margin: 0, color: '#4338ca', fontWeight: 600 }}>шаблон</dd>
+          </>
+        ) : null}
         <dt className="twix-muted">Этажей</dt>
         <dd style={{ margin: 0 }}>{draft.floors.length}</dd>
         <dt className="twix-muted">Активный этаж</dt>
@@ -66,6 +75,35 @@ export function BuildingSummaryPanel() {
         <dd style={{ margin: 0 }}>{roof ? `${roof.roofType} (${roof.slopeDegrees}°)` : 'нет'}</dd>
         <dt className="twix-muted">Верхний этаж</dt>
         <dd style={{ margin: 0 }}>{floorsSorted[floorsSorted.length - 1]?.label ?? '—'}</dd>
+        <dt className="twix-muted">SIP черновик (проект)</dt>
+        <dd style={{ margin: 0 }}>
+          {draftBom.project.wallsWithLayout > 0 ? (
+            <>
+              панелей {draftBom.project.sipPanelsTotal} · trim {draftBom.project.trimPanelsTotal} · ready / partial / invalid:{' '}
+              {draftBom.project.wallsReady} / {draftBom.project.wallsPartial} / {draftBom.project.wallsInvalid} · stale{' '}
+              {draftBom.project.staleLayouts}
+            </>
+          ) : (
+            <span className="twix-muted">нет сохранённых раскладок</span>
+          )}
+        </dd>
+        {fid && draftBom.byFloor.some((x) => x.floorId === fid) ? (
+          <>
+            <dt className="twix-muted">SIP черновик (этаж)</dt>
+            <dd style={{ margin: 0 }}>
+              {(() => {
+                const f = draftBom.byFloor.find((x) => x.floorId === fid);
+                if (!f) return '—';
+                return (
+                  <>
+                    панелей {f.sipPanelsTotal} · trim {f.trimPanelsTotal} · ready/partial/invalid {f.wallsReady}/{f.wallsPartial}/
+                    {f.wallsInvalid} · stale {f.staleLayouts}
+                  </>
+                );
+              })()}
+            </dd>
+          </>
+        ) : null}
         <dt className="twix-muted">Версия модели</dt>
         <dd style={{ margin: 0 }}>{document.currentVersionNumber ?? '—'}</dd>
         <dt className="twix-muted">Сохранение</dt>

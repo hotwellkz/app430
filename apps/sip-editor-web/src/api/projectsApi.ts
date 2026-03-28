@@ -9,12 +9,15 @@ import type {
   CreateImportJobResponse,
   CreateProjectRequest,
   CreateVersionRequest,
+  DuplicateProjectRequest,
   ExportArtifactMeta,
   GetImportApplyHistoryResponse,
   GetImportJobResponse,
   ExportPackageSnapshot,
+  ImportAssetRef,
   ListImportJobsResponse,
   PatchCurrentVersionRequestBody,
+  PatchProjectRequest,
   PrepareEditorApplyRequest,
   PrepareEditorApplyResponse,
   Project,
@@ -23,7 +26,7 @@ import type {
   SaveImportReviewRequest,
   SaveImportReviewResponse,
 } from '@2wix/shared-types';
-import { fetchJson, SipApiError } from './http';
+import { fetchFormDataJson, fetchJson, SipApiError } from './http';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -133,6 +136,37 @@ export async function createProject(
   });
 }
 
+export async function listProjects(params?: {
+  limit?: number;
+  templates?: 'all' | 'only' | 'hide';
+}): Promise<{ projects: Project[] }> {
+  const q = new URLSearchParams();
+  if (params?.limit != null) q.set('limit', String(params.limit));
+  if (params?.templates && params.templates !== 'all') q.set('templates', params.templates);
+  const qs = q.toString();
+  return fetchJson(`/api/projects${qs ? `?${qs}` : ''}`);
+}
+
+export async function duplicateProject(
+  projectId: string,
+  body: DuplicateProjectRequest
+): Promise<ProjectWithCurrentVersion> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}/duplicate`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function patchProject(
+  projectId: string,
+  body: PatchProjectRequest
+): Promise<{ project: Project }> {
+  return fetchJson(`/api/projects/${encodeURIComponent(projectId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
 export async function createVersion(
   projectId: string,
   body: CreateVersionRequest
@@ -208,6 +242,21 @@ export async function createImportJob(
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+/** Загрузка одного растрового файла в Firebase Storage; возвращает ref для create-import (без base64 в JSON). */
+export async function uploadImportSourceFile(
+  projectId: string,
+  params: { file: File; id: string; kind: ImportAssetRef['kind'] }
+): Promise<{ asset: ImportAssetRef }> {
+  const form = new FormData();
+  form.append('file', params.file);
+  form.append('id', params.id);
+  form.append('kind', params.kind);
+  return fetchFormDataJson(
+    `/api/projects/${encodeURIComponent(projectId)}/import-sources`,
+    form
+  );
 }
 
 export async function getImportJob(

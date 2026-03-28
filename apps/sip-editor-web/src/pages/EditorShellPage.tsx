@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { VersionConflictDetails } from '@2wix/shared-types';
 import {
@@ -7,17 +7,34 @@ import {
   DEFAULT_FLOOR_HEIGHT_MM,
   isBuildingModelEmpty,
 } from '@2wix/domain-model';
-import { useEditorStore } from '@2wix/editor-core';
-import { AppShell, EmptyState, LoadingState, RightPanel, TopBar } from '@2wix/ui-kit';
+import {
+  EDITOR_LAYER_FOUNDATION,
+  EDITOR_LAYER_GROUND_SCREED,
+  EDITOR_LAYER_ROOF,
+  EDITOR_LAYER_SLABS,
+  parseFloorOpeningsLayer,
+  parseFloorWallsLayer,
+  useEditorStore,
+} from '@2wix/editor-core';
+import { EmptyState, LoadingState } from '@2wix/ui-kit';
 import { SipApiError } from '@/api/http';
-import { createVersion, patchCurrentVersion } from '@/api/projectsApi';
+import { createVersion, duplicateProject, patchCurrentVersion } from '@/api/projectsApi';
 import { EditorCanvas2D } from '@/canvas2d/EditorCanvas2D';
 import { VersionsPanel } from '@/components/VersionsPanel';
-import { EditorLeftSidebar } from '@/components/EditorLeftSidebar';
-import { EditorToolbar } from '@/components/EditorToolbar';
+import {
+  EditorDesktopShell,
+  EditorProjectTreeSidebar,
+  EditorRightInspectorPanel,
+  EditorStatusBar,
+  EditorTopMenuBar,
+  EditorTopToolbar,
+  EditorWorkspaceShell,
+} from '@/editor-shell';
 import { BuildingSummaryPanel } from '@/components/BuildingSummaryPanel';
+import { EditorProjectCleanupPanel } from '@/components/EditorProjectCleanupPanel';
 import { BuildingWarningsPanel } from '@/components/BuildingWarningsPanel';
 import { PanelizationPanel } from '@/components/PanelizationPanel';
+import { DraftSipBomPanel } from '@/components/DraftSipBomPanel';
 import { SpecPanel } from '@/components/SpecPanel';
 import { ExportPanel } from '@/components/ExportPanel';
 import { ImportApplyHistoryPanel } from '@/components/ImportApplyHistoryPanel';
@@ -27,6 +44,7 @@ import { FloorInspector } from '@/components/FloorInspector';
 import { OpeningInspector } from '@/components/OpeningInspector';
 import { RoofInspector } from '@/components/RoofInspector';
 import { SlabInspector } from '@/components/SlabInspector';
+import { FoundationInspector } from '@/components/FoundationInspector';
 import { WallInspector } from '@/components/WallInspector';
 import { Preview3DPanel } from '@/components/Preview3DPanel';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -145,6 +163,7 @@ function describeLoadError(error: unknown, fallbackTitle: string): { title: stri
 
 export function EditorShellPage() {
   const { projectId = '' } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const sipUserId = getSipUserId();
   const sipUserCtx = resolveSipUserContext();
@@ -178,6 +197,8 @@ export function EditorShellPage() {
   const [pendingSelectImportJobId, setPendingSelectImportJobId] = useState<string | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
   const [initTimedOut, setInitTimedOut] = useState(false);
+  /** После apply-candidate: серверная версия оказалась без геометрии (стены/этажи). */
+  const [postApplyEmptyGeometry, setPostApplyEmptyGeometry] = useState(false);
 
   const versionsQuery = useSipVersionsList(
     projectId,
@@ -229,6 +250,7 @@ export function EditorShellPage() {
       const uid = getSipUserId();
       if (!uid) throw new Error('Нет пользователя');
       const st = useEditorStore.getState().document;
+      const view = useEditorStore.getState().view;
       if (!st.draftModel) throw new Error('Нет черновика');
       if (
         st.currentVersionId === null ||
@@ -237,8 +259,18 @@ export function EditorShellPage() {
       ) {
         throw new Error('Нет ожиданий версии');
       }
+      const buildingModel = {
+        ...st.draftModel,
+        meta: {
+          ...st.draftModel.meta,
+          editorUi: {
+            layerVisibility: { ...view.layerVisibility },
+            layerLocked: { ...view.layerLocked },
+          },
+        },
+      };
       return patchCurrentVersion(projectId, {
-        buildingModel: st.draftModel,
+        buildingModel,
         updatedBy: uid,
         expectedCurrentVersionId: st.currentVersionId,
         expectedVersionNumber: st.currentVersionNumber,
@@ -288,10 +320,42 @@ export function EditorShellPage() {
     },
   });
 
+  const duplicateProjectMutation = useMutation({
+    mutationFn: async (title: string) => {
+      const uid = getSipUserId();
+      if (!uid) throw new Error('Нет пользователя');
+      return duplicateProject(projectId, { title, createdBy: uid });
+    },
+    onSuccess: (res) => {
+      void queryClient.invalidateQueries({ queryKey: ['sip-projects-list'] });
+      const uid = getSipUserId();
+      const path = `/sip-editor/${encodeURIComponent(res.project.id)}`;
+      navigate(uid ? `${path}?sipUserId=${encodeURIComponent(uid)}` : path);
+    },
+  });
+
+  const onSaveProjectAsCopy = useCallback(() => {
+    const uid = getSipUserId();
+    if (!uid) {
+      window.alert('Нужен sipUserId в URL (?sipUserId=…) или в контексте пользователя.');
+      return;
+    }
+    const def = projectQuery.data?.project?.title
+      ? `${projectQuery.data.project.title} (копия)`
+      : 'Новый проект';
+    const title = window.prompt(
+      'Имя нового проекта (копия текущей версии; исходный проект не изменится):',
+      def
+    );
+    if (!title?.trim()) return;
+    duplicateProjectMutation.mutate(title.trim());
+  }, [duplicateProjectMutation, projectQuery.data?.project?.title]);
+
   const reloadFromServer = useCallback(async () => {
     setConflictDetails(null);
     setInitError(null);
     setInitTimedOut(false);
+    setPostApplyEmptyGeometry(false);
     await versionQuery.refetch();
     await projectQuery.refetch();
     await versionsQuery.refetch();
@@ -300,10 +364,19 @@ export function EditorShellPage() {
 
   const onEditorRefreshAfterApply = useCallback(async () => {
     setConflictDetails(null);
-    await refreshEditorAfterApplyCandidate(queryClient, projectId, {
+    setPostApplyEmptyGeometry(false);
+    const loadedVersion = await refreshEditorAfterApplyCandidate(queryClient, projectId, {
       onCacheUpdated: () => setSyncToken((n) => n + 1),
     });
-  }, [queryClient, projectId]);
+    loadDocumentFromServer({
+      projectId,
+      projectTitle: projectQuery.data?.project?.title ?? null,
+      version: loadedVersion,
+    });
+    if (isBuildingModelEmpty(loadedVersion.buildingModel)) {
+      setPostApplyEmptyGeometry(true);
+    }
+  }, [queryClient, projectId, loadDocumentFromServer, projectQuery.data?.project?.title]);
 
   const saveBeforeExport = useCallback(async () => {
     try {
@@ -337,6 +410,26 @@ export function EditorShellPage() {
 
   const statusBadge = saveStatusLabel(document.saveStatus);
   const draft = document.draftModel;
+
+  const layerHint = useMemo(() => {
+    const lid = view.activeEditorLayerId;
+    if (!lid) return 'Активный слой не выбран';
+    const wf = parseFloorWallsLayer(lid);
+    if (wf && draft) {
+      const fl = draft.floors.find((x) => x.id === wf);
+      return `Слой: Стены — ${fl?.label ?? wf}`;
+    }
+    const of = parseFloorOpeningsLayer(lid);
+    if (of && draft) {
+      const fl = draft.floors.find((x) => x.id === of);
+      return `Слой: Проёмы — ${fl?.label ?? of}`;
+    }
+    if (lid === EDITOR_LAYER_FOUNDATION) return 'Слой: Лента фундамента';
+    if (lid === EDITOR_LAYER_GROUND_SCREED) return 'Слой: Стяжка / плита';
+    if (lid === EDITOR_LAYER_SLABS) return 'Слой: Перекрытие';
+    if (lid === EDITOR_LAYER_ROOF) return 'Слой: Крыша';
+    return `Слой: ${lid}`;
+  }, [view.activeEditorLayerId, draft]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -517,7 +610,19 @@ export function EditorShellPage() {
 
   const mainContent =
     activePanel === 'versions' ? (
-      <div style={{ flex: 1, margin: 12, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div
+        style={{
+          flex: 1,
+          margin: 6,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          padding: 10,
+          border: '1px solid #b8c0cc',
+          borderRadius: 2,
+          background: '#fafbfc',
+        }}
+      >
         <p className="twix-panelTitle" style={{ flex: 'none' }}>
           История версий
         </p>
@@ -528,153 +633,147 @@ export function EditorShellPage() {
         />
       </div>
     ) : (
-      <div
-        style={{
-          flex: 1,
-          margin: 12,
-          minHeight: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-        }}
-      >
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button
-            type="button"
-            style={{
-              fontSize: 12,
-              padding: '4px 10px',
-              borderRadius: 6,
-              border: '1px solid var(--twix-border)',
-              background: viewMode === '2d' ? '#0f172a' : '#fff',
-              color: viewMode === '2d' ? '#fff' : '#0f172a',
-            }}
-            onClick={() => setViewMode('2d')}
-          >
-            2D
-          </button>
-          <button
-            type="button"
-            style={{
-              fontSize: 12,
-              padding: '4px 10px',
-              borderRadius: 6,
-              border: '1px solid var(--twix-border)',
-              background: viewMode === '3d' ? '#0f172a' : '#fff',
-              color: viewMode === '3d' ? '#fff' : '#0f172a',
-            }}
-            onClick={() => setViewMode('3d')}
-          >
-            3D
-          </button>
-        </div>
-        {modelEmpty ? (
-          <div style={{ flex: 'none' }}>
-            <EmptyState
-              title="Пустая модель"
-              description={
-                <>
-                  Быстрый старт этажей (без стен) или добавьте этаж в списке слева, затем инструмент «Стена».
-                  <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    <button
-                      type="button"
-                      style={{ fontSize: 13, padding: '6px 12px' }}
-                      onClick={() => {
-                        if (!draft || draft.floors.length > 0) return;
-                        const f = createFloor({
-                          label: '1 этаж',
-                          level: 1,
-                          elevationMm: 0,
-                          heightMm: DEFAULT_FLOOR_HEIGHT_MM,
-                          floorType: 'full',
-                          sortIndex: 0,
-                        });
-                        if (applyCommand({ type: 'addFloor', floor: f }).ok) setActiveFloor(f.id);
-                      }}
-                    >
-                      Шаблон: 1 этаж
-                    </button>
-                    <button
-                      type="button"
-                      style={{ fontSize: 13, padding: '6px 12px' }}
-                      onClick={() => {
-                        if (!draft || draft.floors.length > 0) return;
-                        const f1 = createFloor({
-                          label: '1 этаж',
-                          level: 1,
-                          elevationMm: 0,
-                          heightMm: DEFAULT_FLOOR_HEIGHT_MM,
-                          floorType: 'full',
-                          sortIndex: 0,
-                        });
-                        const f2 = createFloor({
-                          label: '2 этаж',
-                          level: 2,
-                          elevationMm: DEFAULT_FLOOR_HEIGHT_MM,
-                          heightMm: DEFAULT_FLOOR_HEIGHT_MM,
-                          floorType: 'full',
-                          sortIndex: 1,
-                        });
-                        if (applyCommand({ type: 'addFloor', floor: f1 }).ok) {
-                          if (applyCommand({ type: 'addFloor', floor: f2 }).ok) setActiveFloor(f2.id);
-                        }
-                      }}
-                    >
-                      Шаблон: 2 этажа
-                    </button>
-                  </div>
-                </>
-              }
+      <EditorWorkspaceShell layerHint={layerHint}>
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+          }}
+        >
+          {postApplyEmptyGeometry ? (
+            <div
+              role="alert"
+              data-testid="post-apply-empty-geometry"
+              style={{
+                flex: 'none',
+                padding: '8px 10px',
+                borderRadius: 2,
+                border: '1px solid #e59e0b',
+                background: '#fffbeb',
+                fontSize: 12,
+                color: '#92400e',
+              }}
+            >
+              Импорт применён на сервере, но текущая версия не содержит геометрию (стены/этажи). Проверьте
+              candidate в AI Import Review или повторите импорт.
+            </div>
+          ) : null}
+          {modelEmpty ? (
+            <div style={{ flex: 'none' }}>
+              <EmptyState
+                title="Пустая модель"
+                description={
+                  <>
+                    Быстрый старт этажей (без стен) или добавьте этаж в списке слева, затем инструмент «Стена».
+                    <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      <button
+                        type="button"
+                        style={{ fontSize: 13, padding: '6px 12px' }}
+                        onClick={() => {
+                          if (!draft || draft.floors.length > 0) return;
+                          const f = createFloor({
+                            label: '1 этаж',
+                            level: 1,
+                            elevationMm: 0,
+                            heightMm: DEFAULT_FLOOR_HEIGHT_MM,
+                            floorType: 'full',
+                            sortIndex: 0,
+                          });
+                          if (applyCommand({ type: 'addFloor', floor: f }).ok) setActiveFloor(f.id);
+                        }}
+                      >
+                        Шаблон: 1 этаж
+                      </button>
+                      <button
+                        type="button"
+                        style={{ fontSize: 13, padding: '6px 12px' }}
+                        onClick={() => {
+                          if (!draft || draft.floors.length > 0) return;
+                          const f1 = createFloor({
+                            label: '1 этаж',
+                            level: 1,
+                            elevationMm: 0,
+                            heightMm: DEFAULT_FLOOR_HEIGHT_MM,
+                            floorType: 'full',
+                            sortIndex: 0,
+                          });
+                          const f2 = createFloor({
+                            label: '2 этаж',
+                            level: 2,
+                            elevationMm: DEFAULT_FLOOR_HEIGHT_MM,
+                            heightMm: DEFAULT_FLOOR_HEIGHT_MM,
+                            floorType: 'full',
+                            sortIndex: 1,
+                          });
+                          if (applyCommand({ type: 'addFloor', floor: f1 }).ok) {
+                            if (applyCommand({ type: 'addFloor', floor: f2 }).ok) setActiveFloor(f2.id);
+                          }
+                        }}
+                      >
+                        Шаблон: 2 этажа
+                      </button>
+                    </div>
+                  </>
+                }
+              />
+            </div>
+          ) : null}
+          {viewMode === '2d' ? (
+            <EditorCanvas2D
+              onRegisterFitView={(fn) => {
+                fitViewRef.current = fn;
+              }}
             />
-          </div>
-        ) : null}
-        {viewMode === '2d' ? (
-          <EditorCanvas2D
-            onRegisterFitView={(fn) => {
-              fitViewRef.current = fn;
-            }}
-          />
-        ) : (
-          <ErrorBoundary scope="preview3d">
-            <Preview3DPanel model={draft} activeFloorId={view.activeFloorId} />
-          </ErrorBoundary>
-        )}
-      </div>
+          ) : (
+            <ErrorBoundary scope="preview3d">
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                <Preview3DPanel model={draft} activeFloorId={view.activeFloorId} layerVisibility={view.layerVisibility} />
+              </div>
+            </ErrorBoundary>
+          )}
+        </div>
+      </EditorWorkspaceShell>
     );
 
   return (
-    <div style={{ height: '100vh', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <AppShell
-        topBar={
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <TopBar
-              title={
-                <>
-                  SIP Editor — {projectQuery.data?.project?.title ?? 'проект'}{' '}
-                  <span style={{ fontWeight: 400, color: 'var(--twix-muted)' }}>
-                    (v{version.versionNumber} · {projectId.slice(0, 8)}…)
-                  </span>
-                </>
-              }
-            />
-            <EditorToolbar
-              statusBadge={statusBadge}
-              onSave={() => saveMutation.mutate()}
-              onNewVersion={() => newVersionMutation.mutate()}
-              savePending={saveMutation.isPending}
-              newVersionPending={newVersionMutation.isPending}
-              onFitView={() => fitViewRef.current?.()}
-              onOpenAiImport={() => setAiImportWizardOpen(true)}
-            />
-          </div>
+    <div style={{ height: '100vh', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <EditorDesktopShell
+        menuBar={
+          <EditorTopMenuBar
+            projectTitle={`SIP Editor — ${projectQuery.data?.project?.title ?? 'проект'}`}
+            versionHint={`(v${version.versionNumber} · ${projectId.slice(0, 8)}…)`}
+            isTemplate={projectQuery.data?.project?.isTemplate === true}
+          />
         }
-        sidebar={<EditorLeftSidebar />}
-        main={mainContent}
+        toolbar={
+          <EditorTopToolbar
+            statusBadge={statusBadge}
+            onSave={() => saveMutation.mutate()}
+            onNewVersion={() => newVersionMutation.mutate()}
+            savePending={saveMutation.isPending}
+            newVersionPending={newVersionMutation.isPending}
+            onSaveAs={onSaveProjectAsCopy}
+            saveAsPending={duplicateProjectMutation.isPending}
+            onFitView={() => fitViewRef.current?.()}
+            onOpenAiImport={() => setAiImportWizardOpen(true)}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+          />
+        }
+        leftSidebar={<EditorProjectTreeSidebar />}
+        workspace={mainContent}
         rightPanel={
-          <RightPanel>
-            <BuildingSummaryPanel />
+          <EditorRightInspectorPanel title="Свойства и SIP">
+            <BuildingSummaryPanel
+              projectIsTemplate={projectQuery.data?.project?.isTemplate === true}
+            />
+            <EditorProjectCleanupPanel />
             <BuildingWarningsPanel />
             <PanelizationPanel />
+            <DraftSipBomPanel />
             <SpecPanel />
             <ExportPanel
               projectId={projectId}
@@ -799,6 +898,16 @@ export function EditorShellPage() {
               <SlabInspector />
             ) : selection.selectedObjectType === 'wall' ? (
               <WallInspector />
+            ) : selection.selectedObjectType === 'foundation' ||
+              selection.selectedObjectType === 'groundScreed' ? (
+              <FoundationInspector />
+            ) : view.activeEditorLayerId === EDITOR_LAYER_ROOF ? (
+              <RoofInspector />
+            ) : view.activeEditorLayerId === EDITOR_LAYER_SLABS ? (
+              <SlabInspector />
+            ) : view.activeEditorLayerId === EDITOR_LAYER_FOUNDATION ||
+              view.activeEditorLayerId === EDITOR_LAYER_GROUND_SCREED ? (
+              <FoundationInspector />
             ) : activePanel === 'roof' ? (
               <RoofInspector />
             ) : activePanel === 'slabs' ? (
@@ -866,7 +975,23 @@ export function EditorShellPage() {
             ) : (
               <p className="twix-muted">—</p>
             )}
-          </RightPanel>
+          </EditorRightInspectorPanel>
+        }
+        statusBar={
+          <EditorStatusBar
+            modeLabel={viewMode === '2d' ? 'План этажа (2D)' : 'Объём (3D)'}
+            toolLabel={view.toolMode}
+            snapOn={view.snapEnabled}
+            gridOn={view.gridVisible}
+            zoom={view.zoom}
+            saveStatusShort={statusBadge}
+            floorLabel={
+              draft && view.activeFloorId
+                ? draft.floors.find((f) => f.id === view.activeFloorId)?.label ?? view.activeFloorId
+                : null
+            }
+            layerHintShort={layerHint.replace(/^Слой:\s*/, '')}
+          />
         }
       />
       <AiImportWizardModal

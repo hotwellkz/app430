@@ -6,6 +6,15 @@ export {
   isBuildingModelEmpty,
   validateProjectCreatePayload,
 } from './buildingProject.js';
+export {
+  upsertWallPanelLayout,
+  clearWallPanelLayout,
+  mergeWallPanelLayouts,
+  clearWallPanelLayoutsForFloor,
+  markWallPanelLayoutsStaleForWallIds,
+} from './wallPanelLayoutOps.js';
+export { computeWallPanelizationGeometrySignature } from './wallPanelLayoutGeometry.js';
+export { buildDraftSipBomSnapshot, isWallPanelLayoutOutdated } from './draftSipBom.js';
 export { syncBuildingModelMeta } from './metaSync.js';
 export { newDomainId } from './ids.js';
 export {
@@ -44,6 +53,31 @@ export {
   updateWallInModel,
   deleteWallFromModel,
 } from './wallOps.js';
+export { baselineSegmentToCenterline, centerlineSegmentToBaseline } from './wallBaseline.js';
+export { wallFootprintCorners, wallPolygonPointsMm } from './wallGeometry.js';
+export { mergeNearbyWallEndpoints } from './wallEndpointSnap.js';
+export { recomputeManualBuildingGeometry } from './manualGeometryRecompute.js';
+export {
+  attachWallEndpointsToJoints,
+  applyWallGeometryPatch,
+  countWallsReferencingJoint,
+  detachWallEndpointInModel,
+  ensureWallJointsArray,
+  getWallJointById,
+  moveWallJointInModel,
+  pruneUnusedWallJoints,
+  rebuildWallJointsFromWallEndpoints,
+  wallsOnFloorAfterJointMove,
+} from './wallJointOps.js';
+export { snapPointForWallEndpointEdit } from './wallJointSnap.js';
+export {
+  endPointForLengthFromStart,
+  parsePositiveMmString,
+  rectangleOppositeCornerFromSize,
+  translateWallEndpoints,
+  wallDirectionDegrees,
+} from './wallNumericEdit.js';
+export type { TranslateAxis } from './wallNumericEdit.js';
 export type {
   AddWallResult,
   UpdateWallResult,
@@ -82,6 +116,7 @@ export {
   detectOpeningOutOfWallBounds,
   detectOpeningTooCloseToWallEdge,
   detectOpeningOverlap,
+  openingCenterWorldMm,
 } from './openingGeometry.js';
 export {
   DEFAULT_SLAB_DIRECTION,
@@ -95,11 +130,31 @@ export {
   updateSlabInModel,
   validateSlab,
 } from './slabOps.js';
+export { buildSlabDeckContourFromExternalWalls } from './slabContourBuild.js';
+export { syncSlabStaleFromSignatures, markSlabStaleForFloor } from './slabStale.js';
+export {
+  buildSlabAssemblyForFloor,
+  recomputeSlabById,
+} from './slabAssemblyBuild.js';
+export type { BuildSlabAssemblyParams, SlabAssemblyBuildResult } from './slabAssemblyBuild.js';
+export { markFloorStructuralStale } from './structuralStale.js';
+export {
+  buildEavesContourFromFootprint,
+  buildOuterSipRingContourForRoof,
+  validateAxisAlignedRectangleContour,
+} from './roofContourBuild.js';
+export {
+  buildRoofAssemblyForFloor,
+  recomputeRoofById,
+} from './roofAssemblyBuild.js';
+export type { BuildRoofAssemblyParams, RoofAssemblyBuildResult } from './roofAssemblyBuild.js';
+export { syncRoofStaleFromSignatures, markRoofStaleForFloor } from './roofStale.js';
 export {
   DEFAULT_ROOF_OVERHANG_MM,
   DEFAULT_ROOF_RIDGE_DIRECTION,
   DEFAULT_ROOF_SLOPE_DEG,
   DEFAULT_ROOF_TYPE,
+  defaultSingleSlopeDrain,
   addRoofToModel,
   createRoof,
   deleteRoofFromModel,
@@ -118,3 +173,48 @@ export {
   getWallHeightMode,
 } from './verticalModel.js';
 export type { VerticalWarning } from './verticalModel.js';
+export {
+  DEFAULT_FOUNDATION_WIDTH_MM,
+  DEFAULT_FOUNDATION_HEIGHT_MM,
+  DEFAULT_FOUNDATION_OUTER_OFFSET_MM,
+  DEFAULT_FOUNDATION_INNER_OFFSET_MM,
+  DEFAULT_SCREED_THICKNESS_MM,
+  FOUNDATION_WALL_ENDPOINT_TOL_MM,
+} from './foundationConstants.js';
+export {
+  wallsShareEndpoint,
+  isExternalWallForFoundation,
+  orderExternalWallsInRing,
+} from './foundationOuterWallLoop.js';
+export {
+  polygonAreaSigned,
+  lineIntersectionInfinite,
+  polygonSelfIntersects,
+  offsetClosedPolygonOutward,
+  buildOuterSipRing,
+  buildFoundationContours,
+} from './foundationStripBuild.js';
+export {
+  computeExternalWallSignatureForFloor,
+  isFoundationGeometryStale,
+} from './foundationSignature.js';
+export { markFoundationLayerStaleForFloor, syncFoundationStaleFromSignatures } from './foundationStale.js';
+export {
+  buildFoundationAndScreedForFloor,
+  upsertFoundationInModel,
+  deleteFoundationForFloor,
+  findFoundationByFloor,
+  findGroundScreedByFloor,
+  updateFoundationInModel,
+  updateGroundScreedInModel,
+  recomputeFoundationById,
+  deleteFoundationById,
+} from './foundationOps.js';
+export type { CreateFoundationParams, FoundationBuildResult } from './foundationOps.js';
+export {
+  clearWallsForFloor,
+  clearOpeningsForFloor,
+  clearFoundationsAndScreeds,
+  clearSlabs,
+  clearRoofs,
+} from './layerClearOps.js';

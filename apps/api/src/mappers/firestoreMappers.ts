@@ -77,6 +77,7 @@ export function mapProjectDoc(id: string, data: DocumentData): Project {
     createdBy: typeof data.createdBy === 'string' ? data.createdBy : null,
     updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : null,
     allowedEditorIds: allowedEditorIds && allowedEditorIds.length > 0 ? allowedEditorIds : undefined,
+    isTemplate: data.isTemplate === true,
     lastCalculatedAt:
       data.lastCalculatedAt === null || data.lastCalculatedAt === undefined
         ? null

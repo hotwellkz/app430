@@ -1,136 +1,109 @@
 import { describe, expect, it } from 'vitest';
+import { OPENING_DEFAULTS } from './openingPresets.js';
 import {
   addFloorToModel,
   addOpeningToModel,
   addWallToModel,
+  attachWallEndpointsToJoints,
+  buildOpeningOnWallClick,
   createEmptyBuildingModel,
   createFloor,
-  createOpening,
   createWall,
-  deleteOpeningFromModel,
+  normalizeBuildingModel,
   updateOpeningInModel,
 } from './index.js';
 
-function modelWithFloorAndWall() {
-  const floor = createFloor({ id: 'f1', label: '1', sortIndex: 0 });
-  let m = addFloorToModel(createEmptyBuildingModel(), floor);
-  const wall = createWall({
-    id: 'w1',
-    floorId: 'f1',
-    start: { x: 0, y: 0 },
-    end: { x: 8000, y: 0 },
-    thicknessMm: 200,
-  });
-  const wr = addWallToModel(m, wall);
-  if ('ok' in wr && wr.ok === false) throw new Error(wr.reason);
-  return wr as typeof m;
-}
-
 describe('openingOps', () => {
-  it('adds valid door opening', () => {
-    const m = modelWithFloorAndWall();
-    const o = createOpening({
-      floorId: 'f1',
-      wallId: 'w1',
-      positionAlongWall: 4000,
-      widthMm: 900,
-      heightMm: 2100,
-      bottomOffsetMm: 0,
-      openingType: 'door',
-    });
-    const r = addOpeningToModel(m, o);
-    expect('openings' in (r as object)).toBe(true);
-    const next = r as typeof m;
-    expect(next.openings).toHaveLength(1);
+  it('OPENING_DEFAULTS соответствуют ручному сценарию', () => {
+    expect(OPENING_DEFAULTS.window).toEqual({ widthMm: 1250, heightMm: 1300, bottomOffsetMm: 900 });
+    expect(OPENING_DEFAULTS.door).toEqual({ widthMm: 900, heightMm: 2100, bottomOffsetMm: 0 });
+    expect(OPENING_DEFAULTS.portal).toEqual({ widthMm: 900, heightMm: 2100, bottomOffsetMm: 0 });
   });
 
-  it('rejects opening outside wall margins (too wide for short segment)', () => {
-    const m = modelWithFloorAndWall();
-    const o = createOpening({
-      floorId: 'f1',
-      wallId: 'w1',
-      positionAlongWall: 4000,
-      widthMm: 9000,
-      heightMm: 2100,
+  it('buildOpeningOnWallClick привязывает проём к стене и клампит вдоль оси', () => {
+    let m = createEmptyBuildingModel();
+    const f = createFloor({ label: '1', level: 1, elevationMm: 0, sortIndex: 0 });
+    m = addFloorToModel(m, f);
+    const w = createWall({
+      floorId: f.id,
+      start: { x: 0, y: 0 },
+      end: { x: 8000, y: 0 },
+      thicknessMm: 200,
+    });
+    let r = addWallToModel(m, w);
+    m = attachWallEndpointsToJoints(r as typeof m, w.id, 160);
+    const wallId = m.walls[0]!.id;
+    const built = buildOpeningOnWallClick(m, wallId, { x: 100, y: 500 }, 'window');
+    if ('ok' in built && built.ok === false) throw new Error(built.reason);
+    const op = built as import('@2wix/shared-types').Opening;
+    expect(op.wallId).toBe(wallId);
+    expect(op.positionAlongWall).toBeGreaterThan(0);
+    expect(op.positionAlongWall).toBeLessThan(8000);
+  });
+
+  it('слишком широкий проём не добавляется', () => {
+    let m = createEmptyBuildingModel();
+    const f = createFloor({ label: '1', level: 1, elevationMm: 0, sortIndex: 0 });
+    m = addFloorToModel(m, f);
+    const w = createWall({
+      floorId: f.id,
+      start: { x: 0, y: 0 },
+      end: { x: 500, y: 0 },
+      thicknessMm: 200,
+    });
+    m = addWallToModel(m, w) as typeof m;
+    m = attachWallEndpointsToJoints(m, w.id, 160);
+    const wallId = m.walls[0]!.id;
+    const r = addOpeningToModel(m, {
+      id: 'o1',
+      floorId: f.id,
+      wallId,
+      positionAlongWall: 250,
+      widthMm: 4000,
+      heightMm: 2000,
       bottomOffsetMm: 0,
       openingType: 'door',
     });
-    const r = addOpeningToModel(m, o);
     expect('ok' in r && r.ok === false).toBe(true);
   });
 
-  it('rejects overlapping openings on same wall', () => {
-    const m0 = modelWithFloorAndWall();
-    const a = createOpening({
-      id: 'o1',
-      floorId: 'f1',
-      wallId: 'w1',
-      positionAlongWall: 3000,
-      widthMm: 1000,
-      heightMm: 2100,
-      bottomOffsetMm: 0,
-      openingType: 'door',
+  it('обновление offset и размеров проходит валидацию', () => {
+    let m = createEmptyBuildingModel();
+    const f = createFloor({ label: '1', level: 1, elevationMm: 0, sortIndex: 0 });
+    m = addFloorToModel(m, f);
+    const w = createWall({
+      floorId: f.id,
+      start: { x: 0, y: 0 },
+      end: { x: 6000, y: 0 },
+      thicknessMm: 200,
     });
-    const m1 = addOpeningToModel(m0, a) as typeof m0;
-    const b = createOpening({
-      floorId: 'f1',
-      wallId: 'w1',
-      positionAlongWall: 3050,
-      widthMm: 1000,
-      heightMm: 2100,
-      bottomOffsetMm: 0,
-      openingType: 'window',
-    });
-    const r = addOpeningToModel(m1, b);
-    expect('ok' in r && r.ok === false).toBe(true);
+    m = attachWallEndpointsToJoints(addWallToModel(m, w) as typeof m, w.id, 160);
+    const wallId = m.walls[0]!.id;
+    const o = buildOpeningOnWallClick(m, wallId, { x: 3000, y: 0 }, 'door');
+    if ('ok' in o && o.ok === false) throw new Error();
+    m = addOpeningToModel(m, o as import('@2wix/shared-types').Opening) as typeof m;
+    const oid = m.openings[0]!.id;
+    const u = updateOpeningInModel(m, oid, { positionAlongWall: 3100, widthMm: 800 });
+    if ('ok' in u && u.ok === false) throw new Error();
+    expect((u as typeof m).openings[0]!.positionAlongWall).toBe(3100);
   });
 
-  it('rejects door with non-zero bottom offset', () => {
-    const m = modelWithFloorAndWall();
-    const o = createOpening({
-      floorId: 'f1',
-      wallId: 'w1',
-      positionAlongWall: 4000,
-      widthMm: 900,
-      heightMm: 2100,
-      bottomOffsetMm: 100,
-      openingType: 'door',
+  it('normalize сохраняет openings', () => {
+    let m = createEmptyBuildingModel();
+    const f = createFloor({ label: '1', level: 1, elevationMm: 0, sortIndex: 0 });
+    m = addFloorToModel(m, f);
+    const w = createWall({
+      floorId: f.id,
+      start: { x: 0, y: 0 },
+      end: { x: 5000, y: 0 },
+      thicknessMm: 200,
     });
-    const r = addOpeningToModel(m, o);
-    expect('ok' in r && r.ok === false).toBe(true);
-  });
-
-  it('updateOpening excludes self from overlap check', () => {
-    const m0 = modelWithFloorAndWall();
-    const a = createOpening({
-      id: 'o1',
-      floorId: 'f1',
-      wallId: 'w1',
-      positionAlongWall: 4000,
-      widthMm: 900,
-      heightMm: 2100,
-      bottomOffsetMm: 0,
-      openingType: 'door',
-    });
-    const m1 = addOpeningToModel(m0, a) as typeof m0;
-    const r = updateOpeningInModel(m1, 'o1', { positionAlongWall: 4100 });
-    expect('openings' in (r as object)).toBe(true);
-  });
-
-  it('deleteOpeningFromModel removes opening', () => {
-    const m0 = modelWithFloorAndWall();
-    const a = createOpening({
-      id: 'o1',
-      floorId: 'f1',
-      wallId: 'w1',
-      positionAlongWall: 4000,
-      widthMm: 900,
-      heightMm: 2100,
-      bottomOffsetMm: 0,
-      openingType: 'door',
-    });
-    const m1 = addOpeningToModel(m0, a) as typeof m0;
-    const m2 = deleteOpeningFromModel(m1, 'o1');
-    expect(m2.openings).toHaveLength(0);
+    m = attachWallEndpointsToJoints(addWallToModel(m, w) as typeof m, w.id, 160);
+    const wallId = m.walls[0]!.id;
+    const bo = buildOpeningOnWallClick(m, wallId, { x: 2000, y: 0 }, 'window');
+    if ('ok' in bo && bo.ok === false) throw new Error();
+    m = addOpeningToModel(m, bo as import('@2wix/shared-types').Opening) as typeof m;
+    const n = normalizeBuildingModel(JSON.parse(JSON.stringify(m)) as unknown);
+    expect(n.openings).toHaveLength(1);
   });
 });

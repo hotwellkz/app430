@@ -1,25 +1,16 @@
-import type { Point2D, Wall } from '@2wix/shared-types';
+import { snapPointForWallEndpointEdit } from '@2wix/domain-model';
+import type { BuildingModel, Point2D } from '@2wix/shared-types';
 
 const DEFAULT_THRESHOLD_MM = 280;
 
-/** Привязка конца стены к ближайшему узлу других стен (лёгкий joint-snap). */
+/** Привязка точки к узлам, концам стен и осям (T-стык) при рисовании/редактировании. */
 export function snapPointToNearbyWallJoints(
   p: Point2D,
-  walls: Wall[],
+  model: BuildingModel | null | undefined,
+  floorId: string | null | undefined,
   excludeWallId: string,
   thresholdMm: number = DEFAULT_THRESHOLD_MM
 ): Point2D {
-  let best: Point2D = p;
-  let bestD = thresholdMm;
-  for (const w of walls) {
-    if (w.id === excludeWallId) continue;
-    for (const j of [w.start, w.end]) {
-      const d = Math.hypot(p.x - j.x, p.y - j.y);
-      if (d < bestD) {
-        bestD = d;
-        best = j;
-      }
-    }
-  }
-  return best;
+  if (!model || !floorId) return p;
+  return snapPointForWallEndpointEdit(model, floorId, p, excludeWallId, thresholdMm);
 }

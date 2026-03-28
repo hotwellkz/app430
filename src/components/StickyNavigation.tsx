@@ -43,15 +43,11 @@ export const StickyNavigation: React.FC<StickyNavigationProps> = ({ onNavigate }
   };
 
   const { isMenuVisible } = useMenuVisibility();
-  const isTransactionsRoute =
-    location.pathname === '/transactions' ||
-    location.pathname.startsWith('/transactions/') ||
-    location.pathname.startsWith('/transaction-history/');
   const [isAttachmentPreviewOpen, setIsAttachmentPreviewOpen] = useState(() =>
     typeof document !== 'undefined' ? document.body.classList.contains('attachment-preview-open') : false
   );
+  /** Правый плавающий сайдбар — на всех основных экранах CRM (не только транзакции). */
   const shouldBeVisible =
-    isTransactionsRoute &&
     (!isMobileDevice() || isMenuVisible) &&
     !hideForMobileChat &&
     !isAttachmentPreviewOpen;
@@ -115,7 +111,7 @@ export const StickyNavigation: React.FC<StickyNavigationProps> = ({ onNavigate }
 
   const showAsCollapsed = !isMobile && !desktopExpanded && canAccessWhatsApp;
 
-  if (!isTransactionsRoute || isAttachmentPreviewOpen) {
+  if (isAttachmentPreviewOpen) {
     return null;
   }
 

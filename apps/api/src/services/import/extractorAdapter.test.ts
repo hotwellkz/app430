@@ -9,7 +9,7 @@ describe('extractor adapters', () => {
     const snapshot = await adapter.extractArchitecturalSnapshot({
       projectId: 'p1',
       jobId: 'ij-1',
-      sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png' }],
+      sourceImages: [{ id: 'img-1', kind: 'plan', fileName: 'plan.png', base64Data: 'WA==' }],
       projectName: 'Demo',
     });
     expect(zArchitecturalImportSnapshot.safeParse(snapshot).success).toBe(true);

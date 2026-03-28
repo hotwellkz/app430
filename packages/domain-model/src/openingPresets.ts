@@ -6,9 +6,13 @@ export type OpeningSizePreset = {
   bottomOffsetMm: number;
 };
 
-/** Дефолтные размеры при создании проёма одним кликом по стене. */
+/**
+ * Дефолтные размеры при создании проёма одним кликом по стене.
+ * Менять централизованно под ручной сценарий (HouseCreator-like).
+ */
 export const OPENING_DEFAULTS: Record<OpeningType, OpeningSizePreset> = {
-  window: { widthMm: 1200, heightMm: 1500, bottomOffsetMm: 900 },
+  window: { widthMm: 1250, heightMm: 1300, bottomOffsetMm: 900 },
   door: { widthMm: 900, heightMm: 2100, bottomOffsetMm: 0 },
-  portal: { widthMm: 2000, heightMm: 2400, bottomOffsetMm: 0 },
+  /** Проём / портал — универсальное отверстие в стене. */
+  portal: { widthMm: 900, heightMm: 2100, bottomOffsetMm: 0 },
 };

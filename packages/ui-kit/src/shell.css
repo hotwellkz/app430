@@ -1,25 +1,27 @@
-/* macOS Tahoe — Liquid Glass design language */
+/* macOS Tahoe — Liquid Glass, bold variant */
 .twix-ui {
-  --twix-bg:             #dde3ea;
-  --twix-bg-gradient:    linear-gradient(155deg, #d6dce8 0%, #dde3ea 45%, #e5e5ea 100%);
-  --twix-surface:        rgba(255, 255, 255, 0.72);
-  --twix-border:         rgba(0, 0, 0, 0.08);
-  --twix-border-solid:   #c7c7cc;
-  --twix-text:           #1d1d1f;
-  --twix-muted:          #8e8e93;
-  --twix-accent:         #007aff;
-  --twix-accent-hover:   #0071eb;
-  --twix-accent-light:   rgba(0, 122, 255, 0.12);
-  --twix-shadow-sm:      0 1px 2px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
-  --twix-shadow-md:      0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05);
-  --twix-radius-sm:      8px;
-  --twix-radius-md:      12px;
-  --twix-font:           -apple-system, 'SF Pro Text', BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --twix-bg:              #c8d6e8;
+  --twix-bg-gradient:     linear-gradient(145deg, #b8ccdf 0%, #c8d6e8 40%, #d4d8e8 75%, #dcdce8 100%);
+  --twix-surface:         rgba(248, 250, 255, 0.82);
+  --twix-sidebar-bg:      rgba(235, 241, 252, 0.88);
+  --twix-topbar-bg:       rgba(242, 246, 255, 0.90);
+  --twix-border:          rgba(120, 140, 180, 0.18);
+  --twix-border-solid:    #b8c4d8;
+  --twix-text:            #1d1d1f;
+  --twix-muted:           #6e7a8a;
+  --twix-accent:          #007aff;
+  --twix-accent-hover:    #0062cc;
+  --twix-accent-light:    rgba(0, 122, 255, 0.13);
+  --twix-shadow-sm:       0 1px 3px rgba(60,80,120,0.1), 0 1px 6px rgba(60,80,120,0.07);
+  --twix-shadow-md:       0 4px 20px rgba(60,80,120,0.12), 0 1px 4px rgba(60,80,120,0.08);
+  --twix-radius-sm:       9px;
+  --twix-radius-md:       13px;
+  --twix-font:            -apple-system, 'SF Pro Text', BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 
-  font-family:           var(--twix-font);
-  color:                 var(--twix-text);
+  font-family:            var(--twix-font);
+  color:                  var(--twix-text);
   -webkit-font-smoothing: antialiased;
-  box-sizing:            border-box;
+  box-sizing:             border-box;
 }
 .twix-ui *,
 .twix-ui *::before,
@@ -27,7 +29,7 @@
   box-sizing: inherit;
 }
 
-/* ── Shell ── */
+/* ── Shell root ── */
 .twix-appShell {
   display:        flex;
   flex-direction: column;
@@ -38,18 +40,18 @@
 
 /* ── Top bar ── */
 .twix-topBar {
-  flex:               none;
-  display:            flex;
-  align-items:        center;
-  gap:                12px;
-  min-height:         50px;
-  padding:            0 20px;
-  background:         rgba(255, 255, 255, 0.78);
-  backdrop-filter:    blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border-bottom:      1px solid rgba(0, 0, 0, 0.07);
-  box-shadow:         0 1px 0 rgba(255,255,255,0.6) inset,
-                      var(--twix-shadow-sm);
+  flex:                   none;
+  display:                flex;
+  align-items:            center;
+  gap:                    12px;
+  min-height:             50px;
+  padding:                0 20px;
+  background:             var(--twix-topbar-bg);
+  backdrop-filter:        blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border-bottom:          1px solid rgba(100, 130, 180, 0.2);
+  box-shadow:             0 1px 0 rgba(255,255,255,0.7) inset,
+                          var(--twix-shadow-sm);
 }
 
 /* ── Body row ── */
@@ -62,15 +64,15 @@
 
 /* ── Left sidebar ── */
 .twix-sidebar {
-  flex:               none;
-  width:              196px;
-  background:         rgba(255, 255, 255, 0.62);
-  backdrop-filter:    blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border-right:       1px solid rgba(0, 0, 0, 0.07);
-  padding:            10px 8px;
-  overflow:           auto;
-  box-shadow:         1px 0 0 rgba(255,255,255,0.45) inset;
+  flex:                   none;
+  width:                  196px;
+  background:             var(--twix-sidebar-bg);
+  backdrop-filter:        blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border-right:           1px solid rgba(100, 130, 180, 0.2);
+  padding:                10px 8px;
+  overflow:               auto;
+  box-shadow:             1px 0 0 rgba(255,255,255,0.55) inset;
 }
 
 /* ── Main canvas area ── */
@@ -85,18 +87,18 @@
 
 /* ── Right panel ── */
 .twix-rightPanel {
-  flex:               none;
-  width:              288px;
-  background:         rgba(255, 255, 255, 0.68);
-  backdrop-filter:    blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border-left:        1px solid rgba(0, 0, 0, 0.07);
-  padding:            14px;
-  overflow:           auto;
-  box-shadow:         -1px 0 0 rgba(255,255,255,0.4) inset;
+  flex:                   none;
+  width:                  288px;
+  background:             var(--twix-sidebar-bg);
+  backdrop-filter:        blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border-left:            1px solid rgba(100, 130, 180, 0.2);
+  padding:                14px;
+  overflow:               auto;
+  box-shadow:             -1px 0 0 rgba(255,255,255,0.5) inset;
 }
 
-/* ── Nav items (sidebar) ── */
+/* ── Nav items ── */
 .twix-navItem {
   display:         block;
   width:           100%;
@@ -110,17 +112,17 @@
   font-weight:     400;
   color:           var(--twix-text);
   cursor:          pointer;
-  transition:      background 0.1s ease, color 0.1s ease;
+  transition:      background 0.12s ease, color 0.12s ease;
   -webkit-font-smoothing: antialiased;
 }
 .twix-navItem:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(0, 80, 180, 0.07);
 }
 .twix-navItem_active {
-  background:  var(--twix-accent);
-  color:       #fff;
-  font-weight: 590;
-  box-shadow:  0 1px 4px rgba(0, 122, 255, 0.32);
+  background:   var(--twix-accent);
+  color:        #fff;
+  font-weight:  600;
+  box-shadow:   0 2px 8px rgba(0, 100, 220, 0.4);
 }
 .twix-navItem_active:hover {
   background: var(--twix-accent-hover);
@@ -128,21 +130,23 @@
 
 /* ── Canvas placeholder ── */
 .twix-canvasPlaceholder {
-  flex:             1;
-  margin:           12px;
-  border:           1.5px dashed rgba(0, 0, 0, 0.14);
-  border-radius:    var(--twix-radius-md);
-  display:          flex;
-  align-items:      center;
-  justify-content:  center;
-  color:            var(--twix-muted);
-  font-size:        14px;
-  text-align:       center;
-  padding:          24px;
-  background:       rgba(255, 255, 255, 0.28);
+  flex:            1;
+  margin:          12px;
+  border:          1.5px dashed rgba(80, 120, 180, 0.25);
+  border-radius:   var(--twix-radius-md);
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  color:           var(--twix-muted);
+  font-size:       14px;
+  text-align:      center;
+  padding:         24px;
+  background:      rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
-/* ── Panel label / section title ── */
+/* ── Panel section title ── */
 .twix-panelTitle {
   font-size:      11px;
   font-weight:    600;
@@ -159,7 +163,7 @@
   line-height: 1.5;
 }
 
-/* ── Empty / loading states ── */
+/* ── States ── */
 .twix-empty {
   padding:    32px 16px;
   text-align: center;

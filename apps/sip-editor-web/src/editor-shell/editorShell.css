@@ -1,0 +1,59 @@
+.cad-desktop-shell {
+  --cad-app-bg: #e4e6ea;
+  --cad-border: #b8c0cc;
+  --cad-panel: #f0f2f5;
+  --cad-toolbar: #eceef2;
+  --cad-text: #1a1d22;
+  --cad-muted: #5c6470;
+  --cad-accent: #2b6cb0;
+  --cad-accent-soft: #cfe4fc;
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--cad-app-bg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 11px;
+  color: var(--cad-text);
+  box-sizing: border-box;
+}
+
+.cad-desktop-shell *,
+.cad-desktop-shell *::before,
+.cad-desktop-shell *::after {
+  box-sizing: border-box;
+}
+
+.cad-desktop-shell .twix-ui {
+  --twix-bg: var(--cad-app-bg);
+  --twix-bg-gradient: none;
+  --twix-surface: var(--cad-panel);
+  --twix-sidebar-bg: var(--cad-panel);
+  --twix-topbar-bg: var(--cad-toolbar);
+  --twix-border: var(--cad-border);
+  --twix-border-solid: var(--cad-border);
+  --twix-text: var(--cad-text);
+  --twix-muted: var(--cad-muted);
+  --twix-accent: var(--cad-accent);
+  --twix-accent-light: var(--cad-accent-soft);
+  --twix-radius-sm: 2px;
+  --twix-radius-md: 3px;
+}
+
+.cad-left-panel .twix-navItem {
+  border-radius: 2px;
+  font-size: 12px;
+  padding: 5px 8px;
+  margin-bottom: 1px;
+}
+
+.cad-left-panel .twix-navItem_active {
+  box-shadow: none;
+  font-weight: 600;
+}
+
+.cad-inspector-scroll {
+  max-height: 100%;
+  overflow: auto;
+}

@@ -45,4 +45,12 @@ describe('validateImportWizard', () => {
     expect(r.ok).toBe(true);
     expect(r.errors).toHaveLength(0);
   });
+
+  it('fails when only PDF is attached (no raster for AI)', () => {
+    const pdf = new File(['%PDF'], 'plan.pdf', { type: 'application/pdf' });
+    const form = defaultImportWizardForm();
+    const r = validateImportWizard([{ clientId: 'c1', file: pdf, kind: 'plan' }], form);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes('PDF') || e.includes('растров'))).toBe(true);
+  });
 });

@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import type { ProjectVersion } from '@2wix/shared-types';
-import { cloneBuildingModel, getFloorsSorted, syncBuildingModelMeta } from '@2wix/domain-model';
+import {
+  cloneBuildingModel,
+  getFloorsSorted,
+  syncBuildingModelMeta,
+  syncFoundationStaleFromSignatures,
+  syncRoofStaleFromSignatures,
+  syncSlabStaleFromSignatures,
+} from '@2wix/domain-model';
+import { editorLayerFloorWalls } from '../editorLayers.js';
 import type { EditorCommand } from '../commands/editorCommands.js';
 import { recomputeDocumentAfterDraftChange } from '../pure/documentDraft.js';
 import { reduceCommand } from '../pure/reduceCommand.js';
@@ -33,8 +41,13 @@ export function createInitialEditorState(): EditorState {
     },
     view: {
       activeFloorId: null,
+      activeEditorLayerId: null,
       activePanel: 'floors',
       toolMode: 'select',
+      layerVisibility: {},
+      layerLocked: {},
+      newWallWallType: 'external',
+      newWallPlacement: 'on-axis',
       zoom: 1,
       panX: 0,
       panY: 0,
@@ -75,6 +88,11 @@ export interface EditorStoreActions {
   setPan: (panX: number, panY: number) => void;
   toggleGrid: () => void;
   toggleSnap: () => void;
+  setNewWallWallType: (wallType: import('@2wix/shared-types').WallType) => void;
+  setNewWallPlacement: (placement: import('@2wix/shared-types').WallPlacementMode) => void;
+  setActiveEditorLayer: (layerId: string | null) => void;
+  setLayerVisibility: (layerKey: string, visible: boolean) => void;
+  setLayerLocked: (layerKey: string, locked: boolean) => void;
   reset: () => void;
 }
 
@@ -99,16 +117,26 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       versionNumber: version.versionNumber,
       projectTitle: projectTitle ?? undefined,
     });
-    const server = cloneBuildingModel(synced);
-    const draft = cloneBuildingModel(synced);
+    const withStale = syncRoofStaleFromSignatures(
+      syncSlabStaleFromSignatures(syncFoundationStaleFromSignatures(cloneBuildingModel(synced)))
+    );
+    const server = cloneBuildingModel(withStale);
+    const draft = cloneBuildingModel(withStale);
     const base = createInitialEditorState();
+    const firstFloorId = getFloorsSorted(draft)[0]?.id ?? null;
+    const ui = draft.meta.editorUi;
     set({
       ...base,
       view: {
         ...base.view,
         activePanel: prev.view.activePanel,
         toolMode: 'select',
-        activeFloorId: getFloorsSorted(draft)[0]?.id ?? null,
+        newWallWallType: prev.view.newWallWallType ?? 'external',
+        newWallPlacement: prev.view.newWallPlacement ?? 'on-axis',
+        layerVisibility: { ...(ui?.layerVisibility ?? {}) },
+        layerLocked: { ...(ui?.layerLocked ?? {}) },
+        activeFloorId: firstFloorId,
+        activeEditorLayerId: firstFloorId ? editorLayerFloorWalls(firstFloorId) : null,
       },
       document: {
         projectId,
@@ -167,8 +195,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         versionNumber: version.versionNumber,
         projectTitle: s.document.projectTitle ?? undefined,
       });
-      const server = cloneBuildingModel(synced);
-      const draft = cloneBuildingModel(synced);
+      const withStale = syncRoofStaleFromSignatures(
+      syncSlabStaleFromSignatures(syncFoundationStaleFromSignatures(cloneBuildingModel(synced)))
+    );
+      const server = cloneBuildingModel(withStale);
+      const draft = cloneBuildingModel(withStale);
 
       return {
         document: {
@@ -311,5 +342,25 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   toggleSnap: () => {
     get().applyCommand({ type: 'toggleSnap' });
+  },
+
+  setNewWallWallType: (wallType) => {
+    get().applyCommand({ type: 'setNewWallWallType', wallType });
+  },
+
+  setNewWallPlacement: (placement) => {
+    get().applyCommand({ type: 'setNewWallPlacement', placement });
+  },
+
+  setActiveEditorLayer: (layerId) => {
+    get().applyCommand({ type: 'setActiveEditorLayer', layerId });
+  },
+
+  setLayerVisibility: (layerKey, visible) => {
+    get().applyCommand({ type: 'setLayerVisibility', layerKey, visible });
+  },
+
+  setLayerLocked: (layerKey, locked) => {
+    get().applyCommand({ type: 'setLayerLocked', layerKey, locked });
   },
 }));

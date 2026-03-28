@@ -1,5 +1,6 @@
 import type { BuildingModel } from '@2wix/shared-types';
 import { getFloorsSorted } from '@2wix/domain-model';
+import { editorLayerFloorWalls } from '../editorLayers.js';
 import type { ViewState } from '../types/state.js';
 
 export const EDITOR_VIEW_MIN_ZOOM = 0.02;
@@ -12,7 +13,11 @@ export function clampActiveFloorToModel(view: ViewState, draft: BuildingModel): 
     return view;
   }
   const first = getFloorsSorted(draft)[0]?.id ?? null;
-  return { ...view, activeFloorId: first };
+  return {
+    ...view,
+    activeFloorId: first,
+    activeEditorLayerId: first ? editorLayerFloorWalls(first) : null,
+  };
 }
 
 export function clampEditorZoom(zoom: number): number {

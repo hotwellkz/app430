@@ -1,0 +1,7 @@
+export const DEFAULT_FOUNDATION_WIDTH_MM = 300;
+export const DEFAULT_FOUNDATION_HEIGHT_MM = 400;
+export const DEFAULT_FOUNDATION_OUTER_OFFSET_MM = 50;
+export const DEFAULT_FOUNDATION_INNER_OFFSET_MM = 0;
+export const DEFAULT_SCREED_THICKNESS_MM = 80;
+/** Допуск стыков наружных стен, мм. */
+export const FOUNDATION_WALL_ENDPOINT_TOL_MM = 150;

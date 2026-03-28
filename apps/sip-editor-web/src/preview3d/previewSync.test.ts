@@ -4,7 +4,7 @@ import { useEditorStore } from '@2wix/editor-core';
 import type { ProjectVersion } from '@2wix/shared-types';
 import { buildPreviewSceneModel } from './buildPreviewSceneModel';
 
-function makeVersion(model = createEmptyBuildingModel('sync')): ProjectVersion {
+function makeVersion(model = createEmptyBuildingModel()): ProjectVersion {
   return {
     id: 'v1',
     projectId: 'p1',
@@ -24,7 +24,7 @@ describe('preview sync with draft model', () => {
   });
 
   it('изменения draft влияют на preview snapshot', () => {
-    const model = createEmptyBuildingModel('sync');
+    const model = createEmptyBuildingModel();
     const floor = createFloor({
       label: '1 этаж',
       level: 1,
@@ -59,7 +59,7 @@ describe('preview sync with draft model', () => {
   });
 
   it('discard возвращает preview к serverModel', () => {
-    const model = createEmptyBuildingModel('sync');
+    const model = createEmptyBuildingModel();
     const floor = createFloor({
       label: '1 этаж',
       level: 1,
@@ -95,7 +95,7 @@ describe('preview sync with draft model', () => {
   });
 
   it('active floor only фильтрует видимый набор', () => {
-    const model = createEmptyBuildingModel('sync');
+    const model = createEmptyBuildingModel();
     const f1 = createFloor({
       label: '1 этаж',
       level: 1,

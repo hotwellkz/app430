@@ -50,6 +50,8 @@ export function getStorageBucket() {
   const appInstance = getFirebaseApp();
   const explicit = process.env.FIREBASE_STORAGE_BUCKET?.trim();
   const fromProject = process.env.FIREBASE_PROJECT_ID?.trim();
-  const bucketName = explicit || (fromProject ? `${fromProject}.appspot.com` : undefined);
+  /** Firebase Console по умолчанию даёт бакет `*.firebasestorage.app`; legacy — `*.appspot.com`. */
+  const bucketName =
+    explicit || (fromProject ? `${fromProject}.firebasestorage.app` : undefined);
   return getStorage(appInstance).bucket(bucketName);
 }

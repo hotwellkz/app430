@@ -2,6 +2,7 @@ import { FieldValue, type DocumentSnapshot } from 'firebase-admin/firestore';
 import type { Project, ProjectVersion } from '@2wix/shared-types';
 import { BUILDING_MODEL_SCHEMA_VERSION } from '@2wix/shared-types';
 import {
+  cloneBuildingModel,
   createEmptyBuildingModel,
   createEmptyProject,
   normalizeBuildingModel,
@@ -26,7 +27,9 @@ import {
   formatZodError,
   zCreateProjectBody,
   zCreateVersionBody,
+  zDuplicateProjectBody,
   zPatchCurrentBody,
+  zPatchProjectBody,
 } from '../validation/schemas.js';
 
 function cloneModel(model: ProjectVersion['buildingModel']): ProjectVersion['buildingModel'] {
@@ -76,6 +79,7 @@ export async function createProject(
   });
 
   const batch = db.batch();
+  const isTemplate = parsed.data.isTemplate === true;
   batch.set(projectRef, {
     dealId: base.dealId,
     title: base.title,
@@ -88,6 +92,7 @@ export async function createProject(
     updatedAt: now,
     createdBy: base.createdBy,
     updatedBy: base.updatedBy,
+    ...(isTemplate ? { isTemplate: true } : {}),
     ...(allowedEditorIds && allowedEditorIds.length > 0 ? { allowedEditorIds } : {}),
   });
   batch.set(versionRef, {
@@ -115,10 +120,119 @@ export async function createProject(
   return { project: p, currentVersion: v };
 }
 
+/**
+ * Новый проект с глубокой копией текущей версии; исходный проект не изменяется.
+ */
+export async function duplicateProject(
+  sourceProjectId: string,
+  body: unknown,
+  actorId: string
+): Promise<{ project: Project; currentVersion: ProjectVersion }> {
+  const parsed = zDuplicateProjectBody.safeParse(body);
+  if (!parsed.success) {
+    throw new ValidationAppError('Невалидное тело запроса', formatZodError(parsed.error));
+  }
+  assertActorMatchesHeader(parsed.data.createdBy, actorId);
+
+  const source = await getProject(sourceProjectId, actorId);
+  const ver = await getCurrentVersion(sourceProjectId, actorId);
+  if (!ver) {
+    throw new NotFoundError('Нет текущей версии для копирования');
+  }
+
+  const db = getDb();
+  const projectRef = db.collection(COLLECTIONS.PROJECTS).doc();
+  const versionRef = db.collection(COLLECTIONS.PROJECT_VERSIONS).doc();
+  const now = FieldValue.serverTimestamp();
+
+  const rawModel = normalizeBuildingModel(ver.buildingModel);
+  const cloned = cloneBuildingModel(rawModel);
+  const title = parsed.data.title.trim();
+  const markAsTemplate = parsed.data.markAsTemplate === true;
+
+  const buildingModel = syncBuildingModelMeta(cloned, {
+    projectId: projectRef.id,
+    versionId: versionRef.id,
+    versionNumber: 1,
+    projectTitle: title,
+  });
+
+  const allowedEditorIds = source.allowedEditorIds;
+
+  const batch = db.batch();
+  batch.set(projectRef, {
+    dealId: source.dealId,
+    title,
+    status: 'draft',
+    currentVersionId: versionRef.id,
+    currentVersionNumber: 1,
+    versionCounter: 1,
+    schemaVersion: BUILDING_MODEL_SCHEMA_VERSION,
+    createdAt: now,
+    updatedAt: now,
+    createdBy: actorId,
+    updatedBy: actorId,
+    ...(markAsTemplate ? { isTemplate: true } : {}),
+    ...(allowedEditorIds && allowedEditorIds.length > 0 ? { allowedEditorIds } : {}),
+  });
+  batch.set(versionRef, {
+    projectId: projectRef.id,
+    versionNumber: 1,
+    schemaVersion: BUILDING_MODEL_SCHEMA_VERSION,
+    buildingModel,
+    createdAt: now,
+    createdBy: actorId,
+    basedOnVersionId: ver.id,
+    isSnapshot: false,
+  });
+  await batch.commit();
+
+  const projectSnap = await projectRef.get();
+  const versionSnap = await versionRef.get();
+  const p = mapProjectDoc(projectRef.id, projectSnap.data() ?? {});
+  const v = mapVersionDoc(
+    versionRef.id,
+    versionSnap.data() ?? {},
+    normalizeBuildingModel(
+      (versionSnap.data() as { buildingModel?: unknown })?.buildingModel
+    )
+  );
+  return { project: p, currentVersion: v };
+}
+
+/** Метаданные проекта (название, флаг шаблона), без смены версии модели. */
+export async function patchProject(projectId: string, body: unknown, actorId: string): Promise<Project> {
+  const parsed = zPatchProjectBody.safeParse(body);
+  if (!parsed.success) {
+    throw new ValidationAppError('Невалидное тело запроса', formatZodError(parsed.error));
+  }
+  assertActorMatchesHeader(parsed.data.updatedBy, actorId);
+
+  await getProject(projectId, actorId);
+
+  const db = getDb();
+  const pRef = db.collection(COLLECTIONS.PROJECTS).doc(projectId);
+  const now = FieldValue.serverTimestamp();
+
+  const patch: Record<string, unknown> = { updatedAt: now, updatedBy: actorId };
+  if (parsed.data.title !== undefined) {
+    patch.title = parsed.data.title;
+  }
+  if (parsed.data.isTemplate !== undefined) {
+    patch.isTemplate = parsed.data.isTemplate;
+  }
+  await pRef.update(patch);
+
+  return getProject(projectId, actorId);
+}
+
+export type TemplatesListFilter = 'all' | 'only' | 'hide';
+
 /** Список проектов, доступных пользователю (создатель или allowedEditorIds). */
 export async function listProjectsForUser(
   actorId: string,
-  limitCount = 80
+  limitCount = 80,
+  options?: { templatesFilter?: TemplatesListFilter }
 ): Promise<Project[]> {
   const db = getDb();
   const col = db.collection(COLLECTIONS.PROJECTS);
@@ -135,7 +249,13 @@ export async function listProjectsForUser(
     const p = mapProjectDoc(doc.id, doc.data() ?? {});
     if (canAccessProject(p, actorId)) map.set(doc.id, p);
   }
-  const list = [...map.values()];
+  let list = [...map.values()];
+  const tf = options?.templatesFilter ?? 'all';
+  if (tf === 'only') {
+    list = list.filter((p) => p.isTemplate === true);
+  } else if (tf === 'hide') {
+    list = list.filter((p) => p.isTemplate !== true);
+  }
   list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   return list.slice(0, limitCount);
 }
@@ -391,16 +511,18 @@ export async function deleteProject(
   while (true) {
     const snap = await exportCol.where('projectId', '==', trimmed).limit(500).get();
     if (snap.empty) break;
-    for (const d of snap.docs) {
-      const sp = d.data()?.storagePath;
-      if (typeof sp === 'string' && sp.length > 0) {
-        try {
-          await bucket.file(sp).delete({ ignoreNotFound: true });
-        } catch {
-          /* ignore storage errors — документ всё равно удалим */
+    await Promise.all(
+      snap.docs.map(async (d) => {
+        const sp = d.data()?.storagePath;
+        if (typeof sp === 'string' && sp.length > 0) {
+          try {
+            await bucket.file(sp).delete({ ignoreNotFound: true });
+          } catch {
+            /* ignore storage errors — документ всё равно удалим */
+          }
         }
-      }
-    }
+      })
+    );
     const batch = db.batch();
     for (const d of snap.docs) {
       batch.delete(d.ref);

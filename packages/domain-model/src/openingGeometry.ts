@@ -137,3 +137,20 @@ export function detectOpeningOverlap(
   }
   return false;
 }
+
+/** Центр проёма в мировых координатах XY (по оси стены). */
+export function openingCenterWorldMm(
+  opening: Pick<Opening, 'positionAlongWall'>,
+  wall: Wall
+): Point2D {
+  const dx = wall.end.x - wall.start.x;
+  const dy = wall.end.y - wall.start.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-9) return { ...wall.start };
+  const ux = dx / len;
+  const uy = dy / len;
+  return {
+    x: wall.start.x + ux * opening.positionAlongWall,
+    y: wall.start.y + uy * opening.positionAlongWall,
+  };
+}

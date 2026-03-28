@@ -1,7 +1,10 @@
 import type { CSSProperties } from 'react';
+import type { ArchitecturalImportSnapshot, BuildingModel, ImportGeometryDiagnostics } from '@2wix/shared-types';
 import type { ImportReviewJobListItemViewModel, ImportReviewJobViewModel } from '../viewModel/importReviewViewModel.types';
 import type { ImportSummaryViewModel } from '../viewModel/importSummaryViewModel.types';
 import { ImportReviewSummarySection } from './ImportReviewSummarySection';
+import { ImportGeometryDebugSection } from './ImportGeometryDebugSection';
+import { ImportPlan2DPreview } from './ImportPlan2DPreview';
 import type { ImportReviewPanelMessage } from '../viewModel/importReviewViewModel.types';
 import type { RequiredDecisionFieldViewModel } from '../viewModel/importReviewViewModel.types';
 import type { InternalBearingWallsInteractionPayload } from '../viewModel/decisionsDraft';
@@ -75,6 +78,16 @@ export interface ImportReviewPanelViewProps {
   reviewApplied: boolean;
   panelMessage: ImportReviewPanelMessage | null;
   onDismissMessage: () => void;
+  /** Диагностика нормализации геометрии (после prepare candidate). */
+  geometryDiagnostics: ImportGeometryDiagnostics | null;
+  /** Raw snapshot импорта (2D overlay + опциональный JSON в debug). */
+  rawImportSnapshot: ArchitecturalImportSnapshot | null;
+  /** Snapshot после apply review (transformed), если уже применён. */
+  transformedSnapshotForDebug?: ArchitecturalImportSnapshot | null;
+  /** URL первого plan-изображения (подложка 2D preview). */
+  planImageUrlForDebug?: string | null;
+  /** Модель кандидата после prepare (поверх snapshot). */
+  candidateModelForDebug: BuildingModel | null;
 }
 
 function MessageBanner({
@@ -154,6 +167,11 @@ export function ImportReviewPanelView(props: ImportReviewPanelViewProps) {
     reviewApplied,
     panelMessage,
     onDismissMessage,
+    geometryDiagnostics,
+    rawImportSnapshot,
+    transformedSnapshotForDebug,
+    planImageUrlForDebug,
+    candidateModelForDebug,
   } = props;
 
   return (
@@ -503,6 +521,21 @@ export function ImportReviewPanelView(props: ImportReviewPanelViewProps) {
           </div>
 
           {summaryVm ? <ImportReviewSummarySection vm={summaryVm} /> : null}
+
+          <ImportPlan2DPreview
+            rawSnapshot={rawImportSnapshot}
+            transformedSnapshot={transformedSnapshotForDebug ?? null}
+            candidateModel={candidateModelForDebug}
+            planImageUrl={planImageUrlForDebug ?? null}
+          />
+
+          {geometryDiagnostics ? (
+            <ImportGeometryDebugSection
+              d={geometryDiagnostics}
+              rawSnapshotJson={rawImportSnapshot}
+              normalizedSnapshotJson={transformedSnapshotForDebug ?? null}
+            />
+          ) : null}
 
           <div style={{ ...cardStyle, padding: 8 }}>
             <p className="twix-panelTitle" style={{ margin: '0 0 8px', fontSize: 12 }}>

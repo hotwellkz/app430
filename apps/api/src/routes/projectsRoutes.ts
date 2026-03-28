@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import multipart from '@fastify/multipart';
 import { requireSipUserId } from '../plugins/requestContext.js';
 import { sendRouteError } from './errorReply.js';
 import {
@@ -17,25 +18,41 @@ import {
   prepareImportJobEditorApply,
   saveImportJobReview,
 } from '../services/importJobService.js';
+import type { TemplatesListFilter } from '../services/sipProjectService.js';
 import {
   createProject,
   createVersion,
   deleteProject,
+  duplicateProject,
   getCurrentVersion,
   getProject,
   listProjectsForUser,
   listVersions,
   patchCurrentVersion,
+  patchProject,
 } from '../services/sipProjectService.js';
+import {
+  IMPORT_SOURCE_MAX_BYTES,
+  parseImportSourceUploadRequest,
+  uploadImportRasterAndBuildRef,
+} from '../services/import/importSourceUploadService.js';
 
 export async function registerProjectRoutes(app: FastifyInstance): Promise<void> {
+  await app.register(multipart, {
+    limits: { fileSize: IMPORT_SOURCE_MAX_BYTES },
+    throwFileSizeLimit: true,
+  });
+
   app.get('/api/projects', async (request, reply) => {
     try {
       const actorId = requireSipUserId(request);
-      const q = request.query as { limit?: string };
+      const q = request.query as { limit?: string; templates?: string };
       const raw = parseInt(String(q?.limit ?? '50'), 10);
       const limit = Number.isFinite(raw) ? Math.min(100, Math.max(1, raw)) : 50;
-      const projects = await listProjectsForUser(actorId, limit);
+      const t = String(q?.templates ?? 'all');
+      const templatesFilter: TemplatesListFilter =
+        t === 'only' || t === 'hide' ? t : 'all';
+      const projects = await listProjectsForUser(actorId, limit, { templatesFilter });
       return reply.send({ projects });
     } catch (e) {
       return sendRouteError(reply, request, e);
@@ -59,6 +76,32 @@ export async function registerProjectRoutes(app: FastifyInstance): Promise<void>
         const actorId = requireSipUserId(request);
         const project = await getProject(request.params.projectId, actorId);
         return reply.send({ project });
+      } catch (e) {
+        return sendRouteError(reply, request, e);
+      }
+    }
+  );
+
+  app.patch<{ Params: { projectId: string } }>(
+    '/api/projects/:projectId',
+    async (request, reply) => {
+      try {
+        const actorId = requireSipUserId(request);
+        const project = await patchProject(request.params.projectId, request.body, actorId);
+        return reply.send({ project });
+      } catch (e) {
+        return sendRouteError(reply, request, e);
+      }
+    }
+  );
+
+  app.post<{ Params: { projectId: string } }>(
+    '/api/projects/:projectId/duplicate',
+    async (request, reply) => {
+      try {
+        const actorId = requireSipUserId(request);
+        const result = await duplicateProject(request.params.projectId, request.body, actorId);
+        return reply.code(201).send(result);
       } catch (e) {
         return sendRouteError(reply, request, e);
       }
@@ -196,6 +239,29 @@ export async function registerProjectRoutes(app: FastifyInstance): Promise<void>
           actorId
         );
         return reply.send(result);
+      } catch (e) {
+        return sendRouteError(reply, request, e);
+      }
+    }
+  );
+
+  app.post<{ Params: { projectId: string } }>(
+    '/api/projects/:projectId/import-sources',
+    async (request, reply) => {
+      try {
+        const actorId = requireSipUserId(request);
+        const projectId = request.params.projectId;
+        await getProject(projectId, actorId);
+        const parsed = await parseImportSourceUploadRequest(request);
+        const asset = await uploadImportRasterAndBuildRef({
+          projectId,
+          assetId: parsed.assetId,
+          kind: parsed.kind,
+          originalFileName: parsed.originalFileName,
+          mimeType: parsed.mimeType,
+          buffer: parsed.buffer,
+        });
+        return reply.code(201).send({ asset });
       } catch (e) {
         return sendRouteError(reply, request, e);
       }
