@@ -13,9 +13,11 @@ export function mapWizardToReviewDecisions(
   const floorHeightsMmByFloorId: Record<string, number> = {};
 
   const h1 = Math.round(wizard.floor1HeightMm);
-  if (floors[0]) floorHeightsMmByFloorId[floors[0].id] = h1;
-  if (wizard.floorCount === 2 && floors[1]) {
-    floorHeightsMmByFloorId[floors[1].id] = Math.round(wizard.floor2HeightMm);
+  const h2 = wizard.floorCount === 2 ? Math.round(wizard.floor2HeightMm) : h1;
+  // Map ALL floors returned by the AI — not just the first N matching floorCount.
+  // Extra floors (beyond what the user specified) get the h2 fallback so isReadyToApply stays true.
+  for (let i = 0; i < floors.length; i++) {
+    floorHeightsMmByFloorId[floors[i].id] = i === 0 ? h1 : h2;
   }
 
   const roofTypeConfirmed =

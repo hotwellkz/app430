@@ -47,6 +47,15 @@ describe('mapWizardToReviewDecisions', () => {
     expect(unsure.internalBearingWalls).toEqual({ confirmed: false, wallIds: [] });
   });
 
+  it('maps all AI floors even when floorCount=1 to keep isReadyToApply true', () => {
+    const snap = snapshotTwoFloors();
+    const form = { ...defaultImportWizardForm(), floorCount: 1 as const, floor1HeightMm: 2800 };
+    const d = mapWizardToReviewDecisions(snap, form);
+    // Both floors must have a height so computeReviewReadiness sees heightsComplete=true
+    expect(d.floorHeightsMmByFloorId?.f1).toBe(2800);
+    expect(d.floorHeightsMmByFloorId?.f2).toBe(2800);
+  });
+
   it('maps roof and scale', () => {
     const snap = snapshotTwoFloors();
     const form = {
