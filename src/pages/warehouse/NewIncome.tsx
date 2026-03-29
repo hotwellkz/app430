@@ -3,6 +3,7 @@ import { ArrowLeft, Search, Barcode, Plus, Trash2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, doc, updateDoc, serverTimestamp, writeBatch, addDoc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { getTransactionStatusForCompany } from '../../lib/firebase/transactions';
+import { resolveTransactionCreatedBySnapshot, spreadCreatedBy } from '../../lib/firebase/transactionAuthor';
 import { db } from '../../lib/firebase';
 import { useCompanyId } from '../../contexts/CompanyContext';
 import { getNextDocumentNumber } from '../../utils/documentUtils';
@@ -295,8 +296,10 @@ export const NewIncome: React.FC = () => {
       // Создаем транзакцию расхода для сотрудника
       const supplierTransactionRef = doc(collection(db, 'transactions'));
       const warehouseTransactionRef = doc(collection(db, 'transactions'));
+      const createdByFlat = spreadCreatedBy(await resolveTransactionCreatedBySnapshot());
 
       batch.set(supplierTransactionRef, {
+        ...createdByFlat,
         categoryId: supplierCategory.id,
         fromUser: supplier,
         toUser: 'Склад',
@@ -327,6 +330,7 @@ export const NewIncome: React.FC = () => {
       });
 
       batch.set(warehouseTransactionRef, {
+        ...createdByFlat,
         categoryId: warehouseCategory.id,
         fromUser: supplier,
         toUser: 'Склад',

@@ -1,4 +1,19 @@
-import { collection, doc, runTransaction, serverTimestamp, query, where, getDocs, writeBatch, getDoc, Timestamp, addDoc, updateDoc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  runTransaction,
+  serverTimestamp,
+  query,
+  where,
+  getDocs,
+  writeBatch,
+  getDoc,
+  Timestamp,
+  addDoc,
+  updateDoc,
+  orderBy,
+  limit
+} from 'firebase/firestore';
 import { db, auth } from './config';
 import { CategoryCardType } from '../../types';
 import { formatAmount, parseAmount } from './categories';
@@ -9,6 +24,7 @@ import { updateClientAggregatesOnTransaction, updateClientAggregatesOnDelete } f
 import { incrementExpenseCategoryUsage } from './expenseCategories';
 import { getCanonicalCategoryId } from '../canonicalCategoryId';
 import { getCompanyUser } from './companies';
+import { resolveTransactionCreatedBySnapshot, spreadCreatedBy } from './transactionAuthor';
 
 interface TransactionPhoto {
   name: string;
@@ -285,6 +301,7 @@ export const transferFunds = async ({
     }
 
     const status: TransactionStatus = await getTransactionStatusForCompany(companyId);
+    const createdByFlat = spreadCreatedBy(await resolveTransactionCreatedBySnapshot());
 
     await runTransaction(db, async (transaction) => {
       const sourceRef = doc(db, 'categories', sourceCategory.id);
@@ -311,6 +328,7 @@ export const transferFunds = async ({
       const timestamp = serverTimestamp();
       
       const withdrawalData: Record<string, unknown> = {
+        ...createdByFlat,
         categoryId: sourceCategory.id,
         fromUser: sourceCategory.title,
         toUser: targetCategory.title,
@@ -632,6 +650,7 @@ export const editFeedTransaction = async (params: {
   }
 
   const nowForAggregates = Timestamp.now();
+  const createdByFlat = spreadCreatedBy(await resolveTransactionCreatedBySnapshot());
 
   // Для агрегатов клиентов (row === 1) обновляем как при создании транзакций (4 события: reversal+correction)
   const postCommitAggregateUpdates: Array<Promise<void>> = [];
@@ -728,6 +747,7 @@ export const editFeedTransaction = async (params: {
     };
 
     tx.set(doc(db, 'transactions', reversalWithdrawalId), {
+      ...createdByFlat,
       ...reversalBase,
       categoryId: oldToCategoryId,
       amount: -oldAmount,
@@ -736,6 +756,7 @@ export const editFeedTransaction = async (params: {
       attachments: []
     });
     tx.set(doc(db, 'transactions', reversalDepositId), {
+      ...createdByFlat,
       ...reversalBase,
       categoryId: oldFromCategoryId,
       amount: oldAmount,
@@ -766,6 +787,7 @@ export const editFeedTransaction = async (params: {
     const fromCategoryId = getCanonicalCategoryId(newFromCategory);
     const toCategoryId = getCanonicalCategoryId(newToCategory);
     const withdrawalPayload: Record<string, unknown> = {
+      ...createdByFlat,
       ...correctionBase,
       categoryId: fromCategoryId,
       amount: -newAmount,
@@ -779,6 +801,7 @@ export const editFeedTransaction = async (params: {
     tx.set(doc(db, 'transactions', correctionWithdrawalId), withdrawalPayload);
     // Приход: categoryId = счёт «куда» — попадёт в историю операций счёта newToCategory (/transactions/history/:id)
     const incomeDocData = {
+      ...createdByFlat,
       ...correctionBase,
       categoryId: toCategoryId,
       amount: newAmount,

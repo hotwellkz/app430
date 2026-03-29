@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowUpRight, ArrowDownRight, FileText, Pencil, Receipt } from 'lucide-react';
 import { useSwipeable } from 'react-swipeable';
 import { formatTime } from '../../utils/dateUtils';
+import { getTransactionAuthorUi } from '../../lib/firebase/transactionAuthor';
 import { getDotHex } from '../../utils/expenseCategoryColors';
 import { Transaction } from './types';
 
@@ -138,6 +139,7 @@ export const TransactionCard = React.memo<TransactionCardProps>(function Transac
 
   const fuel = transaction.fuelData;
   const fuelStats = fuel?.derivedFuelStats;
+  const authorUi = getTransactionAuthorUi(transaction);
 
   const fuelStatusMeta =
     fuelStats?.status === 'normal'
@@ -418,9 +420,24 @@ export const TransactionCard = React.memo<TransactionCardProps>(function Transac
                   Накладная №{transaction.waybillNumber}
                 </button>
               )}
-              <span className="text-[12px] text-gray-400 whitespace-nowrap">
-                {formatTime(transaction.date)}
-              </span>
+              <div className="flex items-center gap-1.5 min-w-0 w-full">
+                <span className="text-[11px] sm:text-[12px] text-gray-400 whitespace-nowrap shrink-0">
+                  {formatTime(transaction.date)}
+                </span>
+                {authorUi && (
+                  <>
+                    <span className="text-gray-300 shrink-0 select-none" aria-hidden>
+                      •
+                    </span>
+                    <span
+                      className="text-[11px] sm:text-[12px] text-gray-400 truncate min-w-0"
+                      title={authorUi.title}
+                    >
+                      {authorUi.label}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
             {showFeedActions && (
               <div className="flex flex-row items-center justify-end gap-2 flex-wrap mt-2">

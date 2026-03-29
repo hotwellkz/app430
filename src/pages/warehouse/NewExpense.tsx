@@ -3,6 +3,7 @@ import { ArrowLeft, Search, Barcode, Plus, Trash2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, doc, getDoc, serverTimestamp, writeBatch, getDocs, query, where } from 'firebase/firestore';
 import { getTransactionStatusForCompany } from '../../lib/firebase/transactions';
+import { resolveTransactionCreatedBySnapshot, spreadCreatedBy } from '../../lib/firebase/transactionAuthor';
 import { incrementExpenseCategoryUsage } from '../../lib/firebase/expenseCategories';
 import { getNextDocumentNumber } from '../../utils/documentUtils';
 import { db } from '../../lib/firebase';
@@ -288,8 +289,10 @@ export const NewExpense: React.FC = () => {
 
       const isGeneralExpense = currentProjectTitle === GENERAL_EXPENSE_TITLE;
       const savedExpenseCategoryId = isGeneralExpense && expenseCategoryId ? expenseCategoryId : undefined;
+      const createdByFlat = spreadCreatedBy(await resolveTransactionCreatedBySnapshot());
 
       batch.set(warehouseTransactionRef, {
+        ...createdByFlat,
         categoryId: warehouseCategory.id,
         fromUser: 'Склад',
         toUser: currentProjectTitle,
@@ -321,6 +324,7 @@ export const NewExpense: React.FC = () => {
       });
 
       batch.set(projectTransactionRef, {
+        ...createdByFlat,
         categoryId: selectedProject,
         fromUser: 'Склад',
         toUser: currentProjectTitle,

@@ -4,6 +4,7 @@ import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useCompanyId } from '../../contexts/CompanyContext';
 import { showErrorNotification } from '../../utils/notifications';
+import { resolveTransactionCreatedBySnapshot, spreadCreatedBy } from '../../lib/firebase/transactionAuthor';
 
 interface EditStatsModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export const EditStatsModal: React.FC<EditStatsModalProps> = ({
   currentStats,
   onUpdate
 }) => {
+  const companyId = useCompanyId();
   const [balance, setBalance] = useState('');
   const [expenses, setExpenses] = useState('');
 
@@ -43,8 +45,10 @@ export const EditStatsModal: React.FC<EditStatsModalProps> = ({
     try {
       const balanceValue = parseFloat(balance || '0');
       const expensesValue = parseFloat(expenses || '0');
+      const createdByFlat = spreadCreatedBy(await resolveTransactionCreatedBySnapshot());
 
       await addDoc(collection(db, 'transactions'), {
+        ...createdByFlat,
         amount: balanceValue,
         categoryId: 'system_balance',
         type: 'system_adjustment',
@@ -56,6 +60,7 @@ export const EditStatsModal: React.FC<EditStatsModalProps> = ({
       });
 
       await addDoc(collection(db, 'transactions'), {
+        ...createdByFlat,
         amount: -Math.abs(expensesValue),
         categoryId: 'system_expenses',
         type: 'system_adjustment',

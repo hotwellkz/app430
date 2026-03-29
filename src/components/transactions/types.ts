@@ -1,6 +1,12 @@
 export interface Transaction {
   id: string;
   companyId?: string;
+  /** UID автора на момент создания (снимок). */
+  createdByUid?: string;
+  /** Короткое отображаемое имя на момент создания. */
+  createdByName?: string;
+  /** Полный email на момент создания. */
+  createdByEmail?: string;
   fromUser: string;
   toUser: string;
   amount: number;
