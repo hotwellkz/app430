@@ -21,6 +21,7 @@ import { useCompanyId } from '../../contexts/CompanyContext';
 import { useAIConfigured } from '../../hooks/useAIConfigured';
 import { createDeal, ensureDefaultPipeline, listStages, moveDealToStage } from '../../lib/firebase/deals';
 import { removeCompanyCity, renameCompanyCity, resolveCityForAutoAssign } from '../../lib/firebase/companyCities';
+import { buildConsistentCityBranch, getOrderedCities } from '../../lib/firebase/cityBranchRegulation';
 import type { CompanyBranch } from '../../lib/firebase/companyBranches';
 import { useClampedMenuPosition } from '../../hooks/useClampedMenuPosition';
 import type { Deal } from '../../types/deals';
@@ -421,8 +422,8 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
   const [deletingManager, setDeletingManager] = useState<{ manager: ChatManagerRecord; dealCount: number } | null>(null);
   const [voiceLauncherOpen, setVoiceLauncherOpen] = useState(false);
   const [deleteManagerLoading, setDeleteManagerLoading] = useState(false);
-  const [branchSaving, setBranchSaving] = useState(false);
-  const [branchSaveFeedback, setBranchSaveFeedback] = useState<'idle' | 'success' | 'error'>('idle');
+  const branchSaving = false;
+  const branchSaveFeedback: 'idle' | 'success' | 'error' = 'idle';
   const [showAddBranchModal, setShowAddBranchModal] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
   const [addBranchLoading, setAddBranchLoading] = useState(false);
@@ -433,6 +434,7 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
   const [archiveBranchLoading, setArchiveBranchLoading] = useState(false);
   const [citySaving, setCitySaving] = useState(false);
   const [citySaveFeedback, setCitySaveFeedback] = useState<'idle' | 'success' | 'error'>('idle');
+  const [showAllCities, setShowAllCities] = useState(false);
   const [showAddCityModal, setShowAddCityModal] = useState(false);
   const [newCityName, setNewCityName] = useState('');
   const [addCityLoading, setAddCityLoading] = useState(false);
@@ -729,6 +731,10 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
     return () => document.removeEventListener('click', onDocClick, true);
   }, [branchContextMenu]);
 
+  useEffect(() => {
+    setShowAllCities(false);
+  }, [phone, cities.length]);
+
   /** Сначала прямой вызов функции Netlify (на хостинге без редиректа /api даёт 404 HTML) */
   const AI_ANALYZE_ENDPOINTS = ['/.netlify/functions/ai-analyze-client', '/api/ai/analyze-client'] as const;
 
@@ -974,60 +980,14 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
       setCitySaveFeedback('idle');
       try {
         const normalized = normalizePhone(phone);
+        const payload = buildConsistentCityBranch(value, branches.map((b) => ({ id: b.id, name: b.name })));
         if (client) {
           await updateDoc(doc(db, COLLECTION_CLIENTS, client.id), {
-            city: value ?? null,
+            ...payload
           });
-          setClient({ ...client, city: value ?? undefined } as WhatsAppClientCard);
-        } else {
-          const ref = await addDoc(collection(db, COLLECTION_CLIENTS), {
-            phone: normalized,
-            name: 'Клиент',
-            source: 'whatsapp',
-            comment: '',
-            companyId,
-            createdAt: serverTimestamp(),
-            city: value ?? null,
-          });
-          setClient({
-            id: ref.id,
-            phone: normalized,
-            name: 'Клиент',
-            source: 'whatsapp',
-            comment: '',
-            createdAt: null,
-            city: value ?? undefined,
-          } as WhatsAppClientCard);
-        }
-        setCitySaveFeedback('success');
-        const t = window.setTimeout(() => setCitySaveFeedback('idle'), 2000);
-        return () => window.clearTimeout(t);
-      } catch {
-        setCitySaveFeedback('error');
-        const t = window.setTimeout(() => setCitySaveFeedback('idle'), 3000);
-        return () => window.clearTimeout(t);
-      } finally {
-        setCitySaving(false);
-      }
-    },
-    [phone, companyId, client]
-  );
-
-  const saveBranch = useCallback(
-    async (value: { id: string; name: string } | null) => {
-      if (!phone || !companyId) return;
-      setBranchSaving(true);
-      setBranchSaveFeedback('idle');
-      try {
-        const normalized = normalizePhone(phone);
-        const payload = {
-          branchId: value?.id ?? null,
-          branchName: value?.name ?? null
-        };
-        if (client) {
-          await updateDoc(doc(db, COLLECTION_CLIENTS, client.id), payload);
           setClient({
             ...client,
+            city: payload.city ?? undefined,
             branchId: payload.branchId ?? undefined,
             branchName: payload.branchName ?? undefined
           } as WhatsAppClientCard);
@@ -1048,23 +1008,30 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
             source: 'whatsapp',
             comment: '',
             createdAt: null,
+            city: payload.city ?? undefined,
             branchId: payload.branchId ?? undefined,
             branchName: payload.branchName ?? undefined
           } as WhatsAppClientCard);
         }
-        setBranchSaveFeedback('success');
-        const t = window.setTimeout(() => setBranchSaveFeedback('idle'), 2000);
+        setCitySaveFeedback('success');
+        const t = window.setTimeout(() => setCitySaveFeedback('idle'), 2000);
         return () => window.clearTimeout(t);
       } catch {
-        setBranchSaveFeedback('error');
-        const t = window.setTimeout(() => setBranchSaveFeedback('idle'), 3000);
+        setCitySaveFeedback('error');
+        const t = window.setTimeout(() => setCitySaveFeedback('idle'), 3000);
         return () => window.clearTimeout(t);
       } finally {
-        setBranchSaving(false);
+        setCitySaving(false);
       }
     },
-    [phone, companyId, client]
+    [phone, companyId, client, branches]
   );
+
+  const orderedCities = useMemo(
+    () => getOrderedCities(cities, cityCounts?.byCity),
+    [cities, cityCounts?.byCity]
+  );
+  const visibleCities = showAllCities ? [...orderedCities.primary, ...orderedCities.rest] : orderedCities.primary;
 
   /** Автоподстановка города после AI-анализа (Проанализировать чат): город извлечён, сверяем со справочником и сохраняем только если у контакта нет города. */
   const handleExtractedCityFromAnalysis = useCallback(
@@ -1107,7 +1074,15 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
     try {
       const normalized = normalizePhone(phone);
       const payload: Record<string, unknown> = {};
-      if (source.city.trim()) payload.city = source.city.trim();
+      if (source.city.trim()) {
+        const consistent = buildConsistentCityBranch(
+          source.city.trim(),
+          branches.map((b) => ({ id: b.id, name: b.name }))
+        );
+        payload.city = consistent.city;
+        payload.branchId = consistent.branchId;
+        payload.branchName = consistent.branchName;
+      }
       if (source.areaSqm.trim()) {
         const n = parseFloat(source.areaSqm.replace(',', '.'));
         if (Number.isFinite(n) && n > 0) payload.areaSqm = n;
@@ -1151,6 +1126,7 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
     phone,
     companyId,
     client,
+    branches,
     editName,
     editSource,
     editComment,
@@ -2267,14 +2243,15 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
 
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <h3 className="text-sm font-semibold text-gray-700 mb-2">Филиал</h3>
+                <p className="mb-2 text-[11px] text-gray-500">Определяется автоматически по выбранному городу.</p>
                 <div className="space-y-1">
                   <label className="flex items-center gap-2 cursor-pointer w-full min-w-0">
                     <input
                       type="radio"
                       name="branch"
                       checked={!(client?.branchId ?? '').trim()}
-                      onChange={() => saveBranch(null)}
-                      disabled={branchSaving}
+                      onChange={() => {}}
+                      disabled
                       className="text-green-600"
                     />
                     <span className="text-sm text-gray-600 truncate">Без филиала</span>
@@ -2300,8 +2277,8 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
                           type="radio"
                           name="branch"
                           checked={(client?.branchId ?? '').trim() === branch.id}
-                          onChange={() => saveBranch({ id: branch.id, name: branch.name })}
-                          disabled={branchSaving}
+                          onChange={() => {}}
+                          disabled
                           className="text-green-600"
                         />
                         <span className="text-sm text-gray-800 truncate">
@@ -2329,15 +2306,6 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
                       </button>
                     </div>
                   ))}
-                  {onAddBranch && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAddBranchModal(true)}
-                      className="mt-1 text-[11px] text-green-600 hover:text-green-700"
-                    >
-                      + Добавить филиал
-                    </button>
-                  )}
                 </div>
                 {branchSaving && <p className="mt-1 text-[11px] text-gray-500">Сохранение…</p>}
                 {branchSaveFeedback === 'success' && !branchSaving && (
@@ -2365,7 +2333,7 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
                       <span className={COUNT_BADGE_CLASS + ' ml-auto'}>{cityCounts.none}</span>
                     )}
                   </label>
-                  {cities.map((cityName) => (
+                  {visibleCities.map((cityName) => (
                     <div
                       key={cityName}
                       className="group flex items-center gap-1 w-full"
@@ -2401,6 +2369,15 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
                       </button>
                     </div>
                   ))}
+                  {orderedCities.rest.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllCities((prev) => !prev)}
+                      className="mt-1 text-[11px] text-gray-600 hover:text-gray-800"
+                    >
+                      {showAllCities ? `Скрыть (${orderedCities.rest.length})` : `Показать ещё (${orderedCities.rest.length})`}
+                    </button>
+                  )}
                   {onAddCity && (
                     <button
                       type="button"
@@ -3612,7 +3589,7 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
                     setShowAddBranchModal(false);
                     setNewBranchName('');
                     toast.success('Филиал добавлен');
-                    await saveBranch(created);
+                    // Назначение филиала вручную отключено: филиал определяется по городу.
                   } catch (err) {
                     const message = err instanceof Error ? err.message : 'Не удалось добавить филиал';
                     toast.error(message);

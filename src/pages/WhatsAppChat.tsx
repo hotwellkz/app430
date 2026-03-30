@@ -86,7 +86,12 @@ import ClientInfoPanel from '../components/whatsapp/ClientInfoPanel';
 import { ResizeHandle } from '../components/whatsapp/ResizeHandle';
 import ForwardDialog from '../components/whatsapp/ForwardDialog';
 import DeleteClientConfirmModal from '../components/whatsapp/DeleteClientConfirmModal';
-import { subscribeCompanyCities, addCompanyCity } from '../lib/firebase/companyCities';
+import {
+  subscribeCompanyCities,
+  addCompanyCity,
+  ensureCompanyCitiesCoverage,
+  backfillClientBranchesByCityRegulation
+} from '../lib/firebase/companyCities';
 import {
   subscribeCompanyBranches,
   addCompanyBranch,
@@ -95,6 +100,7 @@ import {
   ensureDefaultCompanyBranches,
   type CompanyBranch
 } from '../lib/firebase/companyBranches';
+import { getOrderedCities, normalizeCityToCanonical, resolveBranchNameByCity } from '../lib/firebase/cityBranchRegulation';
 import { supabase, CLIENTS_BUCKET } from '../lib/supabase/config';
 import { MAX_ATTACHMENT_MB } from '../components/whatsapp/ChatInput';
 import { compressImage, validateVideoForChat, isLargeVideo } from '../utils/mediaUtils';
@@ -729,6 +735,7 @@ const WhatsAppChat: React.FC = () => {
   const [dealStatuses, setDealStatuses] = useState<SimpleDealStatus[]>([]);
   const [dealStatusByPhone, setDealStatusByPhone] = useState<Map<string, string>>(() => new Map());
   const [branches, setBranches] = useState<CompanyBranch[]>([]);
+  const backfillRanForCompanyRef = useRef<string | null>(null);
   const [branchByPhone, setBranchByPhone] = useState<Map<string, { id?: string; name?: string }>>(
     () => new Map()
   );
@@ -1336,7 +1343,8 @@ const WhatsAppChat: React.FC = () => {
           const data = d.data();
           const phone = data.phone as string | undefined;
           const name = ((data.name as string) ?? '').trim();
-          const city = (data.city as string) ?? '';
+          const cityRaw = (data.city as string) ?? '';
+          const city = normalizeCityToCanonical(cityRaw) ?? cityRaw;
           const branchId = (data.branchId as string | undefined) ?? '';
           const branchName =
             ((data.branchName as string | undefined) ??
@@ -1376,6 +1384,7 @@ const WhatsAppChat: React.FC = () => {
       setCompanyCitiesList([]);
       return;
     }
+    ensureCompanyCitiesCoverage(companyId).catch(() => {});
     return subscribeCompanyCities(companyId, setCompanyCitiesList);
   }, [companyId]);
 
@@ -1387,6 +1396,24 @@ const WhatsAppChat: React.FC = () => {
     ensureDefaultCompanyBranches(companyId).catch(() => {});
     return subscribeCompanyBranches(companyId, setBranches);
   }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    if (branches.length === 0) return;
+    if (backfillRanForCompanyRef.current === companyId) return;
+    const branchIdByName = {
+      Астана: branches.find((b) => b.name.trim().toLowerCase() === 'астана')?.id,
+      Алматы: branches.find((b) => b.name.trim().toLowerCase() === 'алматы')?.id
+    } as const;
+    if (!branchIdByName.Астана && !branchIdByName.Алматы) return;
+    backfillRanForCompanyRef.current = companyId;
+    backfillClientBranchesByCityRegulation(companyId, {
+      Астана: branchIdByName.Астана,
+      Алматы: branchIdByName.Алматы
+    }).catch(() => {
+      backfillRanForCompanyRef.current = null;
+    });
+  }, [companyId, branches]);
 
   // Подписка на статусы сделок компании
   useEffect(() => {
@@ -1739,11 +1766,18 @@ const WhatsAppChat: React.FC = () => {
       const normPhone = normalizePhone(c.phone ?? c.client?.phone ?? '');
       const statusId = normPhone ? dealStatusByPhone.get(normPhone) ?? null : null;
       const managerId = normPhone ? managerByPhone.get(normPhone) ?? null : null;
-      const city = normPhone ? (cityByPhone.get(normPhone) ?? null) : null;
+      const cityRaw = normPhone ? (cityByPhone.get(normPhone) ?? null) : null;
+      const city = normalizeCityToCanonical(cityRaw) ?? cityRaw;
       const branchRaw = normPhone ? branchByPhone.get(normPhone) : undefined;
       const branchById = branchRaw?.id ? branches.find((b) => b.id === branchRaw.id) : null;
-      const branchNameResolved = (branchById?.name ?? branchRaw?.name ?? '').trim() || null;
-      const branchIdResolved = (branchById?.id ?? branchRaw?.id ?? '').trim() || null;
+      const branchNameFromData = (branchById?.name ?? branchRaw?.name ?? '').trim() || null;
+      const branchNameFromCity = resolveBranchNameByCity(city);
+      const effectiveBranchName = branchNameFromCity ?? branchNameFromData;
+      const branchByEffectiveName = effectiveBranchName
+        ? branches.find((b) => b.name.trim().toLowerCase() === effectiveBranchName.toLowerCase())
+        : null;
+      const branchNameResolved = (branchByEffectiveName?.name ?? effectiveBranchName ?? '').trim() || null;
+      const branchIdResolved = (branchByEffectiveName?.id ?? branchRaw?.id ?? '').trim() || null;
       const displayTitle =
         crmNamesByPhone.get(normalizePhone(c.phone))?.trim() || c.phone || '—';
       const status = statusId ? (dealStatuses.find((s) => s.id === statusId) ?? null) : null;
@@ -3745,7 +3779,8 @@ const WhatsAppChat: React.FC = () => {
     }
     if (cityFilter !== 'all') {
       base = base.filter((item) => {
-        const c = (item as { city?: string | null }).city;
+        const cRaw = (item as { city?: string | null }).city;
+        const c = normalizeCityToCanonical(cRaw) ?? cRaw;
         if (cityFilter === 'none') return c == null || c === '';
         return (c ?? '').trim() === cityFilter;
       });
@@ -3850,7 +3885,8 @@ const WhatsAppChat: React.FC = () => {
     let none = 0;
     const byCity: Record<string, number> = {};
     for (const item of list) {
-      const c = ((item as { city?: string | null }).city ?? '').trim();
+      const cRaw = ((item as { city?: string | null }).city ?? '').trim();
+      const c = (normalizeCityToCanonical(cRaw) ?? cRaw).trim();
       if (!c) none += 1;
       else byCity[c] = (byCity[c] ?? 0) + 1;
     }
@@ -3858,13 +3894,15 @@ const WhatsAppChat: React.FC = () => {
   }, [listWithDisplayTitle]);
 
   const citiesForFilter = useMemo(() => {
-    const set = new Set<string>(companyCitiesList);
+    const set = new Set<string>(companyCitiesList.map((c) => normalizeCityToCanonical(c) ?? c));
     listWithDisplayTitle.forEach((item) => {
-      const c = ((item as { city?: string | null }).city ?? '').trim();
+      const cRaw = ((item as { city?: string | null }).city ?? '').trim();
+      const c = (normalizeCityToCanonical(cRaw) ?? cRaw).trim();
       if (c) set.add(c);
     });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
-  }, [companyCitiesList, listWithDisplayTitle]);
+    const ordered = getOrderedCities(Array.from(set), cityCounts.byCity);
+    return [...ordered.primary, ...ordered.rest];
+  }, [companyCitiesList, listWithDisplayTitle, cityCounts.byCity]);
 
   const handleAddCity = useCallback(
     async (name: string): Promise<string> => {
