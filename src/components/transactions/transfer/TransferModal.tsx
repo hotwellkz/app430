@@ -50,6 +50,13 @@ interface TransferModalProps {
       gasStation?: string | null;
       isFullTank?: boolean;
     };
+    attachments: Array<{
+      name: string;
+      url: string;
+      type?: string;
+      size?: number;
+      path?: string;
+    }>;
   }>;
   onSubmitData?: (payload: {
     sourceCategory: CategoryCardType;
@@ -84,7 +91,11 @@ type FileUploadStatus = 'pending' | 'uploading' | 'uploaded' | 'error';
 
 interface FileUpload {
   id: string;
-  file: File;
+  file?: File;
+  name?: string;
+  sizeBytes?: number;
+  mimeType?: string;
+  isExisting?: boolean;
   progress: number;
   status: FileUploadStatus;
   path?: string;
@@ -121,6 +132,28 @@ function buildStructuredComment(
   const total = Math.round(totalAmount * 100) / 100;
   return `По чеку:\n${lines.join('\n')}\nИтого по чеку: ${total} ₸`;
 }
+
+const isImageLike = (mimeType?: string, url?: string): boolean => {
+  if (typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('image/')) return true;
+  if (!url) return false;
+  return /\.(png|jpe?g|webp|gif|bmp|heic|heif)(\?.*)?$/i.test(url);
+};
+
+const fileToDataUrl = (file: File): Promise<string> =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+    reader.readAsDataURL(file);
+  });
+
+const blobToDataUrl = (blob: Blob): Promise<string> =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+    reader.readAsDataURL(blob);
+  });
 
 export const TransferModal: React.FC<TransferModalProps> = ({
   sourceCategory,
@@ -246,6 +279,26 @@ export const TransferModal: React.FC<TransferModalProps> = ({
       if (fd.fuelType != null) setFuelType(fd.fuelType || '');
       if (fd.gasStation != null) setGasStation(fd.gasStation || '');
       if (typeof fd.isFullTank === 'boolean') setIsFullTank(fd.isFullTank);
+    }
+    if (Array.isArray(initialValues.attachments)) {
+      const normalized: FileUpload[] = initialValues.attachments
+        .filter((item) => item && typeof item.url === 'string' && item.url.trim() !== '')
+        .map((item, idx) => ({
+          id: `initial-${idx}-${item.url}`,
+          progress: 100,
+          status: 'uploaded',
+          isExisting: true,
+          path: item.path,
+          url: item.url,
+          name: item.name || `receipt-${idx + 1}`,
+          sizeBytes: typeof item.size === 'number' ? item.size : undefined,
+          mimeType: item.type || undefined,
+          file:
+            typeof item.type === 'string'
+              ? new File([], item.name || `receipt-${idx + 1}`, { type: item.type })
+              : undefined
+        }));
+      setFiles(normalized);
     }
     hasSetFuelCategoryForOpen.current = true;
     hasSetDefaultCategoryForOpen.current = true;
@@ -472,7 +525,9 @@ export const TransferModal: React.FC<TransferModalProps> = ({
         };
       });
       setFiles(prev => [...prev, ...toAdd]);
-      toAdd.forEach(item => startPreupload(item.file, item.id));
+      toAdd.forEach((item) => {
+        if (item.file) startPreupload(item.file, item.id);
+      });
     },
     [files.length, startPreupload]
   );
@@ -494,7 +549,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
     async (index: number) => {
       const item = files[index];
       if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-      if (item.status === 'uploaded' && item.path) {
+      if (item.status === 'uploaded' && item.path && !item.isExisting) {
         try {
           await supabase.storage.from('transactions').remove([item.path]);
         } catch (e) {
@@ -526,23 +581,32 @@ export const TransferModal: React.FC<TransferModalProps> = ({
     [files.length, startPreupload]
   );
 
-  const firstUploadedImage = files.find(
-    (f) => f.status === 'uploaded' && f.file.type.startsWith('image/')
-  );
+  const firstUploadedImage = files.find((f) => {
+    if (f.status !== 'uploaded') return false;
+    return isImageLike(f.file?.type ?? f.mimeType, f.url);
+  });
 
   const fillFromReceipt = useCallback(async () => {
-    if (!firstUploadedImage?.file) return;
+    if (!firstUploadedImage) return;
     setReceiptParseLoading(true);
     setReceiptParseResult(null);
     setFuelReceiptParseResult(null);
     setError(null);
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
-        reader.readAsDataURL(firstUploadedImage.file);
-      });
+      const dataUrl = firstUploadedImage.file && firstUploadedImage.file.size > 0
+        ? await fileToDataUrl(firstUploadedImage.file)
+        : firstUploadedImage.url
+          ? await fetch(firstUploadedImage.url)
+              .then((res) => {
+                if (!res.ok) throw new Error('Не удалось загрузить изображение чека');
+                return res.blob();
+              })
+              .then((blob) => blobToDataUrl(blob))
+          : null;
+      if (!dataUrl) {
+        setError('Не удалось прочитать прикреплённый чек');
+        return;
+      }
       const token = await getAuthToken();
       const body = isFuelTransfer
         ? { imageDataUrl: dataUrl, mode: 'fuel' as const }
@@ -663,7 +727,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
     setFuelReceiptParseResult(null);
     setEditableFuelParse(null);
     setImagePreviewUrl(null);
-    const toDelete = files.filter(f => f.status === 'uploaded' && f.path);
+    const toDelete = files.filter(f => f.status === 'uploaded' && f.path && !f.isExisting);
     if (!submittedSuccessRef.current && toDelete.length > 0) {
       toDelete.forEach(({ path }) => {
         if (path) supabase.storage.from('transactions').remove([path]).catch(() => {});
@@ -713,11 +777,11 @@ export const TransferModal: React.FC<TransferModalProps> = ({
     setError(null);
 
     try {
-      const uploadedFiles = uploadedOnly.map(({ file, path, url }) => ({
-        name: file.name,
+      const uploadedFiles = uploadedOnly.map(({ file, name, mimeType, sizeBytes, path, url }) => ({
+        name: file?.name || name || 'attachment',
         url,
-        type: file.type,
-        size: file.size,
+        type: file?.type || mimeType || 'application/octet-stream',
+        size: file?.size ?? sizeBytes ?? 0,
         path
       }));
 
@@ -1573,7 +1637,10 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                   </div>
                 )}
                 {files.map((file, index) => {
-                  const imageUrl = file.file.type.startsWith('image/') ? (file.previewUrl || file.url) : null;
+                  const mimeType = file.file?.type ?? file.mimeType;
+                  const imageUrl = isImageLike(mimeType, file.url) ? (file.previewUrl || file.url || null) : null;
+                  const displayName = file.file?.name || file.name || 'Файл';
+                  const sizeBytes = file.file?.size ?? file.sizeBytes ?? 0;
                   return (
                   <div
                     key={file.id}
@@ -1611,7 +1678,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                           role={imageUrl ? 'button' : undefined}
                           title={imageUrl ? 'Открыть в полном размере' : undefined}
                         >
-                          {file.file.name}
+                          {displayName}
                         </p>
                         <button
                           type="button"
@@ -1622,7 +1689,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                         </button>
                       </div>
                       <p className={`text-gray-500 ${isFuelTransfer ? 'text-[11px]' : 'text-xs'}`}>
-                        {(file.file.size / 1024).toFixed(1)} KB
+                        {(sizeBytes / 1024).toFixed(1)} KB
                         {file.status === 'uploading' && ' · загрузка...'}
                         {file.status === 'uploaded' && ' · загружен'}
                         {file.status === 'error' && file.errorMessage && ` · ${file.errorMessage}`}

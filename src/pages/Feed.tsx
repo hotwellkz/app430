@@ -136,7 +136,7 @@ interface Transaction {
   needsReview?: boolean;
   isSalary?: boolean;
   isCashless?: boolean;
-  attachments?: Array<{ name: string; url: string; type: string }>;
+  attachments?: Array<{ name: string; url: string; type?: string; size?: number; path?: string }>;
   reversedAt?: unknown;
   fuelData?: {
     vehicleId: string;
@@ -1532,6 +1532,47 @@ export const Feed: React.FC = () => {
               isCashless: !!editingTransaction.isCashless,
               needsReview: !!editingTransaction.needsReview,
               expenseCategoryId: editingTransaction.expenseCategoryId,
+              attachments: (() => {
+                const txAny = editingTransaction as unknown as {
+                  attachments?: Array<{ name?: string; url?: string; type?: string; size?: number; path?: string }>;
+                  files?: Array<{ name?: string; url?: string; type?: string; size?: number; path?: string }>;
+                  attachmentUrl?: string;
+                  fileUrl?: string;
+                  receiptImage?: string;
+                  fuelData?: { receiptFileUrl?: string | null; receiptRef?: string | null };
+                };
+                const list = (Array.isArray(txAny.attachments) ? txAny.attachments : [])
+                  .concat(Array.isArray(txAny.files) ? txAny.files : []);
+                const singleUrl =
+                  txAny.attachmentUrl ||
+                  txAny.fileUrl ||
+                  txAny.receiptImage ||
+                  txAny.fuelData?.receiptFileUrl ||
+                  null;
+                if (singleUrl) {
+                  list.push({
+                    name: 'Чек',
+                    url: singleUrl,
+                    type: 'image/jpeg',
+                    path: txAny.fuelData?.receiptRef ?? undefined
+                  });
+                }
+                const uniqueByUrl = new Map<string, { name: string; url: string; type?: string; size?: number; path?: string }>();
+                list.forEach((item) => {
+                  const url = typeof item?.url === 'string' ? item.url.trim() : '';
+                  if (!url) return;
+                  if (!uniqueByUrl.has(url)) {
+                    uniqueByUrl.set(url, {
+                      name: item?.name || 'Чек',
+                      url,
+                      type: item?.type,
+                      size: typeof item?.size === 'number' ? item.size : undefined,
+                      path: item?.path
+                    });
+                  }
+                });
+                return Array.from(uniqueByUrl.values());
+              })(),
               fuelData: editingTransaction.fuelData
                 ? {
                     vehicleId: editingTransaction.fuelData.vehicleId,
