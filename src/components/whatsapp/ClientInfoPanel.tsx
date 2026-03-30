@@ -21,6 +21,7 @@ import { useCompanyId } from '../../contexts/CompanyContext';
 import { useAIConfigured } from '../../hooks/useAIConfigured';
 import { createDeal, ensureDefaultPipeline, listStages, moveDealToStage } from '../../lib/firebase/deals';
 import { removeCompanyCity, renameCompanyCity, resolveCityForAutoAssign } from '../../lib/firebase/companyCities';
+import type { CompanyBranch } from '../../lib/firebase/companyBranches';
 import { useClampedMenuPosition } from '../../hooks/useClampedMenuPosition';
 import type { Deal } from '../../types/deals';
 import toast from 'react-hot-toast';
@@ -100,6 +101,8 @@ export interface WhatsAppClientCard {
   source: string;
   comment: string;
   createdAt: unknown;
+  branchId?: string | null;
+  branchName?: string | null;
   /** Извлечённые / сохранённые поля карточки */
   city?: string | null;
   areaSqm?: number | null;
@@ -134,6 +137,8 @@ async function getClientByPhone(phone: string, companyId: string): Promise<Whats
     source: (data.source as string) ?? '',
     comment: (data.comment as string) ?? '',
     createdAt: data.createdAt,
+    branchId: (data.branchId as string) ?? undefined,
+    branchName: (data.branchName as string) ?? undefined,
     city: (data.city as string) ?? undefined,
     areaSqm: num(data.areaSqm),
     houseType: (data.houseType as string) ?? undefined,
@@ -254,8 +259,18 @@ interface ClientInfoPanelProps {
   cities?: string[];
   /** Количество контактов по городам (для бейджей в блоке «Город») */
   cityCounts?: { none: number; byCity: Record<string, number> };
+  /** Список филиалов компании (обычно активные + архивные, если ещё используются). */
+  branches?: Array<Pick<CompanyBranch, 'id' | 'name' | 'isActive' | 'sortOrder'>>;
+  /** Количество контактов по филиалам (для бейджей в блоке «Филиал»). */
+  branchCounts?: { none: number; byId: Record<string, number> };
   /** Добавить новый город в справочник компании; возвращает нормализованное название. */
   onAddCity?: (name: string) => Promise<string>;
+  /** Добавить новый филиал в справочник компании. */
+  onAddBranch?: (name: string) => Promise<{ id: string; name: string } | null>;
+  /** Переименовать филиал в справочнике компании. */
+  onRenameBranch?: (branchId: string, name: string) => Promise<string>;
+  /** Архивировать филиал в справочнике компании. */
+  onArchiveBranch?: (branchId: string) => Promise<void>;
   /** Встроен в bottom sheet (мобильный): не создавать свой scroll, чтобы скроллил только контейнер шторки */
   embeddedInSheet?: boolean;
   /** Ширина на 100% родителя (для resizable правой панели на desktop) */
@@ -329,7 +344,12 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
   managerCounts,
   cities = [],
   cityCounts,
+  branches = [],
+  branchCounts,
   onAddCity,
+  onAddBranch,
+  onRenameBranch,
+  onArchiveBranch,
   embeddedInSheet = false,
   fillWidth = false,
   onInsertNextMessage,
@@ -401,6 +421,16 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
   const [deletingManager, setDeletingManager] = useState<{ manager: ChatManagerRecord; dealCount: number } | null>(null);
   const [voiceLauncherOpen, setVoiceLauncherOpen] = useState(false);
   const [deleteManagerLoading, setDeleteManagerLoading] = useState(false);
+  const [branchSaving, setBranchSaving] = useState(false);
+  const [branchSaveFeedback, setBranchSaveFeedback] = useState<'idle' | 'success' | 'error'>('idle');
+  const [showAddBranchModal, setShowAddBranchModal] = useState(false);
+  const [newBranchName, setNewBranchName] = useState('');
+  const [addBranchLoading, setAddBranchLoading] = useState(false);
+  const [branchContextMenu, setBranchContextMenu] = useState<{ x: number; y: number; branch: { id: string; name: string } } | null>(null);
+  const [renamingBranch, setRenamingBranch] = useState<{ id: string; name: string } | null>(null);
+  const [renameBranchValue, setRenameBranchValue] = useState('');
+  const [deletingBranch, setDeletingBranch] = useState<{ id: string; name: string } | null>(null);
+  const [archiveBranchLoading, setArchiveBranchLoading] = useState(false);
   const [citySaving, setCitySaving] = useState(false);
   const [citySaveFeedback, setCitySaveFeedback] = useState<'idle' | 'success' | 'error'>('idle');
   const [showAddCityModal, setShowAddCityModal] = useState(false);
@@ -420,6 +450,11 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
     !!cityContextMenu,
     cityContextMenu?.x ?? 0,
     cityContextMenu?.y ?? 0
+  );
+  const branchMenuPosition = useClampedMenuPosition(
+    !!branchContextMenu,
+    branchContextMenu?.x ?? 0,
+    branchContextMenu?.y ?? 0
   );
 
   const [pipelineDeal, setPipelineDeal] = useState<Deal | null>(null);
@@ -684,6 +719,15 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
     document.addEventListener('click', onDocClick, true);
     return () => document.removeEventListener('click', onDocClick, true);
   }, [cityContextMenu]);
+  useEffect(() => {
+    if (!branchContextMenu) return;
+    const close = () => setBranchContextMenu(null);
+    const onDocClick = (e: MouseEvent) => {
+      if (branchMenuPosition.ref.current && !branchMenuPosition.ref.current.contains(e.target as Node)) close();
+    };
+    document.addEventListener('click', onDocClick, true);
+    return () => document.removeEventListener('click', onDocClick, true);
+  }, [branchContextMenu]);
 
   /** Сначала прямой вызов функции Netlify (на хостинге без редиректа /api даёт 404 HTML) */
   const AI_ANALYZE_ENDPOINTS = ['/.netlify/functions/ai-analyze-client', '/api/ai/analyze-client'] as const;
@@ -964,6 +1008,59 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
         return () => window.clearTimeout(t);
       } finally {
         setCitySaving(false);
+      }
+    },
+    [phone, companyId, client]
+  );
+
+  const saveBranch = useCallback(
+    async (value: { id: string; name: string } | null) => {
+      if (!phone || !companyId) return;
+      setBranchSaving(true);
+      setBranchSaveFeedback('idle');
+      try {
+        const normalized = normalizePhone(phone);
+        const payload = {
+          branchId: value?.id ?? null,
+          branchName: value?.name ?? null
+        };
+        if (client) {
+          await updateDoc(doc(db, COLLECTION_CLIENTS, client.id), payload);
+          setClient({
+            ...client,
+            branchId: payload.branchId ?? undefined,
+            branchName: payload.branchName ?? undefined
+          } as WhatsAppClientCard);
+        } else {
+          const ref = await addDoc(collection(db, COLLECTION_CLIENTS), {
+            phone: normalized,
+            name: 'Клиент',
+            source: 'whatsapp',
+            comment: '',
+            companyId,
+            createdAt: serverTimestamp(),
+            ...payload
+          });
+          setClient({
+            id: ref.id,
+            phone: normalized,
+            name: 'Клиент',
+            source: 'whatsapp',
+            comment: '',
+            createdAt: null,
+            branchId: payload.branchId ?? undefined,
+            branchName: payload.branchName ?? undefined
+          } as WhatsAppClientCard);
+        }
+        setBranchSaveFeedback('success');
+        const t = window.setTimeout(() => setBranchSaveFeedback('idle'), 2000);
+        return () => window.clearTimeout(t);
+      } catch {
+        setBranchSaveFeedback('error');
+        const t = window.setTimeout(() => setBranchSaveFeedback('idle'), 3000);
+        return () => window.clearTimeout(t);
+      } finally {
+        setBranchSaving(false);
       }
     },
     [phone, companyId, client]
@@ -2169,6 +2266,89 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
               </div>
 
               <div className="mt-4 pt-4 border-t border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Филиал</h3>
+                <div className="space-y-1">
+                  <label className="flex items-center gap-2 cursor-pointer w-full min-w-0">
+                    <input
+                      type="radio"
+                      name="branch"
+                      checked={!(client?.branchId ?? '').trim()}
+                      onChange={() => saveBranch(null)}
+                      disabled={branchSaving}
+                      className="text-green-600"
+                    />
+                    <span className="text-sm text-gray-600 truncate">Без филиала</span>
+                    {branchCounts != null && (
+                      <span className={COUNT_BADGE_CLASS + ' ml-auto'}>{branchCounts.none}</span>
+                    )}
+                  </label>
+                  {branches.map((branch) => (
+                    <div
+                      key={branch.id}
+                      className="group flex items-center gap-1 w-full"
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setBranchContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          branch: { id: branch.id, name: branch.name }
+                        });
+                      }}
+                    >
+                      <label className="flex-1 flex items-center gap-2 cursor-pointer min-w-0">
+                        <input
+                          type="radio"
+                          name="branch"
+                          checked={(client?.branchId ?? '').trim() === branch.id}
+                          onChange={() => saveBranch({ id: branch.id, name: branch.name })}
+                          disabled={branchSaving}
+                          className="text-green-600"
+                        />
+                        <span className="text-sm text-gray-800 truncate">
+                          {branch.name}
+                          {branch.isActive === false ? ' (архив)' : ''}
+                        </span>
+                      </label>
+                      {branchCounts != null && (
+                        <span className={COUNT_BADGE_CLASS}>{branchCounts.byId[branch.id] ?? 0}</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setBranchContextMenu({
+                            x: e.clientX,
+                            y: e.clientY,
+                            branch: { id: branch.id, name: branch.name }
+                          });
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-200 text-gray-500 flex-shrink-0"
+                        aria-label="Меню филиала"
+                      >
+                        <MoreVertical className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  {onAddBranch && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddBranchModal(true)}
+                      className="mt-1 text-[11px] text-green-600 hover:text-green-700"
+                    >
+                      + Добавить филиал
+                    </button>
+                  )}
+                </div>
+                {branchSaving && <p className="mt-1 text-[11px] text-gray-500">Сохранение…</p>}
+                {branchSaveFeedback === 'success' && !branchSaving && (
+                  <p className="mt-1 text-[11px] text-green-600">Сохранено</p>
+                )}
+                {branchSaveFeedback === 'error' && !branchSaving && (
+                  <p className="mt-1 text-[11px] text-red-600">Ошибка сохранения</p>
+                )}
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-200">
                 <h3 className="text-sm font-semibold text-gray-700 mb-2">Город</h3>
                 <div className="space-y-1">
                   <label className="flex items-center gap-2 cursor-pointer w-full min-w-0">
@@ -3123,6 +3303,37 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
         </div>
       )}
 
+      {branchContextMenu && (
+        <div
+          ref={branchMenuPosition.ref}
+          className="fixed z-[1300] min-w-[160px] py-1 bg-white rounded-lg shadow-lg border border-gray-200"
+          style={{ left: branchMenuPosition.style.left, top: branchMenuPosition.style.top }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+            onClick={() => {
+              setRenameBranchValue(branchContextMenu.branch.name);
+              setRenamingBranch(branchContextMenu.branch);
+              setBranchContextMenu(null);
+            }}
+          >
+            Переименовать
+          </button>
+          <button
+            type="button"
+            className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+            onClick={() => {
+              setDeletingBranch(branchContextMenu.branch);
+              setBranchContextMenu(null);
+            }}
+          >
+            Архивировать
+          </button>
+        </div>
+      )}
+
       {deletingCity && companyId && (
         <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-xl p-4 w-full max-w-sm">
@@ -3269,6 +3480,149 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
                 className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
               >
                 {addCityLoading ? 'Сохранение…' : 'Добавить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {deletingBranch && onArchiveBranch && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-4 w-full max-w-sm">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2">
+              Архивировать филиал «{deletingBranch.name}»?
+            </h3>
+            <p className="text-xs text-gray-600 mb-3">
+              Филиал будет скрыт в новых выборах, но останется в истории у уже назначенных контактов.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingBranch(null)}
+                disabled={archiveBranchLoading}
+                className="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={archiveBranchLoading}
+                onClick={async () => {
+                  setArchiveBranchLoading(true);
+                  try {
+                    await onArchiveBranch(deletingBranch.id);
+                    setDeletingBranch(null);
+                  } finally {
+                    setArchiveBranchLoading(false);
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {archiveBranchLoading ? 'Сохранение…' : 'Архивировать'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {renamingBranch && onRenameBranch && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-4 w-full max-w-xs">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2">Переименовать филиал</h3>
+            <input
+              type="text"
+              value={renameBranchValue}
+              onChange={(e) => setRenameBranchValue(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mb-3"
+              placeholder="Новое название"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setRenamingBranch(null); setRenameBranchValue(''); }}
+                className="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={!renameBranchValue.trim()}
+                onClick={async () => {
+                  if (!renameBranchValue.trim()) return;
+                  try {
+                    const newName = await onRenameBranch(renamingBranch.id, renameBranchValue.trim());
+                    if ((client?.branchId ?? '') === renamingBranch.id) {
+                      setClient({ ...client, branchName: newName } as WhatsAppClientCard);
+                    }
+                    setRenamingBranch(null);
+                    setRenameBranchValue('');
+                  } catch (e) {
+                    if (import.meta.env.DEV) console.warn('Rename branch error', e);
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showAddBranchModal && onAddBranch && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-4 w-full max-w-xs">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2">Добавить филиал</h3>
+            <div className="space-y-2">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Название филиала</label>
+                <input
+                  type="text"
+                  value={newBranchName}
+                  onChange={(e) => setNewBranchName(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  placeholder="Например: Алматы"
+                  disabled={addBranchLoading}
+                />
+              </div>
+            </div>
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (addBranchLoading) return;
+                  setShowAddBranchModal(false);
+                  setNewBranchName('');
+                }}
+                className="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                disabled={addBranchLoading}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={!newBranchName.trim() || addBranchLoading}
+                onClick={async () => {
+                  const trimmed = newBranchName.trim();
+                  if (!trimmed || addBranchLoading) return;
+                  setAddBranchLoading(true);
+                  try {
+                    const created = await onAddBranch(trimmed);
+                    if (!created) {
+                      toast.error('Не удалось добавить филиал');
+                      return;
+                    }
+                    setShowAddBranchModal(false);
+                    setNewBranchName('');
+                    toast.success('Филиал добавлен');
+                    await saveBranch(created);
+                  } catch (err) {
+                    const message = err instanceof Error ? err.message : 'Не удалось добавить филиал';
+                    toast.error(message);
+                  } finally {
+                    setAddBranchLoading(false);
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                {addBranchLoading ? 'Сохранение…' : 'Добавить'}
               </button>
             </div>
           </div>

@@ -69,6 +69,9 @@ export interface ConversationListItem {
   displayTitle?: string;
   /** Город клиента из CRM (для фильтра и отображения). */
   city?: string | null;
+  /** Филиал клиента из CRM (для фильтра и отображения). */
+  branchId?: string | null;
+  branchName?: string | null;
   channel?: 'whatsapp' | 'instagram';
   /** Kaspi-заказ, связанный с диалогом (если есть) */
   kaspiOrderNumber?: string | null;

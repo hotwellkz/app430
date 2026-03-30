@@ -8,7 +8,7 @@ import {
   LayoutGrid,
   Clock,
   Bell,
-  GitBranch,
+  Building2,
   Users,
   MapPin
 } from 'lucide-react';
@@ -87,6 +87,14 @@ import { ResizeHandle } from '../components/whatsapp/ResizeHandle';
 import ForwardDialog from '../components/whatsapp/ForwardDialog';
 import DeleteClientConfirmModal from '../components/whatsapp/DeleteClientConfirmModal';
 import { subscribeCompanyCities, addCompanyCity } from '../lib/firebase/companyCities';
+import {
+  subscribeCompanyBranches,
+  addCompanyBranch,
+  renameCompanyBranch,
+  archiveCompanyBranch,
+  ensureDefaultCompanyBranches,
+  type CompanyBranch
+} from '../lib/firebase/companyBranches';
 import { supabase, CLIENTS_BUCKET } from '../lib/supabase/config';
 import { MAX_ATTACHMENT_MB } from '../components/whatsapp/ChatInput';
 import { compressImage, validateVideoForChat, isLargeVideo } from '../utils/mediaUtils';
@@ -720,7 +728,11 @@ const WhatsAppChat: React.FC = () => {
   type SimpleManager = { id: string; name: string; color: string; order: number };
   const [dealStatuses, setDealStatuses] = useState<SimpleDealStatus[]>([]);
   const [dealStatusByPhone, setDealStatusByPhone] = useState<Map<string, string>>(() => new Map());
-  const [dealStatusFilter, setDealStatusFilter] = useState<'all' | string>('all');
+  const [branches, setBranches] = useState<CompanyBranch[]>([]);
+  const [branchByPhone, setBranchByPhone] = useState<Map<string, { id?: string; name?: string }>>(
+    () => new Map()
+  );
+  const [branchFilter, setBranchFilter] = useState<'all' | 'none' | string>('all');
   const [managers, setManagers] = useState<SimpleManager[]>([]);
   const [managerByPhone, setManagerByPhone] = useState<Map<string, string>>(() => new Map());
   const [managerFilter, setManagerFilter] = useState<'all' | 'none' | string>('all');
@@ -1319,11 +1331,17 @@ const WhatsAppChat: React.FC = () => {
       (snapshot) => {
         const nameMap = new Map<string, string>();
         const cityMap = new Map<string, string>();
+        const branchMap = new Map<string, { id?: string; name?: string }>();
         snapshot.docs.forEach((d) => {
           const data = d.data();
           const phone = data.phone as string | undefined;
           const name = ((data.name as string) ?? '').trim();
           const city = (data.city as string) ?? '';
+          const branchId = (data.branchId as string | undefined) ?? '';
+          const branchName =
+            ((data.branchName as string | undefined) ??
+              ((data.branch as { name?: string } | undefined)?.name) ??
+              '') || '';
           if (!phone) return;
           const norm = normalizePhone(phone);
           if (name) {
@@ -1333,13 +1351,21 @@ const WhatsAppChat: React.FC = () => {
             nameMap.set(norm, name);
           }
           if (city.trim()) cityMap.set(norm, city.trim());
+          if (branchId.trim() || branchName.trim()) {
+            branchMap.set(norm, {
+              id: branchId.trim() || undefined,
+              name: branchName.trim() || undefined
+            });
+          }
         });
         setCrmNamesByPhone(nameMap);
         setCityByPhone(cityMap);
+        setBranchByPhone(branchMap);
       },
       () => {
         setCrmNamesByPhone(new Map());
         setCityByPhone(new Map());
+        setBranchByPhone(new Map());
       }
     );
     return () => unsub();
@@ -1351,6 +1377,15 @@ const WhatsAppChat: React.FC = () => {
       return;
     }
     return subscribeCompanyCities(companyId, setCompanyCitiesList);
+  }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId) {
+      setBranches([]);
+      return;
+    }
+    ensureDefaultCompanyBranches(companyId).catch(() => {});
+    return subscribeCompanyBranches(companyId, setBranches);
   }, [companyId]);
 
   // Подписка на статусы сделок компании
@@ -1705,6 +1740,10 @@ const WhatsAppChat: React.FC = () => {
       const statusId = normPhone ? dealStatusByPhone.get(normPhone) ?? null : null;
       const managerId = normPhone ? managerByPhone.get(normPhone) ?? null : null;
       const city = normPhone ? (cityByPhone.get(normPhone) ?? null) : null;
+      const branchRaw = normPhone ? branchByPhone.get(normPhone) : undefined;
+      const branchById = branchRaw?.id ? branches.find((b) => b.id === branchRaw.id) : null;
+      const branchNameResolved = (branchById?.name ?? branchRaw?.name ?? '').trim() || null;
+      const branchIdResolved = (branchById?.id ?? branchRaw?.id ?? '').trim() || null;
       const displayTitle =
         crmNamesByPhone.get(normalizePhone(c.phone))?.trim() || c.phone || '—';
       const status = statusId ? (dealStatuses.find((s) => s.id === statusId) ?? null) : null;
@@ -1726,7 +1765,9 @@ const WhatsAppChat: React.FC = () => {
         managerId: managerId ?? undefined,
         managerColor: managerColor || undefined,
         managerName: managerName || undefined,
-        city: city ?? undefined
+        city: city ?? undefined,
+        branchId: branchIdResolved ?? undefined,
+        branchName: branchNameResolved ?? undefined
       };
     });
   }, [
@@ -1735,6 +1776,8 @@ const WhatsAppChat: React.FC = () => {
     incognitoMode,
     crmNamesByPhone,
     cityByPhone,
+    branchByPhone,
+    branches,
     dealStatusByPhone,
     dealStatuses,
     managerByPhone,
@@ -3686,11 +3729,11 @@ const WhatsAppChat: React.FC = () => {
   const filteredList = useMemo(() => {
     let base = listWithDisplayTitle;
 
-    if (dealStatusFilter !== 'all') {
+    if (branchFilter !== 'all') {
       base = base.filter((item) => {
-        const sid = (item as { dealStatusId?: string | null }).dealStatusId;
-        if (dealStatusFilter === 'none') return sid == null || sid === '';
-        return sid === dealStatusFilter;
+        const bid = (item as { branchId?: string | null }).branchId;
+        if (branchFilter === 'none') return bid == null || bid === '';
+        return bid === branchFilter;
       });
     }
     if (managerFilter !== 'all') {
@@ -3743,7 +3786,7 @@ const WhatsAppChat: React.FC = () => {
     }
 
     return result;
-  }, [listWithDisplayTitle, activeFilter, dealStatusFilter, managerFilter, cityFilter]);
+  }, [listWithDisplayTitle, activeFilter, branchFilter, managerFilter, cityFilter]);
 
   const dealStatusCounts = useMemo(() => {
     const list = listWithDisplayTitle;
@@ -3760,6 +3803,31 @@ const WhatsAppChat: React.FC = () => {
     }
     return { all: total, none, byId };
   }, [listWithDisplayTitle]);
+
+  const branchCounts = useMemo(() => {
+    const list = listWithDisplayTitle;
+    const total = list.length;
+    let none = 0;
+    const byId: Record<string, number> = {};
+    for (const item of list) {
+      const id = (item as { branchId?: string | null }).branchId ?? null;
+      if (id == null || id === '') none += 1;
+      else byId[id] = (byId[id] ?? 0) + 1;
+    }
+    return { all: total, none, byId };
+  }, [listWithDisplayTitle]);
+
+  const branchesForFilter = useMemo(() => {
+    const active = branches.filter((b) => b.isActive !== false);
+    const archivedUsed = branches.filter(
+      (b) => b.isActive === false && (branchCounts.byId[b.id] ?? 0) > 0
+    );
+    return [...active, ...archivedUsed].sort(
+      (a, b) =>
+        Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0) ||
+        a.name.localeCompare(b.name, 'ru')
+    );
+  }, [branches, branchCounts.byId]);
 
   const managerCounts = useMemo(() => {
     const list = listWithDisplayTitle;
@@ -3805,14 +3873,36 @@ const WhatsAppChat: React.FC = () => {
     },
     [companyId]
   );
+  const handleAddBranch = useCallback(
+    async (name: string): Promise<{ id: string; name: string } | null> => {
+      if (!companyId) return null;
+      const created = await addCompanyBranch(companyId, name);
+      return { id: created.id, name: created.name };
+    },
+    [companyId]
+  );
+  const handleRenameBranch = useCallback(
+    async (branchId: string, name: string): Promise<string> => {
+      if (!companyId) throw new Error('Компания не определена');
+      return renameCompanyBranch(companyId, branchId, name);
+    },
+    [companyId]
+  );
+  const handleArchiveBranch = useCallback(
+    async (branchId: string): Promise<void> => {
+      if (!companyId) return;
+      await archiveCompanyBranch(companyId, branchId);
+    },
+    [companyId]
+  );
 
   /** Счётчики для badge в мобильной панели при не-дефолтном select (чаты в текущем списке). */
-  const mobileDealFilterBadgeCount =
-    dealStatusFilter === 'all'
+  const mobileBranchFilterBadgeCount =
+    branchFilter === 'all'
       ? null
-      : dealStatusFilter === 'none'
-        ? dealStatusCounts.none
-        : dealStatusCounts.byId[dealStatusFilter] ?? 0;
+      : branchFilter === 'none'
+        ? branchCounts.none
+        : branchCounts.byId[branchFilter] ?? 0;
   const mobileManagerFilterBadgeCount =
     managerFilter === 'all'
       ? null
@@ -3966,7 +4056,7 @@ const WhatsAppChat: React.FC = () => {
             {/* Мобильная панель: сетка на всю ширину, без рамок/стрелок; select поверх иконки; бейджи внутри ячейки */}
             <div
               className={`md:hidden grid w-full min-w-0 gap-x-0.5 px-2 pb-2 pt-1.5 ${
-                dealStatuses.length > 0 ? 'grid-cols-6' : 'grid-cols-5'
+                'grid-cols-6'
               }`}
             >
               <button
@@ -4047,52 +4137,47 @@ const WhatsAppChat: React.FC = () => {
                   />
                 )}
               </button>
-              {dealStatuses.length > 0 && (
-                <div
-                  className={`relative z-0 flex h-11 min-h-[44px] w-full min-w-0 items-center justify-center rounded-xl transition-colors ${
-                    dealStatusFilter !== 'all' ? 'bg-emerald-500/[0.14]' : ''
-                  }`}
-                  title={
-                    dealStatusFilter === 'all'
-                      ? 'Фильтр по сделке и статусу'
-                      : `Фильтр по сделке, выбрано чатов: ${mobileDealFilterBadgeCount ?? 0}`
-                  }
+              <div
+                className={`relative z-0 flex h-11 min-h-[44px] w-full min-w-0 items-center justify-center rounded-xl transition-colors ${
+                  branchFilter !== 'all' ? 'bg-emerald-500/[0.14]' : ''
+                }`}
+                title={
+                  branchFilter === 'all'
+                    ? 'Фильтр по филиалу'
+                    : `Фильтр по филиалу, чатов: ${mobileBranchFilterBadgeCount ?? 0}`
+                }
+              >
+                <select
+                  value={branchFilter}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setBranchFilter(v === 'all' ? 'all' : v === 'none' ? 'none' : v);
+                  }}
+                  aria-label="Фильтр по филиалу"
+                  className="absolute inset-0 z-[2] h-full w-full cursor-pointer opacity-0 text-base"
                 >
-                  <select
-                    value={dealStatusFilter}
-                    onChange={(e) =>
-                      setDealStatusFilter(e.target.value === 'all' ? 'all' : e.target.value)
-                    }
-                    aria-label="Фильтр по сделке и статусу воронки"
-                    className="absolute inset-0 z-[2] h-full w-full cursor-pointer opacity-0 text-base"
-                  >
-                    <option value="all">Все сделки ({dealStatusCounts.all})</option>
-                    <option value="none">Без статуса ({dealStatusCounts.none})</option>
-                    {dealStatuses.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({dealStatusCounts.byId[s.id] ?? 0})
-                      </option>
-                    ))}
-                  </select>
-                  <GitBranch
-                    className="pointer-events-none h-5 w-5 shrink-0 text-emerald-600"
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                  {dealStatusFilter === 'all' && dealStatusCounts.all > 0 && (
-                    <MobileFilterEmeraldCountBadge value={dealStatusCounts.all} />
-                  )}
-                  {dealStatusFilter !== 'all' && mobileDealFilterBadgeCount !== null && (
-                    <>
-                      <span
-                        className="pointer-events-none absolute bottom-1 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-emerald-500/90"
-                        aria-hidden
-                      />
-                      <MobileFilterEmeraldCountBadge value={mobileDealFilterBadgeCount} />
-                    </>
-                  )}
-                </div>
-              )}
+                  <option value="all">Все филиалы ({branchCounts.all})</option>
+                  <option value="none">Без филиала ({branchCounts.none})</option>
+                  {branchesForFilter.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({branchCounts.byId[b.id] ?? 0})
+                    </option>
+                  ))}
+                </select>
+                <Building2 className="pointer-events-none h-5 w-5 shrink-0 text-emerald-600" strokeWidth={1.75} aria-hidden />
+                {branchFilter === 'all' && branchCounts.all > 0 && (
+                  <MobileFilterEmeraldCountBadge value={branchCounts.all} />
+                )}
+                {branchFilter !== 'all' && mobileBranchFilterBadgeCount !== null && (
+                  <>
+                    <span
+                      className="pointer-events-none absolute bottom-1 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-emerald-500/90"
+                      aria-hidden
+                    />
+                    <MobileFilterEmeraldCountBadge value={mobileBranchFilterBadgeCount} />
+                  </>
+                )}
+              </div>
               <div
                 className={`relative z-0 flex h-11 min-h-[44px] w-full min-w-0 items-center justify-center rounded-xl transition-colors ${
                   managerFilter !== 'all' ? 'bg-emerald-500/[0.14]' : ''
@@ -4226,25 +4311,24 @@ const WhatsAppChat: React.FC = () => {
                   )}
                 </button>
               </div>
-              {dealStatuses.length > 0 && (
-                <div className="px-3 pb-2">
-                  <select
-                    value={dealStatusFilter}
-                    onChange={(e) =>
-                      setDealStatusFilter(e.target.value === 'all' ? 'all' : e.target.value)
-                    }
-                    className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs"
-                  >
-                    <option value="all">Все сделки ({dealStatusCounts.all})</option>
-                    <option value="none">Без статуса ({dealStatusCounts.none})</option>
-                    {dealStatuses.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({dealStatusCounts.byId[s.id] ?? 0})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div className="px-3 pb-2">
+                <select
+                  value={branchFilter}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setBranchFilter(v === 'all' ? 'all' : v === 'none' ? 'none' : v);
+                  }}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                >
+                  <option value="all">Все филиалы ({branchCounts.all})</option>
+                  <option value="none">Без филиала ({branchCounts.none})</option>
+                  {branchesForFilter.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({branchCounts.byId[b.id] ?? 0})
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="px-3 pb-2">
                 <select
                   value={managerFilter}
@@ -4422,6 +4506,11 @@ const WhatsAppChat: React.FC = () => {
                   cities={citiesForFilter}
                   cityCounts={cityCounts}
                   onAddCity={handleAddCity}
+                  branches={branchesForFilter}
+                  branchCounts={branchCounts}
+                  onAddBranch={handleAddBranch}
+                  onRenameBranch={handleRenameBranch}
+                  onArchiveBranch={handleArchiveBranch}
                   fillWidth
                   getCurrentInputValue={() => inputText}
                   onInsertNextMessage={insertAiReplyIntoComposer}
@@ -4547,6 +4636,11 @@ const WhatsAppChat: React.FC = () => {
                   cities={citiesForFilter}
                   cityCounts={cityCounts}
                   onAddCity={handleAddCity}
+                  branches={branchesForFilter}
+                  branchCounts={branchCounts}
+                  onAddBranch={handleAddBranch}
+                  onRenameBranch={handleRenameBranch}
+                  onArchiveBranch={handleArchiveBranch}
                   embeddedInSheet
                   getCurrentInputValue={() => inputText}
                   onInsertNextMessage={insertAiReplyIntoComposer}

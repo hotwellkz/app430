@@ -11,6 +11,9 @@ export interface WhatsAppClient {
   id: string;
   name: string;
   phone: string;
+  /** Филиал клиента (справочник companyBranches) */
+  branchId?: string | null;
+  branchName?: string | null;
   /** Аватар контакта (если есть, например из Wazzup/WhatsApp) */
   avatarUrl?: string | null;
   /** Владелец контакта (тенант) */
