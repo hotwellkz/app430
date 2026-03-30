@@ -385,6 +385,10 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
   const navigate = useNavigate();
   const { configured: aiConfigured, loading: aiLoadingConfigured } = useAIConfigured();
   const [client, setClient] = useState<WhatsAppClientCard | null>(null);
+  const clientRef = useRef<WhatsAppClientCard | null>(null);
+  useEffect(() => {
+    clientRef.current = client;
+  }, [client]);
   const [deal, setDeal] = useState<DealCard | null>(null);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -639,6 +643,47 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
     setExtractedClientVisible(true);
     loadClientAndDeal();
   }, [phone, loadClientAndDeal]);
+
+  const branchRowsForCityResolve = useMemo(
+    () => branches.map((b) => ({ id: b.id, name: b.name })),
+    [branches]
+  );
+
+  const derivedCityBranch = useMemo(
+    () => buildConsistentCityBranch(client?.city ?? null, branchRowsForCityResolve),
+    [client?.city, branchRowsForCityResolve]
+  );
+
+  /** Филиал в UI строго следует городу + справочнику; branchId из state — запасной вариант, пока список филиалов ещё не подгрузился. */
+  const effectiveBranchIdForUi = useMemo(() => {
+    if (!(client?.city ?? '').trim()) return null;
+    if (derivedCityBranch.branchId) return derivedCityBranch.branchId;
+    return (client?.branchId ?? '').trim() || null;
+  }, [client?.city, client?.branchId, derivedCityBranch.branchId]);
+
+  /** Когда справочник филиалов догружается после сохранения города — дописываем branchId в state и в Firestore. */
+  useEffect(() => {
+    const c = clientRef.current;
+    if (!c?.id || !branchRowsForCityResolve.length) return;
+    if (!(c.city ?? '').trim()) return;
+    const consistent = buildConsistentCityBranch(c.city, branchRowsForCityResolve);
+    if (!consistent.branchId) return;
+    if ((c.branchId ?? '').trim() === consistent.branchId) return;
+    setClient((prev) => {
+      if (!prev || prev.id !== c.id) return prev;
+      return {
+        ...prev,
+        city: consistent.city ?? prev.city,
+        branchId: consistent.branchId!,
+        branchName: consistent.branchName ?? prev.branchName
+      } as WhatsAppClientCard;
+    });
+    updateDoc(doc(db, COLLECTION_CLIENTS, c.id), {
+      city: consistent.city ?? undefined,
+      branchId: consistent.branchId,
+      branchName: consistent.branchName ?? undefined
+    }).catch(() => {});
+  }, [branchRowsForCityResolve, client?.city, client?.branchId, client?.id]);
 
   // Загрузка сохранённого AI-разбора при открытии чата
   useEffect(() => {
@@ -976,21 +1021,27 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
   const saveCity = useCallback(
     async (value: string | null) => {
       if (!phone || !companyId) return;
+      const branchList = branches.map((b) => ({ id: b.id, name: b.name }));
+      const payload = buildConsistentCityBranch(value, branchList);
+      const prev = clientRef.current;
+
+      if (prev) {
+        setClient({
+          ...prev,
+          city: payload.city ?? undefined,
+          branchId: payload.branchId ?? undefined,
+          branchName: payload.branchName ?? undefined
+        } as WhatsAppClientCard);
+      }
+
       setCitySaving(true);
       setCitySaveFeedback('idle');
       try {
         const normalized = normalizePhone(phone);
-        const payload = buildConsistentCityBranch(value, branches.map((b) => ({ id: b.id, name: b.name })));
-        if (client) {
-          await updateDoc(doc(db, COLLECTION_CLIENTS, client.id), {
+        if (prev) {
+          await updateDoc(doc(db, COLLECTION_CLIENTS, prev.id), {
             ...payload
           });
-          setClient({
-            ...client,
-            city: payload.city ?? undefined,
-            branchId: payload.branchId ?? undefined,
-            branchName: payload.branchName ?? undefined
-          } as WhatsAppClientCard);
         } else {
           const ref = await addDoc(collection(db, COLLECTION_CLIENTS), {
             phone: normalized,
@@ -1017,6 +1068,7 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
         const t = window.setTimeout(() => setCitySaveFeedback('idle'), 2000);
         return () => window.clearTimeout(t);
       } catch {
+        loadClientAndDeal();
         setCitySaveFeedback('error');
         const t = window.setTimeout(() => setCitySaveFeedback('idle'), 3000);
         return () => window.clearTimeout(t);
@@ -1024,7 +1076,7 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
         setCitySaving(false);
       }
     },
-    [phone, companyId, client, branches]
+    [phone, companyId, branches, loadClientAndDeal]
   );
 
   const orderedCities = useMemo(
@@ -2249,7 +2301,7 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
                     <input
                       type="radio"
                       name="branch"
-                      checked={!(client?.branchId ?? '').trim()}
+                      checked={!(effectiveBranchIdForUi ?? '').trim()}
                       onChange={() => {}}
                       disabled
                       className="text-green-600"
@@ -2276,7 +2328,7 @@ const ClientInfoPanel: React.FC<ClientInfoPanelProps> = ({
                         <input
                           type="radio"
                           name="branch"
-                          checked={(client?.branchId ?? '').trim() === branch.id}
+                          checked={(effectiveBranchIdForUi ?? '').trim() === branch.id}
                           onChange={() => {}}
                           disabled
                           className="text-green-600"

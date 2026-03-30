@@ -84,6 +84,31 @@ export function resolveBranchNameByCity(rawCity: string | null | undefined): str
   return CITY_TO_BRANCH.get(key) ?? null;
 }
 
+/** Убирает префикс «Филиал …» для сопоставления с нормативным именем («Алматы», «Астана»). */
+export function stripFilialPrefixFromBranchLabel(name: string): string {
+  return (name ?? '')
+    .trim()
+    .replace(/^\s*филиал\s+/iu, '')
+    .trim();
+}
+
+/**
+ * Находит запись филиала по нормативному имени (как в CITY_TO_BRANCH: «Алматы», «Астана»).
+ * Совпадение: точное (без учёта регистра) или после снятия префикса «Филиал ».
+ */
+export function findBranchByRegulatedName(
+  branches: Array<{ id: string; name: string }>,
+  regulatedBranchName: string
+): { id: string; name: string } | undefined {
+  const target = (regulatedBranchName ?? '').trim().toLowerCase();
+  if (!target) return undefined;
+  return branches.find((b) => {
+    const n = b.name.trim();
+    if (n.toLowerCase() === target) return true;
+    return stripFilialPrefixFromBranchLabel(n).toLowerCase() === target;
+  });
+}
+
 export function buildConsistentCityBranch(
   rawCity: string | null | undefined,
   branches: Array<{ id: string; name: string }>
@@ -96,7 +121,7 @@ export function buildConsistentCityBranch(
   if (!branchName) {
     return { city, branchId: null, branchName: null };
   }
-  const branch = branches.find((b) => b.name.trim().toLowerCase() === branchName.toLowerCase());
+  const branch = findBranchByRegulatedName(branches, branchName);
   return {
     city,
     branchId: branch?.id ?? null,
