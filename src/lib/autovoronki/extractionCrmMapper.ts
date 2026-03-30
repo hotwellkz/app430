@@ -1,5 +1,6 @@
 import type { CrmAiBotExtractionResult } from '../../types/crmAiBotExtraction';
 import type { CrmAiBotConfig } from '../../types/crmAiBotConfig';
+import { normalizeDetectedCity } from '../firebase/companyCities';
 import type {
   CrmApplyFieldAction,
   CrmApplyInfoRow,
@@ -68,7 +69,8 @@ function buildAppendBlock(e: CrmAiBotExtractionResult): string | null {
  * Чистое преобразование extraction → предлагаемые значения для CRM (без чтения карточки).
  */
 export function mapExtractionToCrmDraft(extraction: CrmAiBotExtractionResult): CrmExtractionMappedDraft {
-  const city = extraction.city?.trim() || null;
+  const cityRaw = extraction.city?.trim() || null;
+  const city = cityRaw ? normalizeDetectedCity(cityRaw) || null : null;
   const floors = extraction.floors?.trim() || null;
   const leadTemperature = extraction.leadTemperature?.trim() || null;
   const clientDisplayName = extraction.clientName?.trim() || null;

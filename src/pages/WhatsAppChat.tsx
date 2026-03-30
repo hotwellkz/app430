@@ -1,4 +1,11 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  type MutableRefObject
+} from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -284,6 +291,26 @@ function patchAiRuntimeFromExtractionApply(apply: RuntimeExtractionApplyApi): Wh
     lastExtractionAppliedClientId: apply.appliedClientId,
     lastExtractionAppliedAt: apply.appliedAt
   };
+}
+
+/**
+ * После успешного apply extraction на сервере обновляем локальную карточку клиента в правой панели
+ * (тот же путь, что legacy AI через aiBotApplyFacts — saveCity + филиал).
+ * Без этого city/branch остаются старыми до F5, особенно в режиме «Черновик ответа».
+ */
+function notifyCrmExtractionCityToClientPanel(
+  extracted: { city?: string | null } | null | undefined,
+  applyApi: RuntimeExtractionApplyApi | undefined | null,
+  applyRef: MutableRefObject<
+    ((facts: { city?: string | null; area_m2?: number | null; floors?: number | null }) => void) | null
+  >
+): void {
+  if (!applyApi || applyApi.extractionApplyStatus !== 'applied') return;
+  const keys = applyApi.extractionAppliedFields ?? [];
+  if (!keys.includes('city')) return;
+  const raw = typeof extracted?.city === 'string' ? extracted.city.trim() : '';
+  if (!raw) return;
+  applyRef.current?.({ city: raw });
 }
 
 function mergeListItemAiRuntime(
@@ -2372,6 +2399,8 @@ const WhatsAppChat: React.FC = () => {
                 lastExtractionAppliedClientId: null,
                 lastExtractionAppliedAt: null
               };
+
+        notifyCrmExtractionCityToClientPanel(extracted, applyApi, aiBotApplyFactsRef);
 
         const runLogApply =
           applyApi != null
