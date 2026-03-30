@@ -38,6 +38,7 @@ import { UpdateCommentByReceiptModal } from '../components/transactions/UpdateCo
 import type { TransactionCardTransaction } from '../components/transactions/TransactionCard';
 import { FeedFiltersPanel } from '../components/feed/FeedFiltersPanel';
 import { FeedFilterChips } from '../components/feed/FeedFilterChips';
+import { TransferModal } from '../components/transactions/transfer/TransferModal';
 
 const EXPORT_PAGE_SIZE = 500;
 const LARGE_EXPORT_WARNING_THRESHOLD = 20000;
@@ -98,6 +99,7 @@ async function fetchAllTransactionsForExport(
 
 interface Transaction {
   id: string;
+  companyId?: string;
   fromUser: string;
   toUser: string;
   amount: number;
@@ -136,6 +138,16 @@ interface Transaction {
   isCashless?: boolean;
   attachments?: Array<{ name: string; url: string; type: string }>;
   reversedAt?: unknown;
+  fuelData?: {
+    vehicleId: string;
+    vehicleName: string;
+    odometerKm: number;
+    liters?: number | null;
+    pricePerLiter?: number | null;
+    fuelType?: string | null;
+    gasStation?: string | null;
+    isFullTank?: boolean;
+  };
 }
 
 interface WaybillData {
@@ -151,6 +163,19 @@ interface WaybillData {
     price: number;
     unit: string;
   }>;
+}
+
+function isFuelTransactionLike(
+  tx: Pick<Transaction, 'toUser' | 'fuelData' | 'expenseCategoryId'>,
+  expenseCategoryById: Map<string, { name: string; color?: string }>
+): boolean {
+  if (tx.fuelData) return true;
+  if ((tx.toUser || '').trim().toLowerCase() === 'заправка') return true;
+  if (tx.expenseCategoryId) {
+    const expName = expenseCategoryById.get(tx.expenseCategoryId)?.name?.trim().toLowerCase();
+    if (expName === 'заправка') return true;
+  }
+  return false;
 }
 
 export const Feed: React.FC = () => {
@@ -397,6 +422,10 @@ export const Feed: React.FC = () => {
   const [editPasswordError, setEditPasswordError] = useState<string>('');
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const isFuelEditingTransaction = useMemo(
+    () => !!editingTransaction && isFuelTransactionLike(editingTransaction, expenseCategoryById),
+    [editingTransaction, expenseCategoryById]
+  );
 
   useEffect(() => {
     // Ждем завершения проверки авторизации
@@ -685,6 +714,20 @@ export const Feed: React.FC = () => {
   }, [transactionToDelete, user?.uid, isDeleting, refresh]);
 
   const grouped = useMemo(() => groupTransactionsByDate(), [filteredTransactions]);
+  const fuelEditSourceCategory = useMemo(
+    () => (editingTransaction ? employeeCategories.find((c) => c.title === editingTransaction.fromUser) : undefined),
+    [editingTransaction, employeeCategories]
+  );
+  const fuelEditTargetCategory = useMemo(
+    () => (editingTransaction ? visibleCategories.find((c) => c.title === editingTransaction.toUser) : undefined),
+    [editingTransaction, visibleCategories]
+  );
+  useEffect(() => {
+    if (!editingTransaction || !isFuelEditingTransaction) return;
+    if (fuelEditSourceCategory && fuelEditTargetCategory) return;
+    showErrorNotification('Не удалось определить счета для редактирования заправки');
+    setEditingTransaction(null);
+  }, [editingTransaction, isFuelEditingTransaction, fuelEditSourceCategory, fuelEditTargetCategory]);
 
   const flatRows = useMemo((): VirtualizedRow[] => {
     const rows = buildFlattenedRowsFromGrouped(grouped, {
@@ -1474,7 +1517,93 @@ export const Feed: React.FC = () => {
           document.body
         )}
 
-        {editingTransaction && createPortal(
+        {editingTransaction && isFuelEditingTransaction && fuelEditSourceCategory && fuelEditTargetCategory && createPortal(
+          <TransferModal
+            sourceCategory={fuelEditSourceCategory}
+            targetCategory={fuelEditTargetCategory}
+            isOpen
+            mode="edit"
+            title="Редактирование заправки"
+            submitLabel="Сохранить"
+            initialValues={{
+              amount: Math.abs(editingTransaction.amount),
+              description: editingTransaction.description,
+              isSalary: !!editingTransaction.isSalary,
+              isCashless: !!editingTransaction.isCashless,
+              needsReview: !!editingTransaction.needsReview,
+              expenseCategoryId: editingTransaction.expenseCategoryId,
+              fuelData: editingTransaction.fuelData
+                ? {
+                    vehicleId: editingTransaction.fuelData.vehicleId,
+                    odometerKm: editingTransaction.fuelData.odometerKm,
+                    liters: editingTransaction.fuelData.liters ?? null,
+                    pricePerLiter: editingTransaction.fuelData.pricePerLiter ?? null,
+                    fuelType: editingTransaction.fuelData.fuelType ?? null,
+                    gasStation: editingTransaction.fuelData.gasStation ?? null,
+                    isFullTank: !!editingTransaction.fuelData.isFullTank
+                  }
+                : undefined
+            }}
+            onClose={() => {
+              if (isSavingEdit) return;
+              setEditingTransaction(null);
+            }}
+            onSubmitData={async (payload) => {
+              if (isSavingEdit) return;
+              try {
+                setIsSavingEdit(true);
+                await editFeedTransaction({
+                  originalTransactionId: editingTransaction.id,
+                  newFromCategory: fuelEditSourceCategory,
+                  newToCategory: fuelEditTargetCategory,
+                  newAmount: payload.amount,
+                  newDescription: payload.description,
+                  newExpenseCategoryId: payload.expenseCategoryId,
+                  newIsSalary: payload.isSalary,
+                  newIsCashless: payload.isCashless,
+                  newNeedsReview: payload.needsReview,
+                  newAttachments: payload.attachments,
+                  newFuelData: payload.fuelData,
+                  audit: {
+                    transactionId: editingTransaction.id,
+                    before: {
+                      from: editingTransaction.fromUser,
+                      to: editingTransaction.toUser,
+                      amount: editingTransaction.amount,
+                      comment: editingTransaction.description,
+                      category: editingTransaction.fromUser || null,
+                      isSalary: !!editingTransaction.isSalary,
+                      isCashless: !!editingTransaction.isCashless,
+                      needsReview: !!editingTransaction.needsReview
+                    },
+                    after: {
+                      from: fuelEditSourceCategory.title,
+                      to: fuelEditTargetCategory.title,
+                      amount: payload.amount,
+                      comment: payload.description,
+                      category: fuelEditSourceCategory.title,
+                      isSalary: payload.isSalary,
+                      isCashless: payload.isCashless,
+                      needsReview: payload.needsReview
+                    }
+                  }
+                });
+                setEditingTransaction(null);
+              } catch (error) {
+                console.error('Error editing fuel transaction:', error);
+                showErrorNotification(
+                  error instanceof Error ? error.message : 'Ошибка при редактировании заправки'
+                );
+                throw error;
+              } finally {
+                setIsSavingEdit(false);
+              }
+            }}
+          />,
+          document.body
+        )}
+
+        {editingTransaction && !isFuelEditingTransaction && createPortal(
           <EditTransactionModal
             transaction={editingTransaction}
             peopleAccounts={employeeCategories}

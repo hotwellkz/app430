@@ -627,6 +627,8 @@ export const editFeedTransaction = async (params: {
   newIsSalary?: boolean;
   newIsCashless?: boolean;
   newNeedsReview?: boolean;
+  newAttachments?: TransactionPhoto[];
+  newFuelData?: FuelData;
   audit: TransactionEditLogPayload;
 }): Promise<void> => {
   const {
@@ -639,6 +641,8 @@ export const editFeedTransaction = async (params: {
     newIsSalary,
     newIsCashless,
     newNeedsReview,
+    newAttachments,
+    newFuelData,
     audit
   } = params;
 
@@ -647,6 +651,20 @@ export const editFeedTransaction = async (params: {
   }
   if (!newDescription.trim()) {
     throw new Error('Необходимо указать комментарий к переводу');
+  }
+
+  let enrichedFuelData: FuelData | undefined = newFuelData;
+  if (newFuelData) {
+    try {
+      const originalForFuelSnap = await getDoc(doc(db, 'transactions', originalTransactionId));
+      const companyIdForFuel = (originalForFuelSnap.data() as { companyId?: string } | undefined)?.companyId;
+      if (companyIdForFuel) {
+        const derived = await computeDerivedFuelStats(companyIdForFuel, newFuelData);
+        enrichedFuelData = { ...newFuelData, derivedFuelStats: derived };
+      }
+    } catch (e) {
+      console.warn('[fuel] editFeedTransaction derive failed', e);
+    }
   }
 
   const nowForAggregates = Timestamp.now();
@@ -798,6 +816,16 @@ export const editFeedTransaction = async (params: {
     if (newExpenseCategoryId) {
       withdrawalPayload.expenseCategoryId = newExpenseCategoryId;
     }
+    if (newAttachments && newAttachments.length > 0) {
+      withdrawalPayload.attachments = newAttachments;
+    } else if (original.attachments && original.attachments.length > 0) {
+      withdrawalPayload.attachments = original.attachments;
+    }
+    if (enrichedFuelData) {
+      withdrawalPayload.fuelData = enrichedFuelData;
+    } else if (original.fuelData) {
+      withdrawalPayload.fuelData = original.fuelData;
+    }
     tx.set(doc(db, 'transactions', correctionWithdrawalId), withdrawalPayload);
     // Приход: categoryId = счёт «куда» — попадёт в историю операций счёта newToCategory (/transactions/history/:id)
     const incomeDocData = {
@@ -809,6 +837,16 @@ export const editFeedTransaction = async (params: {
       relatedTransactionId: correctionWithdrawalId,
       attachments: []
     };
+    if (newAttachments && newAttachments.length > 0) {
+      (incomeDocData as Record<string, unknown>).attachments = newAttachments;
+    } else if (original.attachments && original.attachments.length > 0) {
+      (incomeDocData as Record<string, unknown>).attachments = original.attachments;
+    }
+    if (enrichedFuelData) {
+      (incomeDocData as Record<string, unknown>).fuelData = enrichedFuelData;
+    } else if (original.fuelData) {
+      (incomeDocData as Record<string, unknown>).fuelData = original.fuelData;
+    }
     if (process.env.NODE_ENV === 'development') {
       (window as any).__lastCorrectionIncomeCategoryId = toCategoryId;
       (window as any).__lastCorrectionIncomeCategoryTitle = newToCategory.title;

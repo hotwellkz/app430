@@ -31,6 +31,53 @@ interface TransferModalProps {
   targetCategory: CategoryCardType;
   isOpen: boolean;
   onClose: () => void;
+  mode?: 'create' | 'edit';
+  title?: string;
+  submitLabel?: string;
+  initialValues?: Partial<{
+    amount: number;
+    description: string;
+    isSalary: boolean;
+    isCashless: boolean;
+    needsReview: boolean;
+    expenseCategoryId: string;
+    fuelData: {
+      vehicleId?: string;
+      odometerKm?: number;
+      liters?: number | null;
+      pricePerLiter?: number | null;
+      fuelType?: string | null;
+      gasStation?: string | null;
+      isFullTank?: boolean;
+    };
+  }>;
+  onSubmitData?: (payload: {
+    sourceCategory: CategoryCardType;
+    targetCategory: CategoryCardType;
+    amount: number;
+    description: string;
+    attachments: Array<{ name: string; url: string; type: string; size: number; path: string }>;
+    isSalary: boolean;
+    isCashless: boolean;
+    needsReview: boolean;
+    expenseCategoryId?: string;
+    fuelData?: {
+      vehicleId: string;
+      vehicleName: string;
+      odometerKm: number;
+      liters?: number | null;
+      pricePerLiter?: number | null;
+      fuelType?: string | null;
+      gasStation?: string | null;
+      isFullTank?: boolean;
+      receiptRecognized?: boolean;
+      receiptFileUrl?: string | null;
+      receiptRef?: string | null;
+      recognizedAt?: unknown;
+      recognizedSource?: 'ai' | 'manual';
+      derivedFuelStats?: null;
+    };
+  }) => Promise<void>;
 }
 
 type FileUploadStatus = 'pending' | 'uploading' | 'uploaded' | 'error';
@@ -79,7 +126,12 @@ export const TransferModal: React.FC<TransferModalProps> = ({
   sourceCategory,
   targetCategory,
   isOpen,
-  onClose
+  onClose,
+  mode = 'create',
+  title,
+  submitLabel,
+  initialValues,
+  onSubmitData
 }) => {
   const { user } = useAuth();
   const companyId = useCompanyId();
@@ -173,6 +225,32 @@ export const TransferModal: React.FC<TransferModalProps> = ({
   const showExpenseCategory = isFromTopRow && isToGeneralExpense;
 
   const balanceValue = parseFloat(String(sourceCategory?.amount ?? 0).replace(/[^\d.-]/g, '')) || 0;
+  const isEditMode = mode === 'edit';
+
+  useEffect(() => {
+    if (!isOpen || !initialValues) return;
+    if (initialValues.amount != null && Number.isFinite(initialValues.amount)) {
+      setAmount(String(Math.abs(initialValues.amount)));
+    }
+    if (typeof initialValues.description === 'string') setDescription(initialValues.description);
+    if (typeof initialValues.isSalary === 'boolean') setIsSalary(initialValues.isSalary);
+    if (typeof initialValues.isCashless === 'boolean') setIsCashless(initialValues.isCashless);
+    if (typeof initialValues.needsReview === 'boolean') setNeedsReview(initialValues.needsReview);
+    if (typeof initialValues.expenseCategoryId === 'string') setExpenseCategoryId(initialValues.expenseCategoryId);
+    if (initialValues.fuelData) {
+      const fd = initialValues.fuelData;
+      if (fd.vehicleId) setVehicleId(fd.vehicleId);
+      if (fd.odometerKm != null) setOdometerKm(String(fd.odometerKm));
+      if (fd.liters != null) setLiters(String(fd.liters));
+      if (fd.pricePerLiter != null) setPricePerLiter(String(fd.pricePerLiter));
+      if (fd.fuelType != null) setFuelType(fd.fuelType || '');
+      if (fd.gasStation != null) setGasStation(fd.gasStation || '');
+      if (typeof fd.isFullTank === 'boolean') setIsFullTank(fd.isFullTank);
+    }
+    hasSetFuelCategoryForOpen.current = true;
+    hasSetDefaultCategoryForOpen.current = true;
+    hasSetDefaultCommentForOpen.current = true;
+  }, [isOpen, initialValues]);
 
   // При закрытии модалки сбрасываем флаг «пользователь менял Безнал вручную»
   useEffect(() => {
@@ -673,23 +751,38 @@ export const TransferModal: React.FC<TransferModalProps> = ({
         : isFuelTransfer && user?.uid
           ? (expenseCategoryId || await ensureFuelExpenseCategory(user.uid))
           : undefined;
-      await transferFunds({
-        sourceCategory,
-        targetCategory,
-        amount: parseFloat(cleanedAmount),
-        description,
-        attachments: uploadedFiles,
-        waybillNumber: '',
-        waybillData: {},
-        isSalary,
-        isCashless,
-        expenseCategoryId: effectiveExpenseCategoryId,
-        needsReview,
-        fuelData,
-        companyId
-      });
+      if (onSubmitData) {
+        await onSubmitData({
+          sourceCategory,
+          targetCategory,
+          amount: parseFloat(cleanedAmount),
+          description,
+          attachments: uploadedFiles,
+          isSalary,
+          isCashless,
+          needsReview,
+          expenseCategoryId: effectiveExpenseCategoryId,
+          fuelData
+        });
+      } else {
+        await transferFunds({
+          sourceCategory,
+          targetCategory,
+          amount: parseFloat(cleanedAmount),
+          description,
+          attachments: uploadedFiles,
+          waybillNumber: '',
+          waybillData: {},
+          isSalary,
+          isCashless,
+          expenseCategoryId: effectiveExpenseCategoryId,
+          needsReview,
+          fuelData,
+          companyId
+        });
+      }
 
-      showSuccessNotification('Перевод успешно выполнен');
+      showSuccessNotification(isEditMode ? 'Изменения сохранены' : 'Перевод успешно выполнен');
       submittedSuccessRef.current = true;
       onClose();
     } catch (error) {
@@ -708,7 +801,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
         <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0 bg-white z-10">
           <div className="w-8" aria-hidden />
           <h2 className="text-lg font-semibold text-center flex-1 min-w-0 truncate">
-            Перевод средств
+            {title ?? (isEditMode ? 'Редактирование заправки' : 'Перевод средств')}
           </h2>
           <button
             type="button"
@@ -1307,7 +1400,11 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                       : 'bg-blue-500 hover:bg-blue-600'
                     }`}
                 >
-                  {loading ? 'Выполняется...' : files.some(f => f.status === 'uploading' || f.status === 'pending') ? 'Загрузка файлов...' : 'Выполнить перевод'}
+                  {loading
+                    ? 'Выполняется...'
+                    : files.some(f => f.status === 'uploading' || f.status === 'pending')
+                      ? 'Загрузка файлов...'
+                      : (submitLabel ?? (isEditMode ? 'Сохранить' : 'Выполнить перевод'))}
                 </button>
               </div>
             </div>
