@@ -10,6 +10,9 @@ import { useCompanyId } from '../contexts/CompanyContext';
 
 interface FeedTransaction {
   id: string;
+  createdByUid?: string;
+  createdByName?: string;
+  createdByEmail?: string;
   fromUser: string;
   toUser: string;
   amount: number;
@@ -89,6 +92,9 @@ function processSnapshot(
     if (data.status === 'cancelled' || data.editType === 'reversal') return;
     const transaction: FeedTransaction = {
       id: d.id,
+      createdByUid: typeof data.createdByUid === 'string' ? data.createdByUid : undefined,
+      createdByName: typeof data.createdByName === 'string' ? data.createdByName : undefined,
+      createdByEmail: typeof data.createdByEmail === 'string' ? data.createdByEmail : undefined,
       fromUser: data.fromUser as string,
       toUser: data.toUser as string,
       amount: data.amount as number,

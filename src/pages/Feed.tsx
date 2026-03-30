@@ -99,6 +99,9 @@ async function fetchAllTransactionsForExport(
 
 interface Transaction {
   id: string;
+  createdByUid?: string;
+  createdByName?: string;
+  createdByEmail?: string;
   companyId?: string;
   fromUser: string;
   toUser: string;
