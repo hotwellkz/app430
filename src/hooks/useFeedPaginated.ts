@@ -77,6 +77,8 @@ interface UseFeedPaginatedReturn {
   totalCount: number;
   /** Локальное обновление одной транзакции (для мгновенного UI после approve/reject). */
   patchTransaction: (transactionId: string, patch: Partial<FeedTransaction>) => void;
+  /** Убрать строки по id (после правки в ленте старый doc id отменяется и заменяется новыми). */
+  removeTransactionsFromFeed: (transactionIds: string[]) => void;
 }
 
 function processSnapshot(
@@ -135,6 +137,30 @@ function processSnapshot(
   return { list, lastDoc };
 }
 
+/** Документы первой страницы снимка, которые processSnapshot отбрасывает (не попадают в ленту). */
+function collectExcludedFeedDocIds(
+  snapshot: { docs: Array<{ id: string; data: () => Record<string, unknown> }> },
+  getDefaultStartDate: () => { seconds: number }
+): Set<string> {
+  const startDateSeconds = getDefaultStartDate().seconds;
+  const excluded = new Set<string>();
+  snapshot.docs.forEach((d) => {
+    const data = d.data();
+    const transactionDate =
+      data.date && typeof (data.date as { seconds?: number }).seconds === 'number'
+        ? (data.date as { seconds: number }).seconds
+        : 0;
+    if (data.type !== 'expense' || transactionDate < startDateSeconds) {
+      excluded.add(d.id);
+      return;
+    }
+    if (data.status === 'cancelled' || data.editType === 'reversal') {
+      excluded.add(d.id);
+    }
+  });
+  return excluded;
+}
+
 export const useFeedPaginated = ({
   defaultDays = 60,
   enabled = true
@@ -186,6 +212,7 @@ export const useFeedPaginated = ({
       (snapshot) => {
         try {
           const { list: sortedTransactions, lastDoc: newLastDoc } = processSnapshot(snapshot, getDefaultStartDate);
+          const excludedFromFirstPage = collectExcludedFeedDocIds(snapshot, getDefaultStartDate);
           setLastDoc(newLastDoc);
           setHasMore(snapshot.docs.length >= PAGE_SIZE);
           setLoading(false);
@@ -201,7 +228,9 @@ export const useFeedPaginated = ({
               return sortedTransactions;
             }
             const firstIds = new Set(sortedTransactions.map((t) => t.id));
-            const rest = prev.filter((t) => !firstIds.has(t.id));
+            const rest = prev.filter(
+              (t) => !firstIds.has(t.id) && !excludedFromFirstPage.has(t.id)
+            );
             const sortDate = (t: FeedTransaction) => {
               const d = t.feedSortDate ?? t.date;
               return d && typeof (d as any).seconds === 'number' ? (d as any).seconds : 0;
@@ -286,6 +315,16 @@ export const useFeedPaginated = ({
     );
   }, []);
 
+  const removeTransactionsFromFeed = useCallback((transactionIds: string[]) => {
+    if (transactionIds.length === 0) return;
+    const idSet = new Set(transactionIds);
+    setTransactions((prev) => {
+      const next = prev.filter((t) => !idSet.has(t.id));
+      setTotalCount(next.length);
+      return next;
+    });
+  }, []);
+
   // Загружаем данные при монтировании
   useEffect(() => {
     return loadInitialData();
@@ -308,7 +347,8 @@ export const useFeedPaginated = ({
     loadMore,
     refresh,
     totalCount,
-    patchTransaction
+    patchTransaction,
+    removeTransactionsFromFeed
   };
 };
 

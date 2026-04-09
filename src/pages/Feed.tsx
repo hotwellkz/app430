@@ -240,7 +240,8 @@ export const Feed: React.FC = () => {
     loadMore,
     totalCount,
     refresh,
-    patchTransaction
+    patchTransaction,
+    removeTransactionsFromFeed
   } = useFeedPaginated({
     defaultDays: 60,
     enabled: !!user && !authLoading
@@ -1632,6 +1633,7 @@ export const Feed: React.FC = () => {
                     }
                   }
                 });
+                removeTransactionsFromFeed([editingTransaction.id]);
                 setEditingTransaction(null);
               } catch (error) {
                 console.error('Error editing fuel transaction:', error);
@@ -1722,9 +1724,9 @@ export const Feed: React.FC = () => {
                 });
 
                 showSuccessNotification('Транзакция успешно отредактирована');
+                removeTransactionsFromFeed([editingTransaction.id]);
                 setEditingTransaction(null);
-                // Не вызываем refresh() — onSnapshot получит обновление из Firestore,
-                // список обновится без перезагрузки, скролл сохранится
+                // onSnapshot подставит correction-транзакции; старый id отменён в БД и убран из state выше
               } catch (error) {
                 console.error('Error editing transaction:', error);
                 showErrorNotification(
