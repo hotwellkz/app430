@@ -10,7 +10,22 @@ import { ExpenseWaybill } from '../components/warehouse/ExpenseWaybill';
 import { Transaction } from '../components/transactions/types';
 import { TransactionHeader } from '../components/transactions/TransactionHeader';
 import { TransactionStats } from '../components/transactions/TransactionStats';
-import { ChevronDown, ChevronUp, Calendar, Filter, ArrowLeft, BarChart2, Download, Menu, Search, X, Lock, Unlock } from 'lucide-react';
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Calendar,
+  Filter,
+  ArrowLeft,
+  BarChart2,
+  Download,
+  Menu as MenuIcon,
+  Search,
+  X,
+  Lock,
+  Unlock,
+  MoreVertical
+} from 'lucide-react';
 import { useMobileSidebar } from '../contexts/MobileSidebarContext';
 import { HeaderSearchBar } from '../components/HeaderSearchBar';
 import clsx from 'clsx';
@@ -652,7 +667,7 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-dvh bg-gray-100">
-      {/* Header: как на Feed — [бургер][←] | Ист.оп / Юха-Ф138 | [export][filter][analytics][search]; sticky */}
+      {/* Header: mobile — бургер, назад, заголовок, фильтр, поиск, «Ещё»; desktop — полная панель */}
       <div
         className="flex-shrink-0 sticky top-0 z-[100] bg-white border-b"
         style={{ background: '#ffffff', borderBottom: '1px solid #e5e7eb' }}
@@ -664,89 +679,81 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
           onClose={() => { setSearchQuery(''); setShowSearch(false); }}
           isOpen={showSearch}
         />
-        <div
-          className="flex items-center min-h-[56px] h-auto py-2 max-w-[1200px] mx-auto px-4 lg:px-[60px] lg:pr-[40px]"
-          style={{ paddingLeft: '12px', paddingRight: '12px' }}
-        >
-          <div className="flex items-center gap-2 flex-shrink-0 w-[96px] md:w-auto" style={{ gap: '8px' }}>
+        <div className="flex items-center min-h-[56px] h-auto py-2 max-w-[1200px] mx-auto gap-1.5 px-2 sm:px-3 md:px-4 lg:px-[60px] lg:pr-[40px]">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             <button
               type="button"
               onClick={toggleMobileSidebar}
-              className="md:hidden flex items-center justify-center w-10 h-10 rounded-[10px] hover:bg-gray-100 transition-colors flex-shrink-0"
-              style={{ color: '#374151' }}
-              aria-label="Меню"
+              className="md:hidden flex items-center justify-center h-10 w-10 min-h-10 min-w-10 rounded-[10px] hover:bg-gray-100 transition-colors text-gray-700"
+              aria-label="Открыть меню"
             >
-              <Menu className="w-6 h-6" style={{ width: 24, height: 24 }} />
+              <MenuIcon className="w-5 h-5 shrink-0" aria-hidden />
             </button>
             <button
+              type="button"
               onClick={() => { if (showSearch) { setShowSearch(false); setSearchQuery(''); } else { navigate(-1); } }}
-              className="flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:p-2 rounded-[10px] md:rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
-              style={{ color: '#374151' }}
+              className="flex items-center justify-center h-10 w-10 min-h-10 min-w-10 rounded-[10px] hover:bg-gray-100 transition-colors text-gray-700"
               aria-label="Назад"
             >
-              <ArrowLeft className="w-6 h-6" style={{ width: 24, height: 24 }} />
+              <ArrowLeft className="w-5 h-5 shrink-0" aria-hidden />
             </button>
           </div>
 
-          <div className="flex-1 flex flex-col items-center justify-center min-w-0 px-2 text-center md:text-left md:items-start">
-            <h1 className="text-lg font-semibold text-gray-900 truncate w-full" style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '18px', fontWeight: 600, color: '#111827' }}>
-              Ист.оп
+          <div className="flex-1 min-w-0 px-1 md:px-2 text-center md:text-left">
+            <h1
+              className="text-base md:text-lg font-semibold text-gray-900 truncate w-full leading-snug"
+              style={{ fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 600, color: '#111827' }}
+            >
+              История операций
             </h1>
             {categoryTitle && (
-              <span className="text-sm text-gray-500 truncate w-full" style={{ fontSize: '13px', color: '#6b7280' }}>
+              <span className="hidden md:block text-sm text-gray-500 truncate w-full mt-0.5" style={{ color: '#6b7280' }}>
                 {categoryTitle}
               </span>
             )}
           </div>
 
-          <div className="flex items-center flex-shrink-0" style={{ gap: '6px' }}>
+          {/* Десктоп (md+): все действия в шапке */}
+          <div className="hidden md:flex items-center flex-shrink-0 gap-1.5">
             <button
+              type="button"
               onClick={() => setIsExportOpen(true)}
               disabled={filteredTransactions.length === 0}
               className={clsx(
-                'flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:px-3 md:py-2 rounded-[10px] md:rounded-lg transition-colors flex-shrink-0',
+                'flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition-colors flex-shrink-0',
                 filteredTransactions.length === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-emerald-500 text-white hover:bg-emerald-600'
               )}
               title={filteredTransactions.length === 0 ? 'Нет данных для экспорта' : 'Скачать отчёт в Excel'}
             >
-              <Download className="w-5 h-5 md:w-4 md:h-4" style={{ width: 24, height: 24 }} />
-              <span className="hidden sm:inline ml-1 text-sm">Скачать отчёт</span>
+              <Download className="w-4 h-4 shrink-0" aria-hidden />
+              <span className="text-sm">Скачать отчёт</span>
             </button>
             <button
               type="button"
               onClick={() => {
-                if (editMode) {
-                  disableEditMode();
-                } else {
-                  openEditModeOrPrompt();
-                }
+                if (editMode) disableEditMode();
+                else openEditModeOrPrompt();
               }}
               className={clsx(
-                'flex items-center justify-center rounded-full border w-10 h-10 md:w-auto md:h-auto md:px-3 md:py-2 md:gap-1 text-sm transition-colors flex-shrink-0',
-                editMode
-                  ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'
-                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                'flex items-center justify-center gap-1.5 px-3 py-2 rounded-full border text-sm transition-colors flex-shrink-0',
+                editMode ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' : 'bg-gray-50 border-gray-200 hover:bg-gray-100 text-gray-700'
               )}
-              style={!editMode ? { color: '#374151' } : undefined}
               title={editMode ? 'Выключить режим редактирования' : 'Включить режим редактирования'}
             >
-              {editMode ? (
-                <Unlock style={{ width: 24, height: 24 }} className="md:w-4 md:h-4 text-red-600" />
-              ) : (
-                <Lock style={{ width: 24, height: 24, color: '#374151' }} className="md:w-4 md:h-4 md:text-gray-600" />
-              )}
-              <span className="hidden md:inline">Режим редактирования</span>
+              {editMode ? <Unlock className="w-4 h-4 shrink-0" aria-hidden /> : <Lock className="w-4 h-4 shrink-0 text-gray-600" aria-hidden />}
+              <span>Режим редактирования</span>
             </button>
             <button
+              type="button"
               onClick={() => setShowAllFilters(!showAllFilters)}
               className={clsx(
-                'relative flex items-center justify-center w-10 h-10 rounded-[10px] md:rounded-lg transition-colors',
-                (showAllFilters || activeFiltersCount > 0) ? 'bg-emerald-50 text-emerald-600' : 'hover:bg-gray-100'
+                'relative flex items-center justify-center h-10 w-10 min-h-10 min-w-10 rounded-lg transition-colors',
+                (showAllFilters || activeFiltersCount > 0) ? 'bg-emerald-50 text-emerald-600' : 'hover:bg-gray-100 text-gray-700'
               )}
-              style={!(showAllFilters || activeFiltersCount > 0) ? { color: '#374151' } : undefined}
               title="Фильтры"
+              aria-label="Фильтры"
             >
-              <Filter className="w-5 h-5" style={{ width: 24, height: 24 }} />
+              <Filter className="w-5 h-5 shrink-0" aria-hidden />
               {activeFiltersCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-emerald-500 text-white text-[11px] font-semibold px-1">
                   {activeFiltersCount}
@@ -754,25 +761,126 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
               )}
             </button>
             <button
+              type="button"
               onClick={() => setShowStats(!showStats)}
               className={clsx(
-                'flex items-center justify-center w-10 h-10 rounded-[10px] md:rounded-lg transition-colors',
-                showStats ? 'bg-emerald-50 text-emerald-600' : 'hover:bg-gray-100'
+                'flex items-center justify-center h-10 w-10 min-h-10 min-w-10 rounded-lg transition-colors',
+                showStats ? 'bg-emerald-50 text-emerald-600' : 'hover:bg-gray-100 text-gray-700'
               )}
-              style={!showStats ? { color: '#374151' } : undefined}
               title="Аналитика"
+              aria-label={showStats ? 'Скрыть статистику' : 'Показать статистику'}
             >
-              <BarChart2 className="w-5 h-5" style={{ width: 24, height: 24 }} />
+              <BarChart2 className="w-5 h-5 shrink-0" aria-hidden />
             </button>
             <button
               type="button"
               onClick={() => setShowSearch(!showSearch)}
-              className="flex items-center justify-center w-10 h-10 rounded-[10px] hover:bg-gray-100 transition-colors"
-              style={{ color: '#374151' }}
+              className="flex items-center justify-center h-10 w-10 min-h-10 min-w-10 rounded-lg hover:bg-gray-100 text-gray-700 transition-colors"
               aria-label="Поиск"
             >
-              <Search className="w-5 h-5" style={{ width: 24, height: 24 }} />
+              <Search className="w-5 h-5 shrink-0" aria-hidden />
             </button>
+          </div>
+
+          {/* Мобильный (&lt; md): только фильтр, поиск и overflow */}
+          <div className="flex md:hidden items-center flex-shrink-0 gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowAllFilters(!showAllFilters)}
+              className={clsx(
+                'relative flex items-center justify-center h-10 w-10 min-h-10 min-w-10 rounded-[10px] transition-colors',
+                (showAllFilters || activeFiltersCount > 0) ? 'bg-emerald-50 text-emerald-600' : 'hover:bg-gray-100 text-gray-700'
+              )}
+              title="Фильтры"
+              aria-label="Фильтры"
+            >
+              <Filter className="w-5 h-5 shrink-0" aria-hidden />
+              {activeFiltersCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-emerald-500 text-white text-[11px] font-semibold px-1">
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSearch(!showSearch)}
+              className="flex items-center justify-center h-10 w-10 min-h-10 min-w-10 rounded-[10px] hover:bg-gray-100 text-gray-700 transition-colors"
+              aria-label="Поиск"
+            >
+              <Search className="w-5 h-5 shrink-0" aria-hidden />
+            </button>
+            <Menu as="div" className="relative flex shrink-0">
+              <MenuButton
+                type="button"
+                className="flex items-center justify-center h-10 w-10 min-h-10 min-w-10 rounded-[10px] hover:bg-gray-100 text-gray-700 transition-colors"
+                aria-label="Ещё: отчёт, редактирование, статистика"
+                title="Ещё"
+              >
+                <MoreVertical className="w-5 h-5 shrink-0" aria-hidden />
+              </MenuButton>
+              <MenuItems
+                anchor="bottom end"
+                modal={false}
+                className="z-[120] w-[min(100vw-2rem,17rem)] rounded-xl border border-gray-200 bg-white py-1 shadow-lg outline-none [--anchor-gap:6px]"
+              >
+                <MenuItem disabled={filteredTransactions.length === 0}>
+                  {({ focus, disabled }) => (
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => setIsExportOpen(true)}
+                      className={clsx(
+                        'flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm',
+                        disabled ? 'cursor-not-allowed text-gray-400' : focus ? 'bg-gray-50 text-gray-900' : 'text-gray-800',
+                        !disabled && 'text-emerald-700'
+                      )}
+                    >
+                      <Download className="w-4 h-4 shrink-0" aria-hidden />
+                      <span>Скачать отчёт</span>
+                    </button>
+                  )}
+                </MenuItem>
+                <MenuItem>
+                  {({ focus }) => (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (editMode) disableEditMode();
+                        else openEditModeOrPrompt();
+                      }}
+                      className={clsx(
+                        'flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left text-sm',
+                        focus ? 'bg-gray-50' : '',
+                        editMode ? 'text-red-600' : 'text-gray-800'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        {editMode ? <Unlock className="w-4 h-4 shrink-0" aria-hidden /> : <Lock className="w-4 h-4 shrink-0" aria-hidden />}
+                        <span>Режим редактирования</span>
+                      </span>
+                      {editMode && (
+                        <span className="pl-6 text-xs font-medium text-emerald-600">Включён</span>
+                      )}
+                    </button>
+                  )}
+                </MenuItem>
+                <MenuItem>
+                  {({ focus }) => (
+                    <button
+                      type="button"
+                      onClick={() => setShowStats(!showStats)}
+                      className={clsx(
+                        'flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-gray-800',
+                        focus && 'bg-gray-50'
+                      )}
+                    >
+                      <BarChart2 className="w-4 h-4 shrink-0" aria-hidden />
+                      <span>{showStats ? 'Скрыть статистику' : 'Показать статистику'}</span>
+                    </button>
+                  )}
+                </MenuItem>
+              </MenuItems>
+            </Menu>
           </div>
         </div>
       </div>
