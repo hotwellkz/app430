@@ -25,6 +25,7 @@ import { incrementExpenseCategoryUsage } from './expenseCategories';
 import { getCanonicalCategoryId } from '../canonicalCategoryId';
 import { getCompanyUser } from './companies';
 import { resolveTransactionCreatedBySnapshot, spreadCreatedBy } from './transactionAuthor';
+import { buildDerivedFuelStatsFromExpenseDocuments } from '../../utils/fuelConsumption';
 
 interface TransactionPhoto {
   name: string;
@@ -133,89 +134,54 @@ interface FuelData {
   } | null;
 }
 
-const FUEL_CONSUMPTION_NORMAL_MAX = 14.5;
-const FUEL_CONSUMPTION_WARNING_MAX = 15.5;
-
+/**
+ * Загружает последние транзакции компании (индекс companyId + date desc) и на клиенте
+ * находит предыдущую заправку той же машины (по vehicleId или нормализованному имени).
+ */
 async function computeDerivedFuelStats(
   companyId: string,
-  fuelData: FuelData
+  fuelData: FuelData,
+  options?: { excludeTransactionIds?: string[] }
 ): Promise<FuelData['derivedFuelStats']> {
-  const liters = fuelData.liters ?? null;
-  const currentOdo = fuelData.odometerKm;
-  if (!companyId || liters == null || !Number.isFinite(liters) || !Number.isFinite(currentOdo)) {
+  if (!companyId) {
     return {
       previousFuelTransactionId: null,
       previousOdometerKm: null,
       distanceSincePrevFuelingKm: null,
       estimatedConsumptionLPer100: null,
       status: 'insufficient_data',
-      note: 'Недостаточно данных для расчёта расхода топлива'
+      note: 'Нет компании для расчёта расхода топлива'
     };
   }
+
+  const excludeIds = new Set(options?.excludeTransactionIds ?? []);
 
   try {
     const q = query(
       collection(db, 'transactions'),
       where('companyId', '==', companyId),
-      where('type', '==', 'expense'),
-      where('status', '==', 'approved'),
-      where('fuelData.vehicleId', '==', fuelData.vehicleId || ''),
       orderBy('date', 'desc'),
-      limit(1)
+      limit(500)
     );
     const snap = await getDocs(q);
-    if (snap.empty) {
-      return {
-        previousFuelTransactionId: null,
-        previousOdometerKm: null,
-        distanceSincePrevFuelingKm: null,
-        estimatedConsumptionLPer100: null,
-        status: 'insufficient_data',
-        note: 'Не найдена предыдущая заправка для этой машины'
-      };
-    }
-    const prevDoc = snap.docs[0];
-    const prevData = prevDoc.data() as Transaction & { fuelData?: FuelData };
-    const prevFuel = prevData.fuelData;
-    const prevOdo = prevFuel?.odometerKm;
-    if (!Number.isFinite(prevOdo)) {
-      return {
-        previousFuelTransactionId: prevDoc.id,
-        previousOdometerKm: null,
-        distanceSincePrevFuelingKm: null,
-        estimatedConsumptionLPer100: null,
-        status: 'insufficient_data',
-        note: 'У предыдущей заправки не указан пробег'
-      };
-    }
-    const distance = currentOdo - prevOdo!;
-    if (!Number.isFinite(distance) || distance <= 0) {
-      return {
-        previousFuelTransactionId: prevDoc.id,
-        previousOdometerKm: prevOdo!,
-        distanceSincePrevFuelingKm: null,
-        estimatedConsumptionLPer100: null,
-        status: 'insufficient_data',
-        note: 'Текущий пробег меньше или равен предыдущему'
-      };
-    }
-    const distanceRounded = Math.round(distance * 10) / 10;
-    const consumptionRaw = (liters / distance) * 100;
-    const consumption = Math.round(consumptionRaw * 10) / 10;
+    const documents = snap.docs.map((d) => ({
+      id: d.id,
+      data: d.data() as Record<string, unknown>
+    }));
 
-    let status: 'normal' | 'warning' | 'critical';
-    if (consumption <= FUEL_CONSUMPTION_NORMAL_MAX) status = 'normal';
-    else if (consumption <= FUEL_CONSUMPTION_WARNING_MAX) status = 'warning';
-    else status = 'critical';
+    const { stats, reason, debug } = buildDerivedFuelStatsFromExpenseDocuments(fuelData, documents, excludeIds);
 
-    return {
-      previousFuelTransactionId: prevDoc.id,
-      previousOdometerKm: prevOdo!,
-      distanceSincePrevFuelingKm: distanceRounded,
-      estimatedConsumptionLPer100: consumption,
-      status,
-      note: null
-    };
+    if (import.meta.env.DEV) {
+      console.debug('[fuel] computeDerivedFuelStats', {
+        reason,
+        companyId,
+        excluded: [...excludeIds],
+        scanned: documents.length,
+        ...debug
+      });
+    }
+
+    return stats;
   } catch (e) {
     console.error('[fuel] computeDerivedFuelStats failed', e);
     return {
@@ -224,7 +190,7 @@ async function computeDerivedFuelStats(
       distanceSincePrevFuelingKm: null,
       estimatedConsumptionLPer100: null,
       status: 'insufficient_data',
-      note: 'Ошибка при расчёте расхода топлива'
+      note: 'Ошибка при расчёте расхода топлива (загрузка транзакций)'
     };
   }
 }
@@ -659,7 +625,9 @@ export const editFeedTransaction = async (params: {
       const originalForFuelSnap = await getDoc(doc(db, 'transactions', originalTransactionId));
       const companyIdForFuel = (originalForFuelSnap.data() as { companyId?: string } | undefined)?.companyId;
       if (companyIdForFuel) {
-        const derived = await computeDerivedFuelStats(companyIdForFuel, newFuelData);
+        const derived = await computeDerivedFuelStats(companyIdForFuel, newFuelData, {
+          excludeTransactionIds: [originalTransactionId]
+        });
         enrichedFuelData = { ...newFuelData, derivedFuelStats: derived };
       }
     } catch (e) {
