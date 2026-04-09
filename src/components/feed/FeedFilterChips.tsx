@@ -28,6 +28,7 @@ interface FeedFilterChipsProps {
   filterNeedsReview: boolean;
   filterCorrection: boolean;
   filterApproved: boolean;
+  filterUnapprovedOnly: boolean;
   searchQuery: string;
   categoryTitleById: (id: string) => string | undefined;
   expenseCategoryNameById: (id: string) => string | undefined;
@@ -40,6 +41,7 @@ interface FeedFilterChipsProps {
   onClearNeedsReview: () => void;
   onClearCorrection: () => void;
   onClearApproved: () => void;
+  onClearUnapproved: () => void;
   onClearSearch: () => void;
 }
 
@@ -54,6 +56,7 @@ export const FeedFilterChips: React.FC<FeedFilterChipsProps> = ({
   filterNeedsReview,
   filterCorrection,
   filterApproved,
+  filterUnapprovedOnly,
   searchQuery,
   categoryTitleById,
   expenseCategoryNameById,
@@ -66,6 +69,7 @@ export const FeedFilterChips: React.FC<FeedFilterChipsProps> = ({
   onClearNeedsReview,
   onClearCorrection,
   onClearApproved,
+  onClearUnapproved,
   onClearSearch
 }) => {
   const chips: Chip[] = [];
@@ -110,6 +114,9 @@ export const FeedFilterChips: React.FC<FeedFilterChipsProps> = ({
   if (filterApproved) {
     chips.push({ id: 'approved', label: 'Подтверждено', onRemove: onClearApproved });
   }
+  if (filterUnapprovedOnly) {
+    chips.push({ id: 'unapproved', label: 'Неодобренные', onRemove: onClearUnapproved });
+  }
 
   if (searchQuery.trim()) {
     chips.push({ id: 'search', label: `«${searchQuery.slice(0, 20)}${searchQuery.length > 20 ? '…' : ''}»`, onRemove: onClearSearch });
@@ -119,22 +126,29 @@ export const FeedFilterChips: React.FC<FeedFilterChipsProps> = ({
 
   return (
     <div className="flex flex-wrap gap-2 items-center">
-      {chips.map((chip) => (
-        <span
-          key={chip.id}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm bg-emerald-50 text-emerald-800 border border-emerald-200"
-        >
-          {chip.label}
-          <button
-            type="button"
-            onClick={chip.onRemove}
-            className="p-0.5 rounded-full hover:bg-emerald-200/60"
-            aria-label={`Убрать фильтр ${chip.label}`}
+      {chips.map((chip) => {
+        const isUnapproved = chip.id === 'unapproved';
+        return (
+          <span
+            key={chip.id}
+            className={
+              isUnapproved
+                ? 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm bg-rose-50 text-rose-900 border border-rose-200'
+                : 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm bg-emerald-50 text-emerald-800 border border-emerald-200'
+            }
           >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </span>
-      ))}
+            {chip.label}
+            <button
+              type="button"
+              onClick={chip.onRemove}
+              className={`p-0.5 rounded-full ${isUnapproved ? 'hover:bg-rose-200/80' : 'hover:bg-emerald-200/60'}`}
+              aria-label={`Убрать фильтр ${chip.label}`}
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </span>
+        );
+      })}
     </div>
   );
 };

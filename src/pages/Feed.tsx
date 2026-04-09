@@ -39,6 +39,7 @@ import type { TransactionCardTransaction } from '../components/transactions/Tran
 import { FeedFiltersPanel } from '../components/feed/FeedFiltersPanel';
 import { FeedFilterChips } from '../components/feed/FeedFilterChips';
 import { TransferModal } from '../components/transactions/transfer/TransferModal';
+import { isTransactionPendingApproval } from '../utils/feedTransactionApproval';
 
 const EXPORT_PAGE_SIZE = 500;
 const LARGE_EXPORT_WARNING_THRESHOLD = 20000;
@@ -376,6 +377,14 @@ export const Feed: React.FC = () => {
     } catch (_) {}
     return false;
   });
+  const [filterUnapprovedOnly, setFilterUnapprovedOnly] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const s = localStorage.getItem(FEED_FILTERS_STORAGE_KEY);
+      if (s) return !!JSON.parse(s)?.filterUnapprovedOnly;
+    } catch (_) {}
+    return false;
+  });
   const [showFiltersDrawer, setShowFiltersDrawer] = useState(false);
 
   const saveFiltersToStorage = useCallback(() => {
@@ -392,13 +401,28 @@ export const Feed: React.FC = () => {
           filterNeedsReview,
           filterCorrection,
           filterApproved,
+          filterUnapprovedOnly,
           searchQuery: searchQuery || undefined,
           dateFrom: dateRange.start?.toISOString(),
           dateTo: dateRange.end?.toISOString()
         })
       );
     } catch (_) {}
-  }, [filterType, filterUser, filterCategoryId, filterExpenseCategoryId, minAmount, maxAmount, filterNeedsReview, filterCorrection, filterApproved, searchQuery, dateRange.start, dateRange.end]);
+  }, [
+    filterType,
+    filterUser,
+    filterCategoryId,
+    filterExpenseCategoryId,
+    minAmount,
+    maxAmount,
+    filterNeedsReview,
+    filterCorrection,
+    filterApproved,
+    filterUnapprovedOnly,
+    searchQuery,
+    dateRange.start,
+    dateRange.end
+  ]);
   useEffect(() => {
     saveFiltersToStorage();
   }, [saveFiltersToStorage]);
@@ -446,8 +470,9 @@ export const Feed: React.FC = () => {
 
 
   // ВСЕ ХУКИ ДОЛЖНЫ БЫТЬ ДО УСЛОВНЫХ RETURN
-  const filteredTransactions = useMemo(() => {
-    return paginatedTransactions.filter((transaction) => {
+  const matchesFeedTransaction = useCallback(
+    (transaction: Transaction, options?: { includeUnapprovedOnly?: boolean }) => {
+      const useUnapprovedFilter = options?.includeUnapprovedOnly !== false;
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch =
         !searchQuery.trim() ||
@@ -491,6 +516,10 @@ export const Feed: React.FC = () => {
       const matchesNeedsReview = !filterNeedsReview || !!transaction.needsReview;
       const matchesCorrection = !filterCorrection || transaction.editType === 'correction';
       const matchesApproved = !filterApproved || transaction.status === 'approved';
+      const matchesUnapprovedOnly =
+        !useUnapprovedFilter ||
+        !filterUnapprovedOnly ||
+        isTransactionPendingApproval(transaction);
 
       return (
         matchesSearch &&
@@ -502,24 +531,41 @@ export const Feed: React.FC = () => {
         matchesExpenseCategory &&
         matchesNeedsReview &&
         matchesCorrection &&
-        matchesApproved
+        matchesApproved &&
+        matchesUnapprovedOnly
       );
-    });
-  }, [
-    paginatedTransactions,
-    searchQuery,
-    dateRange,
-    minAmount,
-    maxAmount,
-    filterType,
-    filterUser,
-    filterCategoryId,
-    filterExpenseCategoryId,
-    filterNeedsReview,
-    filterCorrection,
-    filterApproved,
-    visibleCategories
-  ]);
+    },
+    [
+      searchQuery,
+      dateRange,
+      minAmount,
+      maxAmount,
+      filterType,
+      filterUser,
+      filterCategoryId,
+      filterExpenseCategoryId,
+      filterNeedsReview,
+      filterCorrection,
+      filterApproved,
+      filterUnapprovedOnly,
+      visibleCategories
+    ]
+  );
+
+  const filteredTransactions = useMemo(
+    () => paginatedTransactions.filter((t) => matchesFeedTransaction(t)),
+    [paginatedTransactions, matchesFeedTransaction]
+  );
+
+  /** Неодобренные (pending) среди загруженных данных с учётом всех фильтров, кроме «только неодобренные». */
+  const unapprovedCountInScope = useMemo(
+    () =>
+      paginatedTransactions.filter(
+        (t) =>
+          matchesFeedTransaction(t, { includeUnapprovedOnly: false }) && isTransactionPendingApproval(t)
+      ).length,
+    [paginatedTransactions, matchesFeedTransaction]
+  );
 
   const uniqueUserNames = useMemo(() => {
     const set = new Set<string>();
@@ -542,6 +588,7 @@ export const Feed: React.FC = () => {
     setFilterNeedsReview(false);
     setFilterCorrection(false);
     setFilterApproved(false);
+    setFilterUnapprovedOnly(false);
   }, []);
 
   const categoryTitleById = useCallback(
@@ -1135,6 +1182,9 @@ export const Feed: React.FC = () => {
                   setFilterCorrection={setFilterCorrection}
                   filterApproved={filterApproved}
                   setFilterApproved={setFilterApproved}
+                  filterUnapprovedOnly={filterUnapprovedOnly}
+                  setFilterUnapprovedOnly={setFilterUnapprovedOnly}
+                  unapprovedCountInScope={unapprovedCountInScope}
                   searchQuery={searchQuery}
                   setSearchQuery={setSearchQuery}
                   visibleCategories={visibleCategories}
@@ -1203,6 +1253,25 @@ export const Feed: React.FC = () => {
             >
               Требует уточнения
             </button>
+            <button
+              type="button"
+              onClick={() => setFilterUnapprovedOnly((v) => !v)}
+              className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
+                filterUnapprovedOnly
+                  ? 'bg-rose-50 border-rose-300 text-rose-900 shadow-sm'
+                  : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
+              }`}
+              aria-pressed={filterUnapprovedOnly}
+            >
+              Неодобренные
+              <span
+                className={`ml-1.5 tabular-nums text-xs font-semibold rounded-full px-1.5 py-0.5 ${
+                  filterUnapprovedOnly ? 'bg-rose-200/80 text-rose-900' : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {unapprovedCountInScope}
+              </span>
+            </button>
           </div>
           {/* Активные фильтры (чипы) */}
           <div className="px-4 py-2 flex-shrink-0 border-b border-gray-100">
@@ -1217,6 +1286,7 @@ export const Feed: React.FC = () => {
               filterNeedsReview={filterNeedsReview}
               filterCorrection={filterCorrection}
               filterApproved={filterApproved}
+              filterUnapprovedOnly={filterUnapprovedOnly}
               searchQuery={searchQuery}
               categoryTitleById={categoryTitleById}
               expenseCategoryNameById={expenseCategoryNameById}
@@ -1229,6 +1299,7 @@ export const Feed: React.FC = () => {
               onClearNeedsReview={() => setFilterNeedsReview(false)}
               onClearCorrection={() => setFilterCorrection(false)}
               onClearApproved={() => setFilterApproved(false)}
+              onClearUnapproved={() => setFilterUnapprovedOnly(false)}
               onClearSearch={() => setSearchQuery('')}
             />
           </div>
@@ -1281,6 +1352,14 @@ export const Feed: React.FC = () => {
                 <h3 className="text-lg font-medium text-gray-900 mb-1">Ничего не найдено</h3>
                 <p className="text-gray-500">Попробуйте изменить параметры поиска</p>
               </>
+            ) : filterUnapprovedOnly ? (
+              <>
+                <div className="w-16 h-16 mx-auto mb-4 bg-rose-50 rounded-full flex items-center justify-center border border-rose-100">
+                  <ArrowDownRight className="w-8 h-8 text-rose-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-1">Неодобренных транзакций нет</h3>
+                <p className="text-gray-500">Измените фильтры или загрузите ещё записи</p>
+              </>
             ) : (
               <>
                 <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
@@ -1330,6 +1409,9 @@ export const Feed: React.FC = () => {
                   setFilterCorrection={setFilterCorrection}
                   filterApproved={filterApproved}
                   setFilterApproved={setFilterApproved}
+                  filterUnapprovedOnly={filterUnapprovedOnly}
+                  setFilterUnapprovedOnly={setFilterUnapprovedOnly}
+                  unapprovedCountInScope={unapprovedCountInScope}
                   searchQuery={searchQuery}
                   setSearchQuery={setSearchQuery}
                   visibleCategories={visibleCategories}

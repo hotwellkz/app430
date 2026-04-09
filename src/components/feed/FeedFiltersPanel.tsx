@@ -31,6 +31,10 @@ interface FeedFiltersPanelProps {
   setFilterCorrection: (v: boolean) => void;
   filterApproved: boolean;
   setFilterApproved: (v: boolean) => void;
+  filterUnapprovedOnly: boolean;
+  setFilterUnapprovedOnly: (v: boolean) => void;
+  /** Число неодобренных (pending) в загруженных данных с учётом остальных фильтров, без «только неодобренные». */
+  unapprovedCountInScope: number;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   visibleCategories: CategoryCardType[];
@@ -97,6 +101,9 @@ export const FeedFiltersPanel: React.FC<FeedFiltersPanelProps> = ({
   setFilterCorrection,
   filterApproved,
   setFilterApproved,
+  filterUnapprovedOnly,
+  setFilterUnapprovedOnly,
+  unapprovedCountInScope,
   searchQuery,
   setSearchQuery,
   visibleCategories,
@@ -193,6 +200,25 @@ export const FeedFiltersPanel: React.FC<FeedFiltersPanelProps> = ({
               }`}
             >
               Требует уточнения
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterUnapprovedOnly((v) => !v)}
+              className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                filterUnapprovedOnly
+                  ? 'bg-rose-50 border-rose-300 text-rose-900 shadow-sm'
+                  : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
+              }`}
+              aria-pressed={filterUnapprovedOnly}
+            >
+              Неодобренные
+              <span
+                className={`ml-1.5 tabular-nums text-xs font-semibold rounded-full px-1.5 py-0.5 ${
+                  filterUnapprovedOnly ? 'bg-rose-200/80 text-rose-900' : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {unapprovedCountInScope}
+              </span>
             </button>
           </div>
         </div>
@@ -369,6 +395,18 @@ export const FeedFiltersPanel: React.FC<FeedFiltersPanelProps> = ({
               className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
             />
             <span className="text-sm text-gray-700">Подтверждено</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer flex-wrap">
+            <input
+              type="checkbox"
+              checked={filterUnapprovedOnly}
+              onChange={(e) => setFilterUnapprovedOnly(e.target.checked)}
+              className="rounded border-gray-300 text-rose-600 focus:ring-rose-500"
+            />
+            <span className="text-sm text-gray-700">Только неодобренные</span>
+            <span className="text-xs font-medium tabular-nums text-rose-700 bg-rose-50 border border-rose-100 rounded-full px-2 py-0.5">
+              {unapprovedCountInScope}
+            </span>
           </label>
         </div>
       </div>
