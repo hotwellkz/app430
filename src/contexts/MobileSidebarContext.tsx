@@ -1,10 +1,15 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 
 interface MobileSidebarContextType {
+  /** Открыто ли мобильное боковое меню (CRM drawer слева). */
   isOpen: boolean;
   open: () => void;
   close: () => void;
   toggle: () => void;
+  /** Алиасы для единого API (то же, что open / close / toggle). */
+  openMobileMenu: () => void;
+  closeMobileMenu: () => void;
+  toggleMobileMenu: () => void;
 }
 
 const MobileSidebarContext = createContext<MobileSidebarContextType | undefined>(undefined);
@@ -27,9 +32,15 @@ export const MobileSidebarProvider: React.FC<MobileSidebarProviderProps> = ({ ch
   const close = useCallback(() => setIsOpen(false), []);
   const toggle = useCallback(() => setIsOpen((prev) => !prev), []);
 
-  return (
-    <MobileSidebarContext.Provider value={{ isOpen, open, close, toggle }}>
-      {children}
-    </MobileSidebarContext.Provider>
-  );
+  const value: MobileSidebarContextType = {
+    isOpen,
+    open,
+    close,
+    toggle,
+    openMobileMenu: open,
+    closeMobileMenu: close,
+    toggleMobileMenu: toggle
+  };
+
+  return <MobileSidebarContext.Provider value={value}>{children}</MobileSidebarContext.Provider>;
 };

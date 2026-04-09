@@ -29,6 +29,10 @@ interface UseTransactionsPaginatedReturn {
   totalAmount: number;
   salaryTotal: number;
   cashlessTotal: number;
+  /** Локальное обновление строки (после правок вне первого снимка). */
+  patchTransaction: (transactionId: string, patch: Partial<Transaction>) => void;
+  /** Убрать id из списка сразу после отмены/коррекции (как в ленте). */
+  removeTransactionIds: (ids: string[]) => void;
 }
 
 export const useTransactionsPaginated = ({
@@ -165,6 +169,16 @@ export const useTransactionsPaginated = ({
     }
   }, [categoryId, pageSize, companyId, lastDoc, hasMore, loading]);
 
+  const patchTransaction = useCallback((transactionId: string, patch: Partial<Transaction>) => {
+    setTransactions((prev) => prev.map((t) => (t.id === transactionId ? { ...t, ...patch } : t)));
+  }, []);
+
+  const removeTransactionIds = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    setTransactions((prev) => prev.filter((t) => !idSet.has(t.id)));
+  }, []);
+
   // Загружаем данные при изменении categoryId
   useEffect(() => {
     return loadInitialData();
@@ -177,6 +191,8 @@ export const useTransactionsPaginated = ({
     loadMore,
     totalAmount,
     salaryTotal,
-    cashlessTotal
+    cashlessTotal,
+    patchTransaction,
+    removeTransactionIds
   };
 }; 

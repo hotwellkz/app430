@@ -146,12 +146,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ onPageChange, currentPage }) =
   const whatsAppBadge = useWhatsAppFloatingButtonState(true);
   const whatsAppBadgeCount = whatsAppBadge.unreadChatsCount + whatsAppBadge.awaitingReplyChatsCount;
 
-  // Ушли со страницы транзакций — закрываем drawer, чтобы не оставался overlay без кнопки ☰
+  // Закрываем мобильный drawer только при смене маршрута (навигация), а не при toggle без смены URL.
+  // Раньше в зависимостях был isMobileMenuOpen: на /feed и др. меню открывали и тут же закрывали — бургер в шапке «не работал».
   useEffect(() => {
-    if (!isTransactionsFloatingBurgerRoute(location.pathname) && isMobileMenuOpen) {
-      setMobileMenuOpenFalse();
-    }
-  }, [location.pathname, isMobileMenuOpen, setMobileMenuOpenFalse]);
+    setMobileMenuOpenFalse();
+  }, [location.pathname, setMobileMenuOpenFalse]);
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -272,14 +271,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ onPageChange, currentPage }) =
       {/* Подложка при открытом меню (на WhatsApp странице бургер в шапке, overlay всё равно нужен при открытии) */}
       {isMobileMenuOpen && !hideBurgerInChat && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-[45] xl:hidden backdrop-blur-sm transition-opacity duration-300"
+          className="fixed inset-0 bg-black bg-opacity-50 z-[52] xl:hidden backdrop-blur-sm transition-opacity duration-300"
           onClick={setMobileMenuOpenFalse}
+          aria-hidden="true"
         />
       )}
 
-      {/* Боковое меню (overlay при < 1280px; в открытом чате скрыто) */}
+      {/* Боковое меню (overlay при < 1280px; в открытом чате скрыто). z выше фикс-шапок страниц (z-50), ниже плавающей ☰ (z-[60]). */}
       {isMobileMenuOpen && !hideBurgerInChat && (
-        <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-xl z-[50] transform transition-all duration-300 ease-in-out xl:hidden border-r border-gray-100">
+        <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-xl z-[55] transform transition-all duration-300 ease-in-out xl:hidden border-r border-gray-100">
           <div className="flex flex-col h-full">
             <div className="h-20" />
             {userEmail && (

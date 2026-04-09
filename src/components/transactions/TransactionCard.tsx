@@ -130,7 +130,9 @@ export const TransactionCard = React.memo<TransactionCardProps>(function Transac
           ? 'bg-emerald-50 border-emerald-200'
           : 'bg-white border-gray-200';
 
-  const showFeedActions = context === 'feed' && (editMode || (isPending && isTrustedForApproval));
+  const showActionRow =
+    (context === 'feed' && (editMode || (isPending && isTrustedForApproval))) ||
+    (context === 'history' && !!editMode);
 
   const hasReceipt = !!firstAttachment;
   const isSalary = !!transaction.isSalary;
@@ -439,7 +441,7 @@ export const TransactionCard = React.memo<TransactionCardProps>(function Transac
                 )}
               </div>
             </div>
-            {showFeedActions && (
+            {showActionRow && (
               <div className="flex flex-row items-center justify-end gap-2 flex-wrap mt-2">
                 {editMode && onEdit && (
                   <button

@@ -10,8 +10,7 @@ import { ExpenseWaybill } from '../components/warehouse/ExpenseWaybill';
 import { Transaction } from '../components/transactions/types';
 import { TransactionHeader } from '../components/transactions/TransactionHeader';
 import { TransactionStats } from '../components/transactions/TransactionStats';
-import { TransferModal } from '../components/transactions/transfer/TransferModal';
-import { ChevronDown, ChevronUp, Calendar, Filter, ArrowLeft, BarChart2, Download, Menu, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Calendar, Filter, ArrowLeft, BarChart2, Download, Menu, Search, X, Lock, Unlock } from 'lucide-react';
 import { useMobileSidebar } from '../contexts/MobileSidebarContext';
 import { HeaderSearchBar } from '../components/HeaderSearchBar';
 import clsx from 'clsx';
@@ -34,6 +33,10 @@ import { UpdateCommentByReceiptModal } from '../components/transactions/UpdateCo
 import type { TransactionCardTransaction } from '../components/transactions/TransactionCard';
 import { exportTransactionsReport } from '../utils/exportTransactionsReport';
 import { TransactionExportModal, TransactionExportFilters } from '../components/transactions/TransactionExportModal';
+import { useCategories } from '../hooks/useCategories';
+import { useTransactionEditMode } from '../hooks/useTransactionEditMode';
+import { TransactionEditPasswordModal } from '../components/transactions/TransactionEditPasswordModal';
+import { TransactionEditModals } from '../components/transactions/TransactionEditModals';
 
 const CHIP_MAX_VISIBLE = 3;
 const FILTER_CHIP_STYLE = 'h-8 max-h-8 px-2.5 rounded-2xl text-[13px] font-medium border shrink-0 flex items-center gap-1';
@@ -182,7 +185,6 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
   const [swipedTransactionId, setSwipedTransactionId] = useState<string | null>(null);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const [showWaybill, setShowWaybill] = useState(false);
-  const [showTransferModal, setShowTransferModal] = useState(false);
   const [receiptView, setReceiptView] = useState<{ url: string; type: string; name?: string } | null>(null);
   const [updateCommentTransaction, setUpdateCommentTransaction] = useState<TransactionCardTransaction | null>(null);
 
@@ -206,11 +208,56 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
   // Состояние для отслеживания ошибок загрузки
   const [error, setError] = useState<string | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const { user } = useAuth();
   const { companyUser } = useCurrentCompanyUser();
   const { toggle: toggleMobileSidebar } = useMobileSidebar();
+  const { employeeCategories, visibleCategories } = useCategories();
   const { categories: expenseCategories } = useExpenseCategories(user?.uid);
+
+  const approvedEmails: string[] = useMemo(
+    () =>
+      (import.meta.env.VITE_APPROVED_EMAILS || '')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean),
+    []
+  );
+
+  const isTrustedForApproval = useMemo(() => {
+    const email = user?.email || '';
+    const byEmail = !!email && approvedEmails.includes(email.toLowerCase());
+    const byGlobalAdmin = user?.role === 'global_admin';
+    const byOwner = companyUser?.role === 'owner';
+    const byPermission = companyUser?.permissions?.approveTransactions === true;
+    return Boolean(byEmail || byGlobalAdmin || byOwner || byPermission);
+  }, [user?.email, user?.role, approvedEmails, companyUser?.role, companyUser?.permissions?.approveTransactions]);
+
+  const canShowDeleteForTransaction = useCallback(
+    (t: { companyId?: string }) =>
+      !!(
+        user?.role === 'global_admin' ||
+        user?.role === 'superAdmin' ||
+        user?.role === 'admin' ||
+        (companyUser?.role === 'owner' && t.companyId === companyUser?.companyId)
+      ),
+    [user?.role, companyUser?.role, companyUser?.companyId]
+  );
+
+  const {
+    editMode,
+    showPasswordModal: showEditPasswordModal,
+    setShowPasswordModal: setShowEditPasswordModal,
+    editPassword,
+    setEditPassword,
+    editPasswordError,
+    setEditPasswordError,
+    openEditModeOrPrompt,
+    disableEditMode,
+    submitPassword
+  } = useTransactionEditMode();
   const expenseCategoryById = useMemo(() => {
     const m = new Map<string, { name: string; color?: string }>();
     expenseCategories.forEach((c) => m.set(c.id, { name: c.name, color: c.color }));
@@ -225,7 +272,8 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
     loadMore,
     totalAmount,
     salaryTotal,
-    cashlessTotal
+    cashlessTotal,
+    removeTransactionIds
   } = useTransactionsPaginated({
     categoryId: categoryId!,
     pageSize: 50,
@@ -665,6 +713,31 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
               <span className="hidden sm:inline ml-1 text-sm">Скачать отчёт</span>
             </button>
             <button
+              type="button"
+              onClick={() => {
+                if (editMode) {
+                  disableEditMode();
+                } else {
+                  openEditModeOrPrompt();
+                }
+              }}
+              className={clsx(
+                'flex items-center justify-center rounded-full border w-10 h-10 md:w-auto md:h-auto md:px-3 md:py-2 md:gap-1 text-sm transition-colors flex-shrink-0',
+                editMode
+                  ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'
+                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+              )}
+              style={!editMode ? { color: '#374151' } : undefined}
+              title={editMode ? 'Выключить режим редактирования' : 'Включить режим редактирования'}
+            >
+              {editMode ? (
+                <Unlock style={{ width: 24, height: 24 }} className="md:w-4 md:h-4 text-red-600" />
+              ) : (
+                <Lock style={{ width: 24, height: 24, color: '#374151' }} className="md:w-4 md:h-4 md:text-gray-600" />
+              )}
+              <span className="hidden md:inline">Режим редактирования</span>
+            </button>
+            <button
               onClick={() => setShowAllFilters(!showAllFilters)}
               className={clsx(
                 'relative flex items-center justify-center w-10 h-10 rounded-[10px] md:rounded-lg transition-colors',
@@ -754,11 +827,15 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
                 rows={flatRows}
                 width="100%"
                 context="history"
+                isTrustedForApproval={isTrustedForApproval}
+                editMode={editMode}
                 onReceiptClick={(a) => setReceiptView(a)}
                 onWaybillClick={handleWaybillClick}
+                onEdit={setEditingTransaction}
                 onDeleteRequest={handleDeleteClick}
                 onUpdateCommentByReceipt={setUpdateCommentTransaction}
                 aiConfigured={aiConfigured === true}
+                canDeleteTransaction={canShowDeleteForTransaction}
                 hasMore={hasMore}
                 loading={loading}
                 onLoadMore={loadMore}
@@ -869,25 +946,34 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
         />
       )}
 
-      {showTransferModal && selectedTransaction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg">
-            <h3 className="text-lg font-semibold mb-4">Редактирование транзакции</h3>
-            <p className="text-gray-600 mb-4">Функция редактирования будет доступна в следующей версии</p>
-            <button
-              onClick={() => {
-                setShowTransferModal(false);
-                setSelectedTransaction(null);
-                setSwipedTransactionId(null);
-                setSwipeDirection(null);
-              }}
-              className="px-4 py-2 bg-emerald-500 text-white rounded hover:bg-emerald-600"
-            >
-              Закрыть
-            </button>
-          </div>
-        </div>
-      )}
+      <TransactionEditPasswordModal
+        isOpen={showEditPasswordModal}
+        password={editPassword}
+        error={editPasswordError}
+        onPasswordChange={(v) => {
+          setEditPassword(v);
+          setEditPasswordError('');
+        }}
+        onClose={() => {
+          setShowEditPasswordModal(false);
+          setEditPassword('');
+          setEditPasswordError('');
+        }}
+        onSubmit={submitPassword}
+        description="Введите пароль для включения режима редактирования операций."
+      />
+
+      <TransactionEditModals
+        editingTransaction={editingTransaction}
+        onCloseEditing={() => setEditingTransaction(null)}
+        isSavingEdit={isSavingEdit}
+        setIsSavingEdit={setIsSavingEdit}
+        employeeCategories={employeeCategories}
+        visibleCategories={visibleCategories}
+        expenseCategories={expenseCategories}
+        expenseCategoryById={expenseCategoryById}
+        onRemovedAfterEdit={(ids) => removeTransactionIds(ids)}
+      />
 
       {isExportOpen && (
         <TransactionExportModal

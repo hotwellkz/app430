@@ -15,7 +15,6 @@ import { useCategories } from '../hooks/useCategories';
 import { useExpenseCategories } from '../hooks/useExpenseCategories';
 import { CategoryCardType } from '../types';
 import {
-  editFeedTransaction,
   approveTransaction,
   rejectTransaction,
   secureDeleteTransaction,
@@ -38,8 +37,10 @@ import { UpdateCommentByReceiptModal } from '../components/transactions/UpdateCo
 import type { TransactionCardTransaction } from '../components/transactions/TransactionCard';
 import { FeedFiltersPanel } from '../components/feed/FeedFiltersPanel';
 import { FeedFilterChips } from '../components/feed/FeedFilterChips';
-import { TransferModal } from '../components/transactions/transfer/TransferModal';
 import { isTransactionPendingApproval } from '../utils/feedTransactionApproval';
+import { useTransactionEditMode } from '../hooks/useTransactionEditMode';
+import { TransactionEditPasswordModal } from '../components/transactions/TransactionEditPasswordModal';
+import { TransactionEditModals } from '../components/transactions/TransactionEditModals';
 
 const EXPORT_PAGE_SIZE = 500;
 const LARGE_EXPORT_WARNING_THRESHOLD = 20000;
@@ -167,19 +168,6 @@ interface WaybillData {
     price: number;
     unit: string;
   }>;
-}
-
-function isFuelTransactionLike(
-  tx: Pick<Transaction, 'toUser' | 'fuelData' | 'expenseCategoryId'>,
-  expenseCategoryById: Map<string, { name: string; color?: string }>
-): boolean {
-  if (tx.fuelData) return true;
-  if ((tx.toUser || '').trim().toLowerCase() === 'заправка') return true;
-  if (tx.expenseCategoryId) {
-    const expName = expenseCategoryById.get(tx.expenseCategoryId)?.name?.trim().toLowerCase();
-    if (expName === 'заправка') return true;
-  }
-  return false;
 }
 
 export const Feed: React.FC = () => {
@@ -441,19 +429,20 @@ export const Feed: React.FC = () => {
     currentFilters: { searchQuery?: string; minAmount?: string; maxAmount?: string };
   } | null>(null);
 
-  const [editMode, setEditMode] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return window.sessionStorage.getItem('feed-edit-mode') === 'true';
-  });
-  const [showEditPasswordModal, setShowEditPasswordModal] = useState(false);
-  const [editPassword, setEditPassword] = useState('');
-  const [editPasswordError, setEditPasswordError] = useState<string>('');
+  const {
+    editMode,
+    showPasswordModal: showEditPasswordModal,
+    setShowPasswordModal: setShowEditPasswordModal,
+    editPassword,
+    setEditPassword,
+    editPasswordError,
+    setEditPasswordError,
+    openEditModeOrPrompt,
+    disableEditMode,
+    submitPassword
+  } = useTransactionEditMode();
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const isFuelEditingTransaction = useMemo(
-    () => !!editingTransaction && isFuelTransactionLike(editingTransaction, expenseCategoryById),
-    [editingTransaction, expenseCategoryById]
-  );
 
   useEffect(() => {
     // Ждем завершения проверки авторизации
@@ -765,20 +754,6 @@ export const Feed: React.FC = () => {
   }, [transactionToDelete, user?.uid, isDeleting, refresh]);
 
   const grouped = useMemo(() => groupTransactionsByDate(), [filteredTransactions]);
-  const fuelEditSourceCategory = useMemo(
-    () => (editingTransaction ? employeeCategories.find((c) => c.title === editingTransaction.fromUser) : undefined),
-    [editingTransaction, employeeCategories]
-  );
-  const fuelEditTargetCategory = useMemo(
-    () => (editingTransaction ? visibleCategories.find((c) => c.title === editingTransaction.toUser) : undefined),
-    [editingTransaction, visibleCategories]
-  );
-  useEffect(() => {
-    if (!editingTransaction || !isFuelEditingTransaction) return;
-    if (fuelEditSourceCategory && fuelEditTargetCategory) return;
-    showErrorNotification('Не удалось определить счета для редактирования заправки');
-    setEditingTransaction(null);
-  }, [editingTransaction, isFuelEditingTransaction, fuelEditSourceCategory, fuelEditTargetCategory]);
 
   const flatRows = useMemo((): VirtualizedRow[] => {
     const rows = buildFlattenedRowsFromGrouped(grouped, {
@@ -1086,14 +1061,9 @@ export const Feed: React.FC = () => {
             <button
               onClick={() => {
                 if (editMode) {
-                  setEditMode(false);
-                  if (typeof window !== 'undefined') {
-                    window.sessionStorage.removeItem('feed-edit-mode');
-                  }
+                  disableEditMode();
                 } else {
-                  setShowEditPasswordModal(true);
-                  setEditPassword('');
-                  setEditPasswordError('');
+                  openEditModeOrPrompt();
                 }
               }}
               className={`flex items-center justify-center rounded-full border p-2 md:px-3 md:py-2 md:gap-1 text-sm ${
@@ -1516,311 +1486,34 @@ export const Feed: React.FC = () => {
           />
         )}
 
-        {showEditPasswordModal && createPortal(
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]"
-            onClick={() => {
-              setShowEditPasswordModal(false);
-              setEditPassword('');
-              setEditPasswordError('');
-            }}
-          >
-            <div
-              className="bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 p-6"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                  <Lock className="w-5 h-5 text-gray-500" />
-                  Режим редактирования
-                </h2>
-                <button
-                  onClick={() => {
-                    setShowEditPasswordModal(false);
-                    setEditPassword('');
-                    setEditPasswordError('');
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <p className="text-sm text-gray-600 mb-4">
-                Введите пароль для включения режима редактирования ленты.
-              </p>
-              <input
-                type="password"
-                value={editPassword}
-                onChange={(e) => {
-                  setEditPassword(e.target.value);
-                  setEditPasswordError('');
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                placeholder="Пароль"
-                autoFocus
-              />
-              {editPasswordError && (
-                <p className="mt-2 text-sm text-red-600">{editPasswordError}</p>
-              )}
-              <div className="flex justify-end gap-2 mt-6">
-                <button
-                  onClick={() => {
-                    setShowEditPasswordModal(false);
-                    setEditPassword('');
-                    setEditPasswordError('');
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-                >
-                  Отмена
-                </button>
-                <button
-                  onClick={() => {
-                    const envPassword = import.meta.env.VITE_FEED_EDIT_PASSWORD;
-                    if (!envPassword) {
-                      setEditPasswordError('Пароль не настроен в окружении (VITE_FEED_EDIT_PASSWORD)');
-                      return;
-                    }
-                    if (editPassword !== envPassword) {
-                      setEditPasswordError('Неверный пароль');
-                      return;
-                    }
-                    setEditMode(true);
-                    if (typeof window !== 'undefined') {
-                      window.sessionStorage.setItem('feed-edit-mode', 'true');
-                    }
-                    setShowEditPasswordModal(false);
-                    setEditPassword('');
-                    setEditPasswordError('');
-                    showSuccessNotification('Режим редактирования включён');
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-white bg-emerald-500 rounded-md hover:bg-emerald-600"
-                >
-                  Войти
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
+                <TransactionEditPasswordModal
+          isOpen={showEditPasswordModal}
+          password={editPassword}
+          error={editPasswordError}
+          onPasswordChange={(v) => {
+            setEditPassword(v);
+            setEditPasswordError('');
+          }}
+          onClose={() => {
+            setShowEditPasswordModal(false);
+            setEditPassword('');
+            setEditPasswordError('');
+          }}
+          onSubmit={submitPassword}
+          description="Введите пароль для включения режима редактирования ленты."
+        />
 
-        {editingTransaction && isFuelEditingTransaction && fuelEditSourceCategory && fuelEditTargetCategory && createPortal(
-          <TransferModal
-            sourceCategory={fuelEditSourceCategory}
-            targetCategory={fuelEditTargetCategory}
-            isOpen
-            mode="edit"
-            title="Редактирование заправки"
-            submitLabel="Сохранить"
-            initialValues={{
-              amount: Math.abs(editingTransaction.amount),
-              description: editingTransaction.description,
-              isSalary: !!editingTransaction.isSalary,
-              isCashless: !!editingTransaction.isCashless,
-              needsReview: !!editingTransaction.needsReview,
-              expenseCategoryId: editingTransaction.expenseCategoryId,
-              attachments: (() => {
-                const txAny = editingTransaction as unknown as {
-                  attachments?: Array<{ name?: string; url?: string; type?: string; size?: number; path?: string }>;
-                  files?: Array<{ name?: string; url?: string; type?: string; size?: number; path?: string }>;
-                  attachmentUrl?: string;
-                  fileUrl?: string;
-                  receiptImage?: string;
-                  fuelData?: { receiptFileUrl?: string | null; receiptRef?: string | null };
-                };
-                const list = (Array.isArray(txAny.attachments) ? txAny.attachments : [])
-                  .concat(Array.isArray(txAny.files) ? txAny.files : []);
-                const singleUrl =
-                  txAny.attachmentUrl ||
-                  txAny.fileUrl ||
-                  txAny.receiptImage ||
-                  txAny.fuelData?.receiptFileUrl ||
-                  null;
-                if (singleUrl) {
-                  list.push({
-                    name: 'Чек',
-                    url: singleUrl,
-                    type: 'image/jpeg',
-                    path: txAny.fuelData?.receiptRef ?? undefined
-                  });
-                }
-                const uniqueByUrl = new Map<string, { name: string; url: string; type?: string; size?: number; path?: string }>();
-                list.forEach((item) => {
-                  const url = typeof item?.url === 'string' ? item.url.trim() : '';
-                  if (!url) return;
-                  if (!uniqueByUrl.has(url)) {
-                    uniqueByUrl.set(url, {
-                      name: item?.name || 'Чек',
-                      url,
-                      type: item?.type,
-                      size: typeof item?.size === 'number' ? item.size : undefined,
-                      path: item?.path
-                    });
-                  }
-                });
-                return Array.from(uniqueByUrl.values());
-              })(),
-              fuelData: editingTransaction.fuelData
-                ? {
-                    vehicleId: editingTransaction.fuelData.vehicleId,
-                    odometerKm: editingTransaction.fuelData.odometerKm,
-                    liters: editingTransaction.fuelData.liters ?? null,
-                    pricePerLiter: editingTransaction.fuelData.pricePerLiter ?? null,
-                    fuelType: editingTransaction.fuelData.fuelType ?? null,
-                    gasStation: editingTransaction.fuelData.gasStation ?? null,
-                    isFullTank: !!editingTransaction.fuelData.isFullTank
-                  }
-                : undefined
-            }}
-            onClose={() => {
-              if (isSavingEdit) return;
-              setEditingTransaction(null);
-            }}
-            onSubmitData={async (payload) => {
-              if (isSavingEdit) return;
-              try {
-                setIsSavingEdit(true);
-                await editFeedTransaction({
-                  originalTransactionId: editingTransaction.id,
-                  newFromCategory: fuelEditSourceCategory,
-                  newToCategory: fuelEditTargetCategory,
-                  newAmount: payload.amount,
-                  newDescription: payload.description,
-                  newExpenseCategoryId: payload.expenseCategoryId,
-                  newIsSalary: payload.isSalary,
-                  newIsCashless: payload.isCashless,
-                  newNeedsReview: payload.needsReview,
-                  newAttachments: payload.attachments,
-                  newFuelData: payload.fuelData,
-                  audit: {
-                    transactionId: editingTransaction.id,
-                    before: {
-                      from: editingTransaction.fromUser,
-                      to: editingTransaction.toUser,
-                      amount: editingTransaction.amount,
-                      comment: editingTransaction.description,
-                      category: editingTransaction.fromUser || null,
-                      isSalary: !!editingTransaction.isSalary,
-                      isCashless: !!editingTransaction.isCashless,
-                      needsReview: !!editingTransaction.needsReview
-                    },
-                    after: {
-                      from: fuelEditSourceCategory.title,
-                      to: fuelEditTargetCategory.title,
-                      amount: payload.amount,
-                      comment: payload.description,
-                      category: fuelEditSourceCategory.title,
-                      isSalary: payload.isSalary,
-                      isCashless: payload.isCashless,
-                      needsReview: payload.needsReview
-                    }
-                  }
-                });
-                removeTransactionsFromFeed([editingTransaction.id]);
-                setEditingTransaction(null);
-              } catch (error) {
-                console.error('Error editing fuel transaction:', error);
-                showErrorNotification(
-                  error instanceof Error ? error.message : 'Ошибка при редактировании заправки'
-                );
-                throw error;
-              } finally {
-                setIsSavingEdit(false);
-              }
-            }}
-          />,
-          document.body
-        )}
-
-        {editingTransaction && !isFuelEditingTransaction && createPortal(
-          <EditTransactionModal
-            transaction={editingTransaction}
-            peopleAccounts={employeeCategories}
-            objectAccounts={visibleCategories}
-            expenseCategories={expenseCategories}
-            isSaving={isSavingEdit}
-            onClose={() => {
-              if (isSavingEdit) return;
-              setEditingTransaction(null);
-            }}
-            onSave={async (updated) => {
-              if (isSavingEdit) return;
-              try {
-                setIsSavingEdit(true);
-
-                const newFromCategory = employeeCategories.find(c => c.id === updated.fromCategoryId);
-                const newToCategory = visibleCategories.find(c => c.id === updated.toCategoryId);
-                const afterAuditCategory = employeeCategories.find(c => c.id === updated.auditCategoryId);
-
-                if (!newFromCategory || !newToCategory) {
-                  throw new Error('Не удалось найти выбранные счета');
-                }
-                if (process.env.NODE_ENV === 'development') {
-                  console.log('FEED EDIT save: toCategory для истории счёта "Куда"', {
-                    toCategoryId: updated.toCategoryId,
-                    newToCategoryId: newToCategory.id,
-                    newToCategoryTitle: newToCategory.title,
-                    match: updated.toCategoryId === newToCategory.id
-                  });
-                  console.log('EDIT SAVE PAYLOAD', {
-                    originalId: editingTransaction.id,
-                    fromCategoryId: newFromCategory.id,
-                    toCategoryId: newToCategory.id,
-                    fromCategoryTitle: newFromCategory.title,
-                    toCategoryTitle: newToCategory.title
-                  });
-                }
-
-                await editFeedTransaction({
-                  originalTransactionId: editingTransaction.id,
-                  newFromCategory,
-                  newToCategory,
-                  newAmount: updated.amount,
-                  newDescription: updated.comment,
-                  newExpenseCategoryId: updated.expenseCategoryId ?? undefined,
-                  newIsSalary: updated.isSalary,
-                  newIsCashless: updated.isCashless,
-                  newNeedsReview: updated.needsReview,
-                  audit: {
-                    transactionId: editingTransaction.id,
-                    before: {
-                      from: editingTransaction.fromUser,
-                      to: editingTransaction.toUser,
-                      amount: editingTransaction.amount,
-                      comment: editingTransaction.description,
-                      category: editingTransaction.fromUser || null,
-                      isSalary: !!editingTransaction.isSalary,
-                      isCashless: !!editingTransaction.isCashless,
-                      needsReview: !!editingTransaction.needsReview
-                    },
-                    after: {
-                      from: newFromCategory.title,
-                      to: newToCategory.title,
-                      amount: updated.amount,
-                      comment: updated.comment,
-                      category: afterAuditCategory?.title ?? null,
-                      isSalary: updated.isSalary,
-                      isCashless: updated.isCashless,
-                      needsReview: updated.needsReview
-                    }
-                  }
-                });
-
-                showSuccessNotification('Транзакция успешно отредактирована');
-                removeTransactionsFromFeed([editingTransaction.id]);
-                setEditingTransaction(null);
-                // onSnapshot подставит correction-транзакции; старый id отменён в БД и убран из state выше
-              } catch (error) {
-                console.error('Error editing transaction:', error);
-                showErrorNotification(
-                  error instanceof Error ? error.message : 'Ошибка при редактировании транзакции'
-                );
-              } finally {
-                setIsSavingEdit(false);
-              }
-            }}
-          />,
-          document.body
-        )}
+        <TransactionEditModals
+          editingTransaction={editingTransaction}
+          onCloseEditing={() => setEditingTransaction(null)}
+          isSavingEdit={isSavingEdit}
+          setIsSavingEdit={setIsSavingEdit}
+          employeeCategories={employeeCategories}
+          visibleCategories={visibleCategories}
+          expenseCategories={expenseCategories}
+          expenseCategoryById={expenseCategoryById}
+          onRemovedAfterEdit={(ids) => removeTransactionsFromFeed(ids)}
+        />
 
         {/* Предупреждение о большом объёме экспорта (> 20000 записей) */}
         {pendingLargeExport && createPortal(
@@ -1978,306 +1671,6 @@ export const Feed: React.FC = () => {
           </div>,
           document.body
         )}
-    </div>
-  );
-};
-
-interface EditTransactionModalProps {
-  transaction: Transaction;
-  peopleAccounts: CategoryCardType[];
-  objectAccounts: CategoryCardType[];
-  expenseCategories: Array<{ id: string; name: string }>;
-  isSaving: boolean;
-  onClose: () => void;
-  onSave: (data: {
-    fromCategoryId: string;
-    toCategoryId: string;
-    amount: number;
-    comment: string;
-    auditCategoryId: string | null;
-    expenseCategoryId: string | null;
-    isSalary: boolean;
-    isCashless: boolean;
-    needsReview: boolean;
-  }) => void;
-}
-
-const EXPENSE_ACCOUNT_TITLES = ['Общ Расх', 'Расходы', 'Прочие расходы'];
-
-const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
-  transaction,
-  peopleAccounts,
-  objectAccounts,
-  expenseCategories,
-  isSaving,
-  onClose,
-  onSave
-}) => {
-  const [fromCategoryId, setFromCategoryId] = useState<string>(() => {
-    const match = peopleAccounts.find(c => c.title === transaction.fromUser);
-    return match?.id ?? '';
-  });
-  const [toCategoryId, setToCategoryId] = useState<string>(() => {
-    const target = objectAccounts.find(c => c.title === transaction.toUser);
-    return target?.id ?? '';
-  });
-  const [amount, setAmount] = useState<string>(Math.abs(transaction.amount).toString());
-  const [comment, setComment] = useState<string>(transaction.description);
-  const [isSalary, setIsSalary] = useState<boolean>(!!transaction.isSalary);
-  const [isCashless, setIsCashless] = useState<boolean>(!!transaction.isCashless);
-  const [needsReview, setNeedsReview] = useState<boolean>(!!transaction.needsReview);
-  const [auditCategoryId, setAuditCategoryId] = useState<string>(() => {
-    const match = peopleAccounts.find(c => c.title === transaction.fromUser);
-    return match?.id ?? '';
-  });
-  const [expenseCategoryId, setExpenseCategoryId] = useState<string>(() => transaction.expenseCategoryId ?? '');
-  const [error, setError] = useState<string>('');
-  const [toAccountSearch, setToAccountSearch] = useState<string>('');
-  const filteredObjectAccounts = useMemo(() => {
-    const q = toAccountSearch.trim().toLowerCase();
-    if (!q) return objectAccounts;
-    return objectAccounts.filter((c) => c.title.toLowerCase().includes(q));
-  }, [objectAccounts, toAccountSearch]);
-
-  const selectedToCategory = objectAccounts.find((c) => c.id === toCategoryId);
-  const isToExpenseAccount =
-    selectedToCategory &&
-    (selectedToCategory.type === 'general_expense' ||
-      EXPENSE_ACCOUNT_TITLES.includes(selectedToCategory.title));
-  const showExpenseCategory = !!isToExpenseAccount;
-
-  const handleSubmit = () => {
-    setError('');
-
-    if (!fromCategoryId || !toCategoryId) {
-      setError('Выберите счета "Откуда" и "Куда"');
-      return;
-    }
-
-    if (showExpenseCategory && !expenseCategoryId) {
-      setError('Выберите категорию расхода');
-      return;
-    }
-
-    const numericAmount = Number(amount.replace(',', '.'));
-    if (!numericAmount || numericAmount <= 0) {
-      setError('Введите корректную сумму');
-      return;
-    }
-
-    if (!comment.trim()) {
-      setError('Введите комментарий');
-      return;
-    }
-
-    onSave({
-      fromCategoryId,
-      toCategoryId,
-      amount: numericAmount,
-      comment: comment.trim(),
-      auditCategoryId: auditCategoryId || null,
-      expenseCategoryId: showExpenseCategory ? expenseCategoryId || null : null,
-      isSalary,
-      isCashless,
-      needsReview
-    });
-  };
-
-  return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-6 py-4 border-b flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Pencil className="w-5 h-5 text-gray-500" />
-            Редактирование транзакции
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-            disabled={isSaving}
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="px-6 py-4 space-y-4">
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Откуда (счёт)
-              </label>
-              <select
-                value={fromCategoryId}
-                onChange={(e) => setFromCategoryId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              >
-                <option value="">Выберите счёт</option>
-                {peopleAccounts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Куда (счёт)
-              </label>
-              {objectAccounts.length > 8 && (
-                <input
-                  type="text"
-                  value={toAccountSearch}
-                  onChange={(e) => setToAccountSearch(e.target.value)}
-                  placeholder="Поиск счёта..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 mb-2"
-                />
-              )}
-              <select
-                value={toCategoryId}
-                onChange={(e) => setToCategoryId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              >
-                <option value="">Выберите счёт</option>
-                {filteredObjectAccounts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {showExpenseCategory && (
-            <div id="expenseCategoryBlock">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Категория расхода
-              </label>
-              <select
-                id="expenseCategory"
-                value={expenseCategoryId}
-                onChange={(e) => setExpenseCategoryId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              >
-                <option value="">Выберите категорию</option>
-                {expenseCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Сумма
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Категория (для журнала аудита)
-              </label>
-              <select
-                value={auditCategoryId}
-                onChange={(e) => setAuditCategoryId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              >
-                <option value="">Выберите человека</option>
-                {peopleAccounts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Комментарий
-            </label>
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-            />
-          </div>
-
-          <div>
-            <p className="block text-sm font-medium text-gray-700 mb-2">Тип операции</p>
-            <div className="flex flex-wrap items-center gap-4 sm:gap-6" style={{ minHeight: 36 }}>
-              <label className="inline-flex items-center gap-2 cursor-pointer min-h-[36px]">
-                <input
-                  type="checkbox"
-                  checked={isSalary}
-                  onChange={(e) => setIsSalary(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span className="text-sm text-gray-700">ЗП</span>
-              </label>
-              <label className="inline-flex items-center gap-2 cursor-pointer min-h-[36px]">
-                <input
-                  type="checkbox"
-                  checked={isCashless}
-                  onChange={(e) => setIsCashless(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span className="text-sm text-gray-700">Безнал</span>
-              </label>
-              <label className="inline-flex items-center gap-2 cursor-pointer min-h-[36px]" title="Требует уточнения">
-                <input
-                  type="checkbox"
-                  checked={needsReview}
-                  onChange={(e) => setNeedsReview(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span className="text-sm text-gray-700">Треб.уч.</span>
-              </label>
-            </div>
-          </div>
-        </div>
-        <div className="px-6 py-4 border-t flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            disabled={isSaving}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50"
-          >
-            Отмена
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isSaving}
-            className="px-4 py-2 text-sm font-medium text-white bg-emerald-500 rounded-md hover:bg-emerald-600 disabled:opacity-50 flex items-center gap-2"
-          >
-            {isSaving && (
-              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-            )}
-            Сохранить
-          </button>
-        </div>
-      </div>
     </div>
   );
 };
