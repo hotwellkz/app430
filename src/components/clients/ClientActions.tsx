@@ -1,24 +1,19 @@
 import React, { useState } from 'react';
 import { Building2, History, Download, MessageSquare, BarChart2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Client } from '../../types/client';
 import { CommentTooltip } from '../comments/CommentTooltip';
 import { CommentModal } from '../modals/CommentModal';
 import { useClientComments } from '../../hooks/useClientComments';
 import { exportToExcel } from '../../services/excelExportService';
 import { showErrorNotification } from '../../utils/notifications';
-import { Transaction } from '../transactions/types';
 import { db } from '../../lib/firebase';
-import { useCompanyId } from '../../contexts/CompanyContext';
+import { useCompanyContext } from '../../contexts/CompanyContext';
+import { doc, getDoc } from 'firebase/firestore';
 import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  query,
-  where
-} from 'firebase/firestore';
+  formatTransactionHistoryErrorForUser,
+  getTransactionHistory
+} from '../../services/transactionHistoryCategoryLookup';
 import clsx from 'clsx';
 import {
   FoundationEstimateData,
@@ -73,6 +68,9 @@ export const ClientActions: React.FC<ClientActionsProps> = ({
   allowWrap = false
 }) => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const { companyId, loading: companyLoading } = useCompanyContext();
   const { comments, loading: commentsLoading } = useClientComments(client.id);
   const [showCommentModal, setShowCommentModal] = useState(false);
   const sizing = iconSizes[size];
@@ -84,214 +82,81 @@ export const ClientActions: React.FC<ClientActionsProps> = ({
     }
   };
 
-  const getClientCategoryId = async () => {
-    let categoryId: string | null = null;
-
-    if (client.objectName) {
-      const objectNameQuery = query(
-        collection(db, 'categories'),
-        where('companyId', '==', companyId),
-        where('title', '==', client.objectName),
-        where('row', '==', 1)
-      );
-      const objectNameSnapshot = await getDocs(objectNameQuery);
-
-      if (objectNameSnapshot.docs.length === 1) {
-        categoryId = objectNameSnapshot.docs[0].id;
-      } else if (objectNameSnapshot.docs.length > 1) {
-        for (const categoryDoc of objectNameSnapshot.docs) {
-          const transactionsQuery = query(
-            collection(db, 'transactions'),
-            where('companyId', '==', companyId),
-            where('categoryId', '==', categoryDoc.id),
-            limit(1)
-          );
-          const transactionsSnapshot = await getDocs(transactionsQuery);
-
-          if (!transactionsSnapshot.empty) {
-            const transaction = transactionsSnapshot.docs[0].data() as Transaction;
-            const clientName = `${client.lastName} ${client.firstName}`.trim();
-            if (
-              transaction.toUser?.includes(client.lastName || '') ||
-              transaction.toUser?.includes(client.firstName || '') ||
-              transaction.description?.includes(client.objectName || '') ||
-              transaction.description?.includes(clientName)
-            ) {
-              categoryId = categoryDoc.id;
-              break;
-            }
-          }
-        }
-
-        if (!categoryId) {
-          categoryId = objectNameSnapshot.docs[0].id;
-        }
-      }
+  const openTransactionHistory = async (scope: 'client' | 'project') => {
+    if (!client?.id) {
+      showErrorNotification('Не указан клиент');
+      return;
+    }
+    if (companyLoading) {
+      return;
+    }
+    if (!companyId) {
+      showErrorNotification('Компания не загружена. Обновите страницу или войдите снова.');
+      return;
     }
 
-    if (!categoryId) {
-      const clientName = `${client.lastName} ${client.firstName}`.trim();
-      if (clientName) {
-        const nameQuery = query(
-          collection(db, 'categories'),
-          where('companyId', '==', companyId),
-          where('title', '==', clientName),
-          where('row', '==', 1)
+    if (import.meta.env.DEV) {
+      console.info('[ClientActions] transaction history', {
+        scope,
+        route: { pathname: location.pathname, search: location.search },
+        queryClientId: searchParams.get('clientId'),
+        clientDocId: client.id,
+        clientNumber: client.clientNumber,
+        objectName: client.objectName,
+        companyId
+      });
+    }
+
+    try {
+      const categoryId = await getTransactionHistory({
+        scope,
+        companyId,
+        client
+      });
+
+      if (import.meta.env.DEV) {
+        console.info('[ClientActions] transaction history result', {
+          scope,
+          categoryId,
+          navigateTo: categoryId ? `/transactions/history/${categoryId}` : null
+        });
+      }
+
+      if (!categoryId) {
+        showErrorNotification(
+          scope === 'project'
+            ? 'История операций проекта недоступна'
+            : 'История операций недоступна'
         );
-        const nameSnapshot = await getDocs(nameQuery);
-
-        if (nameSnapshot.docs.length === 1) {
-          categoryId = nameSnapshot.docs[0].id;
-        } else if (nameSnapshot.docs.length > 1) {
-          for (const categoryDoc of nameSnapshot.docs) {
-            const transactionsQuery = query(
-              collection(db, 'transactions'),
-              where('companyId', '==', companyId),
-              where('categoryId', '==', categoryDoc.id),
-              limit(1)
-            );
-            const transactionsSnapshot = await getDocs(transactionsQuery);
-
-            if (!transactionsSnapshot.empty) {
-              const transaction = transactionsSnapshot.docs[0].data() as Transaction;
-              if (
-                transaction.toUser?.includes(client.lastName || '') ||
-                transaction.toUser?.includes(client.firstName || '') ||
-                transaction.description?.includes(client.objectName || '')
-              ) {
-                categoryId = categoryDoc.id;
-                break;
-              }
-            }
-          }
-
-          if (!categoryId) {
-            categoryId = nameSnapshot.docs[0].id;
-          }
-        }
+        return;
       }
-    }
 
-    return categoryId;
-  };
-
-  const getProjectCategoryId = async () => {
-    let categoryId: string | null = null;
-
-    if (client.objectName) {
-      const objectNameQuery = query(
-        collection(db, 'categories'),
-        where('companyId', '==', companyId),
-        where('title', '==', client.objectName),
-        where('row', '==', 3)
-      );
-      const objectNameSnapshot = await getDocs(objectNameQuery);
-
-      if (objectNameSnapshot.docs.length === 1) {
-        categoryId = objectNameSnapshot.docs[0].id;
-      } else if (objectNameSnapshot.docs.length > 1) {
-        for (const categoryDoc of objectNameSnapshot.docs) {
-          const transactionsQuery = query(
-            collection(db, 'transactions'),
-            where('companyId', '==', companyId),
-            where('categoryId', '==', categoryDoc.id),
-            limit(1)
-          );
-          const transactionsSnapshot = await getDocs(transactionsQuery);
-
-          if (!transactionsSnapshot.empty) {
-            const transaction = transactionsSnapshot.docs[0].data() as Transaction;
-            const clientName = `${client.lastName} ${client.firstName}`.trim();
-            if (
-              transaction.toUser?.includes(client.lastName || '') ||
-              transaction.toUser?.includes(client.firstName || '') ||
-              transaction.description?.includes(client.objectName || '') ||
-              transaction.description?.includes(clientName)
-            ) {
-              categoryId = categoryDoc.id;
-              break;
-            }
-          }
-        }
-
-        if (!categoryId) {
-          categoryId = objectNameSnapshot.docs[0].id;
-        }
+      navigate(`/transactions/history/${categoryId}`);
+    } catch (error) {
+      console.error('[ClientActions] transaction history failed', { scope, error });
+      if (import.meta.env.DEV) {
+        const code = error && typeof error === 'object' && 'code' in error ? String((error as { code: unknown }).code) : undefined;
+        console.info('[ClientActions] transaction history error detail', {
+          scope,
+          code,
+          message: error instanceof Error ? error.message : String(error)
+        });
       }
+      const prefix =
+        scope === 'project'
+          ? 'Не удалось открыть историю проекта'
+          : 'Не удалось открыть историю клиента';
+      const detail = formatTransactionHistoryErrorForUser(error, import.meta.env.DEV);
+      showErrorNotification(import.meta.env.DEV ? `${prefix}: ${detail}` : `${prefix}. ${detail}`);
     }
-
-    if (!categoryId) {
-      const clientName = `${client.lastName} ${client.firstName}`.trim();
-      if (clientName) {
-        const nameQuery = query(
-          collection(db, 'categories'),
-          where('companyId', '==', companyId),
-          where('title', '==', clientName),
-          where('row', '==', 3)
-        );
-        const nameSnapshot = await getDocs(nameQuery);
-
-        if (nameSnapshot.docs.length === 1) {
-          categoryId = nameSnapshot.docs[0].id;
-        } else if (nameSnapshot.docs.length > 1) {
-          for (const categoryDoc of nameSnapshot.docs) {
-            const transactionsQuery = query(
-              collection(db, 'transactions'),
-              where('companyId', '==', companyId),
-              where('categoryId', '==', categoryDoc.id),
-              limit(1)
-            );
-            const transactionsSnapshot = await getDocs(transactionsQuery);
-
-            if (!transactionsSnapshot.empty) {
-              const transaction = transactionsSnapshot.docs[0].data() as Transaction;
-              if (
-                transaction.toUser?.includes(client.lastName || '') ||
-                transaction.toUser?.includes(client.firstName || '') ||
-                transaction.description?.includes(client.objectName || '')
-              ) {
-                categoryId = categoryDoc.id;
-                break;
-              }
-            }
-          }
-
-          if (!categoryId) {
-            categoryId = nameSnapshot.docs[0].id;
-          }
-        }
-      }
-    }
-
-    return categoryId;
   };
 
   const handleProjectHistoryClick = async () => {
-    try {
-      const categoryId = await getProjectCategoryId();
-      if (!categoryId) {
-        showErrorNotification('История операций проекта недоступна');
-        return;
-      }
-      navigate(`/transactions/history/${categoryId}`);
-    } catch (error) {
-      console.error('Error loading project history:', error);
-      showErrorNotification('Не удалось загрузить историю операций проекта');
-    }
+    await openTransactionHistory('project');
   };
 
   const handleClientHistoryClick = async () => {
-    try {
-      const categoryId = await getClientCategoryId();
-      if (!categoryId) {
-        showErrorNotification('История операций недоступна');
-        return;
-      }
-      navigate(`/transactions/history/${categoryId}`);
-    } catch (error) {
-      console.error('Error loading history:', error);
-      showErrorNotification('Не удалось загрузить историю транзакций');
-    }
+    await openTransactionHistory('client');
   };
 
   const handleExportEstimateClick = async () => {
@@ -328,7 +193,15 @@ export const ClientActions: React.FC<ClientActionsProps> = ({
 
   const handleDownloadReport = async () => {
     try {
-      const categoryId = await getClientCategoryId();
+      if (companyLoading || !companyId) {
+        showErrorNotification('Компания не загружена. Обновите страницу.');
+        return;
+      }
+      const categoryId = await getTransactionHistory({
+        scope: 'client',
+        companyId,
+        client
+      });
       if (!categoryId) {
         showErrorNotification('Нет данных для отчёта');
         return;

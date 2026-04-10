@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   collection, 
   query, 
@@ -29,6 +29,8 @@ interface UseTransactionsPaginatedReturn {
   totalAmount: number;
   salaryTotal: number;
   cashlessTotal: number;
+  /** Ошибка подписки Firestore (например, отсутствует composite index). */
+  listenError: string | null;
   /** Локальное обновление строки (после правок вне первого снимка). */
   patchTransaction: (transactionId: string, patch: Partial<Transaction>) => void;
   /** Убрать id из списка сразу после отмены/коррекции (как в ленте). */
@@ -45,6 +47,8 @@ export const useTransactionsPaginated = ({
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [listenError, setListenError] = useState<string | null>(null);
+  const loggedListenErrorRef = useRef<string | null>(null);
 
   // Мемоизируем вычисления сумм (только одобренные транзакции влияют на баланс/итоги счёта)
   const { totalAmount, salaryTotal, cashlessTotal } = useMemo(() => {
@@ -67,6 +71,7 @@ export const useTransactionsPaginated = ({
     if (!enabled || !companyId || !categoryId) {
       setLoading(false);
       setTransactions([]);
+      setListenError(null);
       return () => {};
     }
 
@@ -74,6 +79,8 @@ export const useTransactionsPaginated = ({
     setTransactions([]);
     setLastDoc(null);
     setHasMore(true);
+    setListenError(null);
+    loggedListenErrorRef.current = null;
 
     const q = query(
       collection(db, 'transactions'),
@@ -83,40 +90,59 @@ export const useTransactionsPaginated = ({
       limit(pageSize)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const raw = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as (Transaction & { status?: string; editType?: string; correctedFrom?: string; categoryTitle?: string })[];
-      if (process.env.NODE_ENV === 'development') {
-        console.log('TRANSACTIONS PAGE RAW RESULT', {
-          routeId: categoryId,
-          totalFetched: raw.length,
-          docs: raw.map(t => ({ id: t.id, categoryId: t.categoryId, categoryTitle: (t as any).categoryTitle, editType: t.editType, status: t.status, correctedFrom: t.correctedFrom }))
-        });
-      }
-      const correctedFromIds = new Set(
-        raw.filter(t => t.correctedFrom).map(t => t.correctedFrom as string)
-      );
-      const transactionsData = raw.filter(
-        t =>
-          t.status !== 'cancelled' &&
-          t.editType !== 'reversal' &&
-          !correctedFromIds.has(t.id)
-      ) as Transaction[];
-      if (process.env.NODE_ENV === 'development') {
-        console.log('TRANSACTIONS PAGE FILTERED RESULT', {
-          routeId: categoryId,
-          totalVisible: transactionsData.length,
-          docs: transactionsData.map(t => ({ id: t.id, categoryId: t.categoryId, editType: (t as any).editType, status: (t as any).status, correctedFrom: (t as any).correctedFrom }))
-        });
-      }
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        setListenError(null);
+        const raw = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as (Transaction & { status?: string; editType?: string; correctedFrom?: string; categoryTitle?: string })[];
+        if (import.meta.env.DEV) {
+          console.log('TRANSACTIONS PAGE RAW RESULT', {
+            routeId: categoryId,
+            totalFetched: raw.length,
+            docs: raw.map(t => ({ id: t.id, categoryId: t.categoryId, categoryTitle: (t as any).categoryTitle, editType: t.editType, status: t.status, correctedFrom: t.correctedFrom }))
+          });
+        }
+        const correctedFromIds = new Set(
+          raw.filter(t => t.correctedFrom).map(t => t.correctedFrom as string)
+        );
+        const transactionsData = raw.filter(
+          t =>
+            t.status !== 'cancelled' &&
+            t.editType !== 'reversal' &&
+            !correctedFromIds.has(t.id)
+        ) as Transaction[];
+        if (import.meta.env.DEV) {
+          console.log('TRANSACTIONS PAGE FILTERED RESULT', {
+            routeId: categoryId,
+            totalVisible: transactionsData.length,
+            docs: transactionsData.map(t => ({ id: t.id, categoryId: t.categoryId, editType: (t as any).editType, status: (t as any).status, correctedFrom: (t as any).correctedFrom }))
+          });
+        }
 
-      setTransactions(transactionsData);
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
-      setHasMore(snapshot.docs.length === pageSize);
-      setLoading(false);
-    });
+        setTransactions(transactionsData);
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+        setHasMore(snapshot.docs.length === pageSize);
+        setLoading(false);
+      },
+      (err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        setListenError(msg);
+        setLoading(false);
+        setTransactions([]);
+        if (loggedListenErrorRef.current !== msg) {
+          loggedListenErrorRef.current = msg;
+          console.error('useTransactionsPaginated onSnapshot error', {
+            categoryId,
+            companyId,
+            code: (err as { code?: string }).code,
+            message: msg
+          });
+        }
+      }
+    );
 
     return unsubscribe;
   }, [categoryId, pageSize, enabled, companyId]);
@@ -192,6 +218,7 @@ export const useTransactionsPaginated = ({
     totalAmount,
     salaryTotal,
     cashlessTotal,
+    listenError,
     patchTransaction,
     removeTransactionIds
   };

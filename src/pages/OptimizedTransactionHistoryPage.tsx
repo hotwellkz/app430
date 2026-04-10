@@ -50,6 +50,7 @@ import { exportTransactionsReport } from '../utils/exportTransactionsReport';
 import { TransactionExportModal, TransactionExportFilters } from '../components/transactions/TransactionExportModal';
 import { useCategories } from '../hooks/useCategories';
 import { useTransactionEditMode } from '../hooks/useTransactionEditMode';
+import { formatTransactionHistoryErrorForUser } from '../services/transactionHistoryCategoryLookup';
 import { TransactionEditPasswordModal } from '../components/transactions/TransactionEditPasswordModal';
 import { TransactionEditModals } from '../components/transactions/TransactionEditModals';
 
@@ -288,7 +289,8 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
     totalAmount,
     salaryTotal,
     cashlessTotal,
-    removeTransactionIds
+    removeTransactionIds,
+    listenError
   } = useTransactionsPaginated({
     categoryId: categoryId!,
     pageSize: 50,
@@ -485,7 +487,9 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
         }
       } catch (error) {
         console.error('Error loading category:', error);
-        setError('Ошибка загрузки категории');
+        setError(
+          error instanceof Error ? error.message : 'Ошибка загрузки категории'
+        );
       }
     };
 
@@ -930,7 +934,14 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
       <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto">
         <div className="max-w-[1200px] mx-auto px-4 lg:px-[60px] lg:pr-[40px]">
           <div {...handlers}>
-            {flatRows.length > 0 ? (
+            {listenError ? (
+              <div className="text-center py-12 px-4 max-w-lg mx-auto">
+                <p className="text-red-700 font-medium">Не удалось загрузить список операций</p>
+                <p className="text-gray-600 text-sm mt-2 break-words">
+                  {formatTransactionHistoryErrorForUser(new Error(listenError), import.meta.env.DEV)}
+                </p>
+              </div>
+            ) : flatRows.length > 0 ? (
               <VirtualizedTransactionsList
                 rows={flatRows}
                 width="100%"
@@ -955,7 +966,7 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
               </div>
             ) : (
               <div className="text-center py-12">
-                <p className="text-gray-500">Транзакции не найдены</p>
+                <p className="text-gray-500">История пуста</p>
               </div>
             )}
           </div>
