@@ -91,9 +91,9 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
       <div
         className={[
           'bg-white flex flex-col overflow-hidden',
-          // mobile: fullscreen bottom sheet (h-screen — fallback для старых iOS Safari)
-          'fixed inset-0 h-screen w-screen',
-          'h-[100dvh]',
+          // mobile: fullscreen — высота = реальный viewport через inset-0,
+          // не используем dvh/vh, иначе нижний край уезжает за url-bar
+          'fixed inset-0',
           // desktop: centered, max width, max height
           'md:static md:inset-auto md:h-auto md:w-full md:max-w-2xl md:max-h-[90vh] md:rounded-lg md:shadow-xl',
         ].join(' ')}
