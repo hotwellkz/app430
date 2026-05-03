@@ -47,6 +47,21 @@ body.attachment-preview-open [data-testid="sticky-navigation-root"] {
   pointer-events: none !important;
 }
 
+/* Открытое полноэкранное модальное окно CRM на мобилке: блокируем скролл фона
+   и скрываем плавающее WhatsApp-меню, чтобы оно не перекрывало поля и футер. */
+@media (max-width: 767px) {
+  body.crm-mobile-modal-open {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+  }
+  body.crm-mobile-modal-open [data-testid="sticky-navigation-root"] {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
+
 /* Встроенное видео в чате WhatsApp (как в приложении) */
 .chat-video {
   max-width: 260px;
