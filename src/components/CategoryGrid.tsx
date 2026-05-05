@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { CategoryCard } from './CategoryCard';
 import { CategoryCardType } from '../types';
 import { AddCategoryButton } from './AddCategoryButton';
-import { ChevronDown, ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { AddCategoryModal } from './AddCategoryModal';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -197,15 +197,15 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({ categories: initialC
             
             {!isCollapsed && (
               <div className="relative group">
-                <div 
+                <div
                   ref={el => scrollContainers.current[rowKey] = el}
-                  className="overflow-x-hidden cursor-grab"
+                  className="overflow-x-hidden cursor-grab sm:cursor-default sm:overflow-visible"
                   onMouseDown={(e) => handleMouseDown(e, rowKey)}
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
                 >
-                  <div className="grid grid-cols-4 gap-2 px-2 sm:grid-cols-none sm:gap-0 sm:px-4 sm:inline-flex sm:space-x-4">
+                  <div className="grid grid-cols-4 gap-2 px-2 sm:flex sm:flex-wrap sm:gap-4 sm:px-4 sm:space-x-0">
                     {rowCategories.map((category) => (
                       <div key={category.id} className="sm:w-[120px] flex-shrink-0">
                         <CategoryCard 
@@ -223,26 +223,9 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({ categories: initialC
                   </div>
                 </div>
                 
-                {rowCategories.length > 5 && (
-                  <>
-                    <div className="hidden sm:block absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-white to-transparent">
-                      <button
-                        onClick={() => scroll(rowKey, 'left')}
-                        className="absolute left-1 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600"
-                      >
-                        <ChevronLeft className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <div className="hidden sm:block absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-white to-transparent">
-                      <button
-                        onClick={() => scroll(rowKey, 'right')}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600"
-                      >
-                        <ChevronRightIcon className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </>
-                )}
+                {/* Кнопки горизонтальной прокрутки больше не нужны на десктопе:
+                    карточки переносятся flex-wrap. На мобиле прокрутка
+                    тоже не используется (там grid-cols-4). */}
               </div>
             )}
           </div>
