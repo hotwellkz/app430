@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { FloorEstimateItem } from '../../types/estimate';
+import { EstimateTooltip } from './estimate/EstimateTooltip';
 
 interface FloorEstimateTableProps {
   items: FloorEstimateItem[];
@@ -12,6 +13,47 @@ interface FloorEstimateTableProps {
   isEditing: boolean;
 }
 
+const getTooltipContent = (item: FloorEstimateItem): string => {
+  switch (item.name) {
+    case 'Брус 40x190x6000 (Для перекрыт расстояние между балками 29см)':
+      return `Количество бруса 40x190 рассчитывается по формуле:
+──────────────────────────────────
+⌈((пог. бруса 40x19 + балок 40x19) ÷ 6) + 2⌉
+──────────────────────────────────
+Где:
+- 6 м - длина одного бруса
+- +2 шт - запас на непредвиденные расходы
+- Расстояние между балками: 29 см`;
+
+    case 'OSB 18 (Для перекрытия (пол второго этажа))':
+      return `Количество OSB рассчитывается по формуле:
+──────────────────────────────────
+⌈(площадь пола ÷ 3.125) + 1⌉
+──────────────────────────────────
+Где:
+- 3.125 м² - площадь одного листа OSB 18 (1.25 × 2.5)
+- +1 лист - запас на подрезку`;
+
+    case 'Шурупы 4 крупная резьба':
+      return `Количество шурупов рассчитывается по формуле:
+──────────────────────────────────
+⌈количество OSB ÷ 5⌉
+──────────────────────────────────
+1 пачка хватает на 5 листов OSB`;
+
+    case 'Гвозди 120':
+      return `Количество гвоздей рассчитывается по формуле:
+──────────────────────────────────
+⌈количество бруса × 0.05⌉
+──────────────────────────────────
+Назначение: для монтажа бруса.
+0.05 кг на 1 балку`;
+
+    default:
+      return '';
+  }
+};
+
 export const FloorEstimateTable: React.FC<FloorEstimateTableProps> = ({
   items,
   totalMaterialsCost,
@@ -22,6 +64,8 @@ export const FloorEstimateTable: React.FC<FloorEstimateTableProps> = ({
   onUpdateCosts,
   isEditing
 }) => {
+  const [showTooltip, setShowTooltip] = useState<number | null>(null);
+
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full">
@@ -35,43 +79,50 @@ export const FloorEstimateTable: React.FC<FloorEstimateTableProps> = ({
           </tr>
         </thead>
         <tbody>
-          {items.map((item, index) => (
-            <tr key={index} className="border-t">
-              <td className="px-4 py-2">
-                {item.name === 'Гвозди 120' ? (
-                  <div className="group relative">
-                    <span>{item.name}</span>
-                    <div className="invisible group-hover:visible absolute left-0 top-full mt-2 p-2 bg-gray-800 text-white text-sm rounded shadow-lg z-10 w-64">
-                      (Для Монтажа Бруса) 0,05 кг на 1 балку
+          {items.map((item, index) => {
+            const tooltipContent = getTooltipContent(item);
+            const hasTooltip = tooltipContent.length > 0;
+            return (
+              <tr key={index} className="border-t">
+                <td className="px-4 py-2">
+                  {hasTooltip ? (
+                    <div
+                      className="relative inline-block cursor-help"
+                      onMouseEnter={() => setShowTooltip(index)}
+                      onMouseLeave={() => setShowTooltip(null)}
+                      onClick={() => setShowTooltip(showTooltip === index ? null : index)}
+                    >
+                      <span className="border-b border-dotted border-gray-400">{item.name}</span>
+                      <EstimateTooltip content={tooltipContent} show={showTooltip === index} />
                     </div>
-                  </div>
-                ) : (
-                  item.name
-                )}
-              </td>
-              <td className="px-4 py-2 text-center">{item.unit}</td>
-              <td className="px-4 py-2 text-center">
-                <input
-                  type="number"
-                  value={item.quantity}
-                  onChange={(e) => onUpdateItem(index, 'quantity', Number(e.target.value))}
-                  className="w-24 px-2 py-1 text-right border rounded"
-                  disabled={!isEditing}
-                  step="0.1"
-                />
-              </td>
-              <td className="px-4 py-2 text-center">
-                <input
-                  type="number"
-                  value={item.price}
-                  onChange={(e) => onUpdateItem(index, 'price', Number(e.target.value))}
-                  className="w-24 px-2 py-1 text-right border rounded"
-                  disabled={!isEditing}
-                />
-              </td>
-              <td className="px-4 py-2 text-right">{item.total.toLocaleString()} ₸</td>
-            </tr>
-          ))}
+                  ) : (
+                    item.name
+                  )}
+                </td>
+                <td className="px-4 py-2 text-center">{item.unit}</td>
+                <td className="px-4 py-2 text-center">
+                  <input
+                    type="number"
+                    value={item.quantity}
+                    onChange={(e) => onUpdateItem(index, 'quantity', Number(e.target.value))}
+                    className="w-24 px-2 py-1 text-right border rounded"
+                    disabled={!isEditing}
+                    step="0.1"
+                  />
+                </td>
+                <td className="px-4 py-2 text-center">
+                  <input
+                    type="number"
+                    value={item.price}
+                    onChange={(e) => onUpdateItem(index, 'price', Number(e.target.value))}
+                    className="w-24 px-2 py-1 text-right border rounded"
+                    disabled={!isEditing}
+                  />
+                </td>
+                <td className="px-4 py-2 text-right">{item.total.toLocaleString()} ₸</td>
+              </tr>
+            );
+          })}
         </tbody>
         <tfoot>
           <tr className="bg-gray-100 font-bold">
