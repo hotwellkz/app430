@@ -195,10 +195,23 @@ export const Transactions: React.FC = () => {
     const y = pointerYRef.current;
     if (el && y != null) {
       const rect = el.getBoundingClientRect();
-      const margin = 100;
-      const speed = 36;
-      if (y > rect.bottom - margin) el.scrollTop += speed;
-      else if (y < rect.top + margin) el.scrollTop -= speed;
+      // На мобиле — меньше зона и медленнее, чтобы пользователь мог
+      // спокойно остановиться на нужной иконке. Скорость пропорциональна
+      // близости пальца к краю (edge-based velocity): на границе зоны
+      // скорость = 0, у самого края экрана — максимум.
+      const isMobile = window.innerWidth < 768;
+      const margin = isMobile ? 60 : 100;
+      const maxSpeed = isMobile ? 8 : 18;
+
+      if (y > rect.bottom - margin) {
+        const distance = Math.min(y - (rect.bottom - margin), margin);
+        const speed = (distance / margin) * maxSpeed;
+        el.scrollTop += speed;
+      } else if (y < rect.top + margin) {
+        const distance = Math.min(rect.top + margin - y, margin);
+        const speed = (distance / margin) * maxSpeed;
+        el.scrollTop -= speed;
+      }
     }
     autoScrollRafRef.current = requestAnimationFrame(runDragAutoScroll);
   }, []);
@@ -222,18 +235,14 @@ export const Transactions: React.FC = () => {
     autoScrollRafRef.current = requestAnimationFrame(runDragAutoScroll);
   };
 
-  /** Доп. прокрутка по rect карточки (desktop / когда есть translated) */
+  /** Только обновляем pointerY координатой центра перетаскиваемой карточки —
+   *  сам скролл делает runDragAutoScroll (RAF-loop), чтобы не было двойного
+   *  ускорения и потери контроля над целью на мобиле. */
   const handleDragMove = useCallback((event: DragMoveEvent) => {
-    const el = scrollContainerRef.current;
     const translated = event.active.rect.current.translated;
-    if (!el || !translated) return;
-    pointerYRef.current = translated.top + translated.height / 2;
-    const clientY = pointerYRef.current;
-    const rect = el.getBoundingClientRect();
-    const margin = 80;
-    const speed = 28;
-    if (clientY > rect.bottom - margin) el.scrollTop += speed;
-    else if (clientY < rect.top + margin) el.scrollTop -= speed;
+    if (translated) {
+      pointerYRef.current = translated.top + translated.height / 2;
+    }
   }, []);
 
   const navigate = useNavigate();
