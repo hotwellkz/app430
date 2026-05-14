@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 
 interface FoundationEstimateTooltipProps {
   content: string;
@@ -11,6 +11,37 @@ export const FoundationEstimateTooltip: React.FC<FoundationEstimateTooltipProps>
   show,
   position = 'bottom'
 }) => {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [shiftX, setShiftX] = useState(0);
+
+  // На десктопе абсолютное позиционирование может вытолкнуть попап за viewport,
+  // если якорь близко к левому или правому краю окна. Меряем rect и сдвигаем
+  // через translateX, чтобы вернуть его в видимую зону. На мобиле попап fixed
+  // left-4 right-4 — коррекция не нужна.
+  useLayoutEffect(() => {
+    if (!show) {
+      setShiftX(0);
+      return;
+    }
+    const el = ref.current;
+    if (!el) return;
+    if (window.matchMedia('(max-width: 639px)').matches) return;
+
+    setShiftX(0);
+    const raf = requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      const margin = 8;
+      let dx = 0;
+      if (rect.right > window.innerWidth - margin) {
+        dx = window.innerWidth - margin - rect.right;
+      } else if (rect.left < margin) {
+        dx = margin - rect.left;
+      }
+      if (dx !== 0) setShiftX(dx);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [show, content]);
+
   if (!show) return null;
 
   const desktopVerticalCls =
@@ -20,10 +51,10 @@ export const FoundationEstimateTooltip: React.FC<FoundationEstimateTooltipProps>
 
   return (
     <div
+      ref={ref}
       className={[
         'z-50 p-4 sm:p-6 bg-emerald-50 border border-emerald-200 rounded-lg shadow-xl',
-        // Мобила: fixed в нижней части viewport, с отступами от краёв,
-        // чтобы попап никогда не выходил за экран
+        // Мобила: fixed в нижней части viewport, с отступами от краёв
         'fixed left-4 right-4 bottom-4',
         // Десктоп: absolute, как раньше — рядом с якорем
         'sm:absolute sm:left-auto sm:right-0 sm:bottom-auto',
@@ -32,7 +63,8 @@ export const FoundationEstimateTooltip: React.FC<FoundationEstimateTooltipProps>
       ].join(' ')}
       style={{
         maxHeight: 'min(calc(100dvh - 120px), calc(100vh - 120px))',
-        overflowY: 'auto'
+        overflowY: 'auto',
+        transform: shiftX !== 0 ? `translateX(${shiftX}px)` : undefined,
       }}
     >
       <pre className="text-xs sm:text-sm text-emerald-700 whitespace-pre-wrap font-sans break-words">{content}</pre>
