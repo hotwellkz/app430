@@ -1,4 +1,5 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 interface EstimateTooltipProps {
   content: string;
@@ -6,72 +7,132 @@ interface EstimateTooltipProps {
   position?: 'top' | 'bottom';
 }
 
+interface Coords {
+  top: number;
+  left: number;
+  width: number;
+}
+
+/**
+ * Попап с формулой расчёта. Рендерится через portal в document.body
+ * с position:fixed — чтобы overflow:hidden у таблицы не обрезал попап.
+ * На десктопе позиционируется относительно якоря и автоматически
+ * сдвигается обратно в viewport, если уезжает за край.
+ * На мобиле прижимается к нижней части экрана с отступами 16px.
+ */
 export const EstimateTooltip: React.FC<EstimateTooltipProps> = ({
   content,
   show,
   position = 'bottom'
 }) => {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [shiftX, setShiftX] = useState(0);
+  const anchorMarkerRef = useRef<HTMLSpanElement | null>(null);
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const [coords, setCoords] = useState<Coords | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  // На десктопе попап позиционируется absolute относительно якоря (`sm:right-0`).
-  // Если якорь близко к левому или правому краю окна — попап вылезает за
-  // viewport. Мерим rect и сдвигаем через translateX, чтобы вернуть его в зону
-  // видимости. На мобиле попап fixed left-4 right-4 — JS-коррекция не нужна.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Отслеживаем мобильность для выбора стиля позиционирования
+  useEffect(() => {
+    if (!show) return;
+    const mq = window.matchMedia('(max-width: 639px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, [show]);
+
+  // Вычисление координат попапа относительно viewport на основе якоря
   useLayoutEffect(() => {
-    if (!show) {
-      setShiftX(0);
+    if (!show || isMobile) {
+      setCoords(null);
       return;
     }
-    const el = ref.current;
-    if (!el) return;
-    if (window.matchMedia('(max-width: 639px)').matches) return;
+    const anchorEl = anchorMarkerRef.current?.parentElement;
+    const tooltipEl = tooltipRef.current;
+    if (!anchorEl || !tooltipEl) return;
 
-    setShiftX(0);
-    // Замер на следующем кадре, чтобы CSS-классы успели применить базовую
-    // позицию до измерения.
-    const raf = requestAnimationFrame(() => {
-      const rect = el.getBoundingClientRect();
+    const compute = () => {
+      const aRect = anchorEl.getBoundingClientRect();
+      const tRect = tooltipEl.getBoundingClientRect();
       const margin = 8;
-      let dx = 0;
-      if (rect.right > window.innerWidth - margin) {
-        dx = window.innerWidth - margin - rect.right;
-      } else if (rect.left < margin) {
-        dx = margin - rect.left;
+      const gap = 10;
+      const viewportW = window.innerWidth;
+      const viewportH = window.innerHeight;
+
+      // Базовая позиция: выравниваем правый край попапа по правому краю якоря
+      let left = aRect.right - tRect.width;
+      let top = position === 'top'
+        ? aRect.top - tRect.height - gap
+        : aRect.bottom + gap;
+
+      // Коррекция по X: не уходим за края viewport
+      if (left + tRect.width > viewportW - margin) {
+        left = viewportW - margin - tRect.width;
       }
-      if (dx !== 0) setShiftX(dx);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [show, content]);
+      if (left < margin) {
+        left = margin;
+      }
 
-  if (!show) return null;
+      // Коррекция по Y: если внизу нет места — переворачиваем наверх, и наоборот
+      if (position !== 'top' && top + tRect.height > viewportH - margin) {
+        const altTop = aRect.top - tRect.height - gap;
+        if (altTop >= margin) top = altTop;
+      } else if (position === 'top' && top < margin) {
+        const altTop = aRect.bottom + gap;
+        if (altTop + tRect.height <= viewportH - margin) top = altTop;
+      }
 
-  const desktopVerticalCls =
-    position === 'top'
-      ? 'sm:top-auto sm:bottom-[calc(100%+10px)]'
-      : 'sm:bottom-auto sm:top-[calc(100%+10px)]';
+      setCoords({ top, left, width: tRect.width });
+    };
 
-  return (
+    compute();
+    // Перевычисляем при скролле/ресайзе, пока попап открыт
+    window.addEventListener('scroll', compute, true);
+    window.addEventListener('resize', compute);
+    return () => {
+      window.removeEventListener('scroll', compute, true);
+      window.removeEventListener('resize', compute);
+    };
+  }, [show, isMobile, position, content]);
+
+  if (!show) return <span ref={anchorMarkerRef} aria-hidden style={{ display: 'none' }} />;
+
+  const desktopReady = !isMobile && coords !== null;
+
+  const tooltipNode = (
     <div
-      ref={ref}
+      ref={tooltipRef}
       className={[
-        'z-50 p-4 sm:p-6 bg-emerald-50 border border-emerald-200 rounded-lg shadow-xl',
-        // Мобила: fixed в нижней части viewport, с отступами от краёв
-        'fixed left-4 right-4 bottom-4',
-        // Десктоп: absolute рядом с якорем
-        'sm:absolute sm:left-auto sm:right-0 sm:bottom-auto',
-        desktopVerticalCls,
-        'sm:w-auto sm:min-w-[400px] sm:max-w-[600px]',
+        'z-[2000] p-4 sm:p-6 bg-emerald-50 border border-emerald-200 rounded-lg shadow-xl',
+        // Мобила: прижатый к низу viewport бар с отступами
+        isMobile ? 'fixed left-4 right-4 bottom-4' : 'fixed',
+        !isMobile ? 'min-w-[400px] max-w-[600px]' : '',
       ].join(' ')}
       style={{
         maxHeight: 'min(calc(100dvh - 120px), calc(100vh - 120px))',
         overflowY: 'auto',
-        // На десктопе сдвигаем, чтобы попап не вылезал за viewport.
-        // На мобиле shiftX = 0, поэтому transform нейтрален.
-        transform: shiftX !== 0 ? `translateX(${shiftX}px)` : undefined,
+        // Для десктопа: первый рендер невидим, чтобы измерить размер;
+        // после расчёта coords — становится видимым в правильной позиции.
+        ...(isMobile
+          ? {}
+          : desktopReady
+            ? { top: coords!.top, left: coords!.left }
+            : { top: -9999, left: -9999, visibility: 'hidden' as const }),
       }}
     >
       <pre className="text-xs sm:text-sm text-emerald-700 whitespace-pre-wrap font-sans break-words">{content}</pre>
     </div>
+  );
+
+  return (
+    <>
+      {/* Маркер-якорь: его parentElement используется для вычисления позиции попапа */}
+      <span ref={anchorMarkerRef} aria-hidden style={{ display: 'none' }} />
+      {mounted ? createPortal(tooltipNode, document.body) : null}
+    </>
   );
 };
