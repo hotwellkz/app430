@@ -160,14 +160,13 @@ export const NewIncome: React.FC = () => {
       setItems(prev => {
         const existingIndex = prev.findIndex(item => item.product.id === newItem.product.id);
         if (existingIndex >= 0) {
-          const newItems = [...prev];
-          newItems[existingIndex] = {
-            ...newItems[existingIndex],
-            quantity: newItem.quantity
-          };
-          return newItems;
+          // Товар уже в списке: сохраняем введённое пользователем количество
+          // и поднимаем строку наверх, чтобы пользователь сразу её увидел.
+          const existing = prev[existingIndex];
+          const others = prev.filter((_, i) => i !== existingIndex);
+          return [existing, ...others];
         }
-        return [newItem, ...prev]; // Добавляем новый товар в начало списка
+        return [newItem, ...prev]; // Новый товар — в начало списка
       });
       
       navigate('.', { replace: true, state: {} });
