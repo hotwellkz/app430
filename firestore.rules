@@ -647,5 +647,44 @@ service cloud.firestore {
         || isGlobalAdmin()
       );
     }
+
+    // ────────────────────────────────────────────────────────────────────
+    // Модуль «Демпинг цен Kaspi» (kaspi-repricer).
+    // Запись во все kaspi* коллекции — ТОЛЬКО через Admin SDK (apps/api).
+    // Чтение с фронта — авторизованным пользователям соответствующей компании.
+    // ────────────────────────────────────────────────────────────────────
+    match /kaspiSettings/{companyId} {
+      allow read: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/company_users/$(request.auth.uid)) && get(/databases/$(database)/documents/company_users/$(request.auth.uid)).data.companyId == companyId)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId)
+        || isGlobalAdmin()
+      );
+      allow write: if false;
+    }
+
+    match /kaspiProducts/{productId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+
+      match /competitors/{snapshotId} {
+        allow read: if isAuthenticated();
+        allow write: if false;
+      }
+
+      match /priceHistory/{entryId} {
+        allow read: if isAuthenticated();
+        allow write: if false;
+      }
+    }
+
+    match /kaspiExcludedMerchants/{id} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /kaspiParseJobs/{jobId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
   }
 }
