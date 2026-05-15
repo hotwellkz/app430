@@ -1088,3 +1088,5 @@ export interface ApiErrorBody {
   details?: unknown;
   requestId?: string;
 }
+
+export * from './kaspi';

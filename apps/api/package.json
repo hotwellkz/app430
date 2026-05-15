@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "kaspi:smoke": "tsx src/scripts/kaspi-smoke.ts"
   },
   "dependencies": {
     "@2wix/domain-model": "workspace:*",
