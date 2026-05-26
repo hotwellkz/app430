@@ -3534,10 +3534,15 @@ const WhatsAppChat: React.FC = () => {
 
   const handleLongPressMessage = useCallback(
     (messageId: string) => {
+      // Long-press = только выделить сообщение (selection mode).
+      // Дальше пользователь может тапать на другие сообщения, чтобы добавить
+      // их в выделение (множественный выбор для пересылки).
+      // Reaction picker сюда НЕ открываем — он раньше мешал множественному
+      // выбору на мобиле: пользователь видел панель реакций и не понимал,
+      // что можно ещё что-то выделить.
       setSelectedMessageIds((prev) => (prev.includes(messageId) ? prev : [...prev, messageId]));
-      if (isMobile) setReactionPickerMessageId(messageId);
     },
-    [isMobile]
+    [],
   );
 
   const handleContextMenuMessage = useCallback((e: React.MouseEvent, messageId: string) => {
