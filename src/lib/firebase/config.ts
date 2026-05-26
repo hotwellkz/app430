@@ -1,5 +1,10 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getFirestore, initializeFirestore } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 
@@ -124,16 +129,47 @@ setPersistence(auth, browserLocalPersistence).catch((err) => {
   console.error('Error setting auth persistence:', err);
 });
 
+/**
+ * Persistent IndexedDB cache.
+ *
+ * - Документы, прочитанные через Firestore, сохраняются на устройстве.
+ *   При повторном заходе данные сразу показываются из локального кеша,
+ *   новые подгружаются с сервера в фоне — как в WhatsApp Web.
+ * - persistentMultipleTabManager — корректная работа в нескольких вкладках
+ *   браузера на одном устройстве (ПК).
+ * - Если persistence недоступен (iOS Safari в приватном режиме, заблокирован
+ *   IndexedDB) — откатываемся на in-memory кеш (поведение, как было до этого
+ *   изменения). Никаких падений.
+ */
 export const db = (() => {
+  const baseSettings = {
+    experimentalAutoDetectLongPolling: true,
+    useFetchStreams: false,
+  } as const;
+
   try {
     return initializeFirestore(app, {
-      // Helps in restricted/proxy networks where WebChannel is blocked.
-      experimentalAutoDetectLongPolling: true,
-      useFetchStreams: false
+      ...baseSettings,
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
     });
-  } catch {
-    // Firestore may already be initialized (HMR/multiple imports).
-    return getFirestore(app);
+  } catch (err) {
+    const code = (err as { code?: string })?.code;
+    // 'failed-precondition' / 'unimplemented' / уже инициализирован.
+    // Пытаемся без persistence — стабильный fallback.
+    try {
+      return initializeFirestore(app, baseSettings);
+    } catch {
+      // Firestore уже был инициализирован ранее (HMR/двойной импорт).
+      if (typeof console !== 'undefined') {
+        console.warn(
+          '[firestore] persistence init skipped, using existing instance',
+          code ?? err,
+        );
+      }
+      return getFirestore(app);
+    }
   }
 })();
 export const storage = getStorage(app);
