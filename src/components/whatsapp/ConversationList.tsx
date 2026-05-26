@@ -129,7 +129,11 @@ const ConversationRow = memo(function ConversationRow({
       onContextMenu={(e) => {
         if (!onConversationContextMenu) return;
         e.preventDefault();
-        onConversationContextMenu(item.id, e.clientX, e.clientY, 'desktop');
+        // На мобиле Android Chrome ловит long-press через contextmenu —
+        // в этом случае открываем bottom-sheet (source: 'mobile'), а не
+        // абсолютно-позиционированное desktop-меню, которое улетает за край.
+        const source: 'desktop' | 'mobile' = isMobileDevice() ? 'mobile' : 'desktop';
+        onConversationContextMenu(item.id, e.clientX, e.clientY, source);
       }}
       className={[
         'chat-list-item w-full text-left border-b border-gray-100 hover:bg-gray-50 transition-colors px-3 py-2 md:px-4 md:py-2.5',

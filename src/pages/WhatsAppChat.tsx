@@ -4909,9 +4909,21 @@ const WhatsAppChat: React.FC = () => {
           );
         }
 
-        // Desktop: контекстное меню у курсора
-        const menuX = conversationMenu.x;
-        const menuY = conversationMenu.y;
+        // Desktop: контекстное меню у курсора. Clamping чтобы не вылазило
+        // за края viewport (особенно при клике у правого/нижнего края).
+        const MENU_WIDTH_PX = 240;
+        const MENU_HEIGHT_PX = 240; // примерная высота 4-5 пунктов
+        const MENU_MARGIN_PX = 8;
+        const vw = typeof window !== 'undefined' ? window.innerWidth : 1024;
+        const vh = typeof window !== 'undefined' ? window.innerHeight : 768;
+        const menuX = Math.max(
+          MENU_MARGIN_PX,
+          Math.min(conversationMenu.x, vw - MENU_WIDTH_PX - MENU_MARGIN_PX),
+        );
+        const menuY = Math.max(
+          MENU_MARGIN_PX,
+          Math.min(conversationMenu.y, vh - MENU_HEIGHT_PX - MENU_MARGIN_PX),
+        );
         return (
           <div
             className="fixed inset-0 z-[1300]"
