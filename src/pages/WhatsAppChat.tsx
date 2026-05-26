@@ -65,6 +65,7 @@ import { API_CONFIG } from '../config/api';
 import { showErrorNotification } from '../utils/notifications';
 import toast from 'react-hot-toast';
 import { collection, query, where, onSnapshot, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { readSnapshotCacheMap, writeSnapshotCacheMap } from '../lib/firebase/localSnapshotCache';
 import { transcribeVoiceBatch, getVoiceMessagesToTranscribe } from '../utils/transcribeVoiceBatch';
 import {
   getMessageTextContentForAi,
@@ -1354,8 +1355,23 @@ const WhatsAppChat: React.FC = () => {
     if (!companyId) {
       setCrmNamesByPhone(new Map());
       setCityByPhone(new Map());
+      setBranchByPhone(new Map());
       return;
     }
+
+    // Шаг 1: мгновенно гидратируем UI из localStorage-кеша. Это та самая
+    // «открыл повторно — не ждём прогрузки» история. Если кеша нет (первый
+    // заход после релиза / после очистки) — оставляем пустые Map'ы.
+    const cachedNames = readSnapshotCacheMap<string>(`whatsapp:clients:names:${companyId}`);
+    const cachedCity = readSnapshotCacheMap<string>(`whatsapp:clients:city:${companyId}`);
+    const cachedBranch = readSnapshotCacheMap<{ id?: string; name?: string }>(
+      `whatsapp:clients:branch:${companyId}`,
+    );
+    if (cachedNames) setCrmNamesByPhone(cachedNames);
+    if (cachedCity) setCityByPhone(cachedCity);
+    if (cachedBranch) setBranchByPhone(cachedBranch);
+
+    // Шаг 2: подписка на свежие данные (как раньше). Перетрёт state.
     const q = query(
       collection(db, 'clients'),
       where('companyId', '==', companyId)
@@ -1396,11 +1412,15 @@ const WhatsAppChat: React.FC = () => {
         setCrmNamesByPhone(nameMap);
         setCityByPhone(cityMap);
         setBranchByPhone(branchMap);
+
+        // Шаг 3: пишем свежий snapshot в localStorage для следующего mount.
+        writeSnapshotCacheMap(`whatsapp:clients:names:${companyId}`, nameMap);
+        writeSnapshotCacheMap(`whatsapp:clients:city:${companyId}`, cityMap);
+        writeSnapshotCacheMap(`whatsapp:clients:branch:${companyId}`, branchMap);
       },
       () => {
-        setCrmNamesByPhone(new Map());
-        setCityByPhone(new Map());
-        setBranchByPhone(new Map());
+        // Ошибка от Firestore — НЕ обнуляем state, оставляем то, что
+        // загидратировали из кеша (offline-сценарий).
       }
     );
     return () => unsub();
