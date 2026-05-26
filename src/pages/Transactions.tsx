@@ -34,6 +34,7 @@ import { RayBackground } from '../components/RayBackground';
 import { PageMetadata } from '../components/PageMetadata';
 import './Transactions.css';
 import { PendingTransactionsProvider } from '../contexts/PendingTransactionsContext';
+import { TransactionsClientSearch } from '../components/transactions/TransactionsClientSearch';
 // Баланс для всех категорий (включая проекты) берём из Firestore (categories.amount).
 // Раньше для проектов подставляли sumAbsAmountByCategory, из-за чего при переводе
 // объект→сотрудник у объекта отображался рост суммы вместо списания.
@@ -155,6 +156,38 @@ export const Transactions: React.FC = () => {
     sourceCategory: CategoryCardType;
     targetCategory: CategoryCardType;
   } | null>(null);
+
+  // Подсветка иконки из поиска клиентов (см. TransactionsClientSearch).
+  const [highlightedCategoryId, setHighlightedCategoryId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    },
+    [],
+  );
+
+  const handleClientSearchPick = useCallback((categoryId: string | null) => {
+    if (!categoryId) {
+      showErrorNotification('У этого клиента ещё нет иконки на странице транзакций');
+      return;
+    }
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    setHighlightedCategoryId(categoryId);
+    // Скроллим к карточке после render-цикла
+    requestAnimationFrame(() => {
+      const el = document.querySelector(
+        `[data-tx-category-id="${categoryId}"]`,
+      ) as HTMLElement | null;
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+    highlightTimerRef.current = setTimeout(() => {
+      setHighlightedCategoryId(null);
+    }, 2200);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -531,8 +564,9 @@ export const Transactions: React.FC = () => {
                 onDeleteCategory={handleDeleteCategory}
                 onEditCategory={handleEditCategory}
                 rowNumber={1}
+                highlightedCategoryId={highlightedCategoryId}
               />
-              
+
               <CategoryRow
                 title="Сотрудники"
                 categories={employeeCategories}
@@ -541,8 +575,9 @@ export const Transactions: React.FC = () => {
                 onEditCategory={handleEditCategory}
                 rowNumber={2}
                 maskAmountCategoryIds={maskAmountEmployeeCategoryIds}
+                highlightedCategoryId={highlightedCategoryId}
               />
-              
+
               <CategoryRow
                 title="Проекты"
                 categories={projectCategories}
@@ -550,8 +585,9 @@ export const Transactions: React.FC = () => {
                 onDeleteCategory={handleDeleteCategory}
                 onEditCategory={handleEditCategory}
                 rowNumber={3}
+                highlightedCategoryId={highlightedCategoryId}
               />
-              
+
               <CategoryRow
                 title="Склад"
                 categories={warehouseCategories}
@@ -560,6 +596,7 @@ export const Transactions: React.FC = () => {
                 onEditCategory={handleEditCategory}
                 onAddCategory={() => setShowAddWarehouseModal(true)}
                 rowNumber={4}
+                highlightedCategoryId={highlightedCategoryId}
               />
                 </>
               )}
@@ -593,6 +630,12 @@ export const Transactions: React.FC = () => {
             )}
             </div>
           </DndContext>
+
+          {/* Поиск клиента (вызывается из плавающей кнопки в StickyNavigation) */}
+          <TransactionsClientSearch
+            categories={categories}
+            onSelectCategory={handleClientSearchPick}
+          />
         </PendingTransactionsProvider>
       </div>
     </div>
