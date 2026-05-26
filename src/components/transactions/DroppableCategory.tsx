@@ -17,6 +17,8 @@ interface DroppableCategoryProps {
   onHistoryClick?: () => void;
   /** Скрыть сумму (например, для чужих карточек сотрудников при ограничении прав). */
   maskAmount?: boolean;
+  /** Подсветить карточку коротким пульсом (используется поиском клиента). */
+  highlighted?: boolean;
 }
 
 export const DroppableCategory: React.FC<DroppableCategoryProps> = ({
@@ -24,6 +26,7 @@ export const DroppableCategory: React.FC<DroppableCategoryProps> = ({
   onEdit,
   onDelete,
   maskAmount,
+  highlighted,
 }) => {
   console.log('DroppableCategory получил onDelete:', !!onDelete, 'для категории:', category.title);
   const navigate = useNavigate();
@@ -113,7 +116,12 @@ export const DroppableCategory: React.FC<DroppableCategoryProps> = ({
     <>
       <div
         ref={setNodeRef}
-        className={`relative ${isOver && active ? 'ring-2 ring-emerald-500 rounded-lg' : ''}`}
+        data-tx-category-id={category.id}
+        className={[
+          'relative rounded-lg',
+          isOver && active ? 'ring-2 ring-emerald-500' : '',
+          highlighted ? 'tx-category-highlight' : '',
+        ].filter(Boolean).join(' ')}
         onContextMenu={handleContextMenu}
       >
         <CategoryCard

@@ -13,6 +13,8 @@ interface CategoryRowProps {
   rowNumber: number;
   /** ID категорий, у которых сумму нужно скрыть (например, чужие сотрудники при ограничении прав). */
   maskAmountCategoryIds?: Set<string>;
+  /** Id карточки, которую сейчас подсвечивает поиск клиента. */
+  highlightedCategoryId?: string | null;
 }
 
 export const CategoryRow: React.FC<CategoryRowProps> = ({
@@ -23,7 +25,8 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
   onEditCategory,
   onAddCategory,
   rowNumber,
-  maskAmountCategoryIds
+  maskAmountCategoryIds,
+  highlightedCategoryId,
 }) => {
   console.log('CategoryRow получил onDeleteCategory:', !!onDeleteCategory);
   const [isCollapsed, setIsCollapsed] = useState(rowNumber === 1);
@@ -112,6 +115,7 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
                   onEditCategory(category);
                 } : undefined}
                 maskAmount={maskAmountCategoryIds?.has(category.id)}
+                highlighted={highlightedCategoryId === category.id}
               />
             </div>
           ))}

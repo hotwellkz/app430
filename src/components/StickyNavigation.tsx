@@ -1,12 +1,13 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Warehouse, ArrowLeftRight, UserCircle, List } from 'lucide-react';
+import { Warehouse, ArrowLeftRight, UserCircle, List, Search } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { useMenuVisibility } from '../contexts/MenuVisibilityContext';
 import { useMobileWhatsAppChat } from '../contexts/MobileWhatsAppChatContext';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useWhatsAppFloatingButtonState } from '../hooks/useWhatsAppFloatingButtonState';
 import { useCurrentCompanyUser } from '../hooks/useCurrentCompanyUser';
+import { useTransactionsSearch } from '../contexts/TransactionsSearchContext';
 
 const MOBILE_BREAKPOINT = 768;
 const DESKTOP_COLLAPSE_DELAY_MS = 220;
@@ -30,6 +31,9 @@ export const StickyNavigation: React.FC<StickyNavigationProps> = ({ onNavigate }
   const canAccessTransactions = !accessLoading && canAccess('transactions');
 
   const waState = useWhatsAppFloatingButtonState(canAccessWhatsApp);
+  const transactionsSearch = useTransactionsSearch();
+  const isOnTransactionsPage = location.pathname === '/transactions';
+  const showClientSearchButton = isOnTransactionsPage && canAccessTransactions;
 
   const [desktopExpanded, setDesktopExpanded] = useState(false);
   const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -139,7 +143,18 @@ export const StickyNavigation: React.FC<StickyNavigationProps> = ({ onNavigate }
       >
         {/* Свёрнутый режим (desktop): только триггер с бейджем */}
         {showAsCollapsed && (
-          <div className="flex flex-col items-center rounded-2xl bg-white/95 backdrop-blur border border-gray-200/80 shadow-lg p-1.5">
+          <div className="flex flex-col items-center gap-2 rounded-2xl bg-white/95 backdrop-blur border border-gray-200/80 shadow-lg p-1.5">
+            {showClientSearchButton && (
+              <button
+                type="button"
+                onClick={transactionsSearch.open}
+                className="w-11 h-11 flex items-center justify-center rounded-full bg-emerald-500 hover:bg-emerald-600 text-white shadow transition-colors duration-200"
+                title="Поиск клиента"
+                aria-label="Поиск клиента"
+              >
+                <Search className="w-5 h-5" />
+              </button>
+            )}
             {canAccessWhatsApp && (
               <button
                 onClick={() => navigate('/whatsapp')}
@@ -172,6 +187,23 @@ export const StickyNavigation: React.FC<StickyNavigationProps> = ({ onNavigate }
               !isMobile ? 'rounded-2xl bg-white/95 backdrop-blur border border-gray-200/80 shadow-lg p-2 gap-2' : 'gap-1.5',
             ].join(' ')}
           >
+            {showClientSearchButton && (
+              <button
+                type="button"
+                onClick={transactionsSearch.open}
+                className={[
+                  btnClass,
+                  isMobile
+                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                    : 'bg-emerald-500 hover:bg-emerald-600 text-white',
+                ].join(' ')}
+                title="Поиск клиента"
+                aria-label="Поиск клиента"
+              >
+                <Search className={isMobile ? 'w-4 h-4' : 'w-5 h-5'} />
+              </button>
+            )}
+
             {canAccessWhatsApp && (
               <button
                 onClick={() => navigate('/whatsapp')}
