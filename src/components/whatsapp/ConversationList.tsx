@@ -435,11 +435,17 @@ const ConversationList: React.FC<ConversationListProps> = ({
       {items.length > 0 && showPaginationHints && hasMore && onLoadMore && (
         <div ref={sentinelRef} className="h-px w-full shrink-0" aria-hidden />
       )}
-      {loadingMore && (
+      {loadingMore && items.length === 0 && (
         <div className="border-t border-gray-100">
           {Array.from({ length: 5 }).map((_, i) => (
             <SkeletonRow key={`sk-${i}`} />
           ))}
+        </div>
+      )}
+      {loadingMore && items.length > 0 && (
+        <div className="flex items-center justify-center gap-2 border-t border-gray-100 px-3 py-2 text-xs text-gray-500">
+          <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-gray-500 rounded-full animate-spin" />
+          Загрузка...
         </div>
       )}
       {showPaginationHints && hasMore && onLoadMore && !loadingMore && items.length > 0 && (
