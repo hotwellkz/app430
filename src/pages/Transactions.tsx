@@ -170,7 +170,9 @@ export const Transactions: React.FC = () => {
 
   const handleClientSearchPick = useCallback((categoryId: string | null) => {
     if (!categoryId) {
-      showErrorNotification('У этого клиента ещё нет иконки на странице транзакций');
+      showErrorNotification(
+        'У этого клиента ещё нет иконки проекта (синяя) на странице транзакций',
+      );
       return;
     }
     if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
