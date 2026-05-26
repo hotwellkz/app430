@@ -48,24 +48,40 @@ body.attachment-preview-open [data-testid="sticky-navigation-root"] {
 }
 
 /* Подсветка карточки счёта при выборе клиента из поиска (Transactions). */
-@keyframes tx-category-pulse {
-  0% {
+@keyframes tx-category-jump {
+  0%, 100% {
+    transform: scale(1);
     box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
-    background-color: rgba(16, 185, 129, 0);
   }
   20% {
-    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0.35);
-    background-color: rgba(16, 185, 129, 0.12);
+    transform: scale(1.12);
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.55), 0 8px 24px rgba(16, 185, 129, 0.25);
   }
-  100% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
-    background-color: rgba(16, 185, 129, 0);
+  40% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0.25);
+  }
+  60% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0.4);
+  }
+  80% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.2);
   }
 }
 .tx-category-highlight {
-  animation: tx-category-pulse 2.2s ease-out 1;
+  /* 1.4s × 2 повтора = ~2.8с эффект «подпрыгивания» */
+  animation: tx-category-jump 1.4s ease-in-out 2;
   position: relative;
-  z-index: 5;
+  z-index: 30;
+  border-radius: 0.5rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tx-category-highlight {
+    animation: none;
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.5);
+  }
 }
 
 /* Открытое полноэкранное модальное окно CRM на мобилке: блокируем скролл фона
