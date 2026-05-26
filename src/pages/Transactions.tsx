@@ -175,18 +175,35 @@ export const Transactions: React.FC = () => {
     }
     if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
     setHighlightedCategoryId(categoryId);
-    // Скроллим к карточке после render-цикла
-    requestAnimationFrame(() => {
+
+    // Карточка может быть в свёрнутой секции (Клиенты row=1 свёрнут по
+    // умолчанию). CategoryRow раскроется через useEffect на highlightedCategoryId,
+    // но это произойдёт после rerender. Поэтому polling — пытаемся найти
+    // элемент несколько раз с короткой задержкой.
+    let attempts = 0;
+    const tryScroll = () => {
       const el = document.querySelector(
         `[data-tx-category-id="${categoryId}"]`,
       ) as HTMLElement | null;
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+          inline: 'center',
+        });
+        return;
       }
-    });
+      attempts++;
+      if (attempts < 30) {
+        setTimeout(tryScroll, 60); // до ~1.8 сек ожидания
+      }
+    };
+    setTimeout(tryScroll, 60); // дать React commit для setIsCollapsed(false)
+
+    // Длительность подсветки = animation × iterations + запас
     highlightTimerRef.current = setTimeout(() => {
       setHighlightedCategoryId(null);
-    }, 2200);
+    }, 3200);
   }, []);
 
   const sensors = useSensors(

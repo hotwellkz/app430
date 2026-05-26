@@ -36,6 +36,16 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
   const scrollStartX = useRef(0);
   const scrollLeft = useRef(0);
 
+  // Если поиск клиентов запросил подсветку карточки, которая лежит в этой
+  // секции — автоматически разворачиваем секцию, чтобы карточку можно было
+  // найти в DOM (скролл + подсветка работают только когда элемент отрендерен).
+  useEffect(() => {
+    if (!highlightedCategoryId) return;
+    if (categories.some((c) => c.id === highlightedCategoryId)) {
+      setIsCollapsed(false);
+    }
+  }, [highlightedCategoryId, categories]);
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!scrollContainerRef.current || rowNumber > 2) return;
     
