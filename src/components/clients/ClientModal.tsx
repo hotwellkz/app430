@@ -196,7 +196,10 @@ export const ClientModal: React.FC<ClientModalProps> = ({
       }
     } catch (error) {
       console.error('Error saving client:', error);
-      alert('Ошибка при сохранении данных клиента');
+      const code = (error as { code?: string })?.code;
+      const message = (error as { message?: string })?.message ?? String(error);
+      const detail = code ? `${code}: ${message}` : message;
+      alert(`Ошибка при сохранении данных клиента\n\n${detail}`);
     }
   };
 
