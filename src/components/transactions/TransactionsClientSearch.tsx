@@ -41,14 +41,20 @@ function buildHaystack(c: Client): string {
     .join(' ');
 }
 
-function matchCategory(
+/**
+ * Поиск иконки проекта (синяя, row=3) по названию объекта клиента.
+ * Жёлтую клиентскую иконку (row=1) НЕ возвращаем намеренно — пользователю
+ * обычно нужна именно синяя, чтобы провести расход на этот объект.
+ * Если иконки-проекта нет — null (показываем notification «нет проекта»).
+ */
+function matchProjectCategory(
   client: Client,
   categories: CategoryCardType[],
 ): CategoryCardType | null {
   const target = normalize(client.objectName);
   if (!target) return null;
   return (
-    categories.find((c) => normalize(c.title) === target) ?? null
+    categories.find((c) => c.row === 3 && normalize(c.title) === target) ?? null
   );
 }
 
@@ -111,7 +117,7 @@ export const TransactionsClientSearch: React.FC<TransactionsClientSearchProps> =
       if (allMatch) {
         matched.push({
           client,
-          category: matchCategory(client, categories),
+          category: matchProjectCategory(client, categories),
         });
       }
     }
@@ -233,11 +239,11 @@ export const TransactionsClientSearch: React.FC<TransactionsClientSearchProps> =
                             <span className="font-medium">{m.client.objectName}</span>
                             {m.category ? (
                               <span className="ml-2 inline-flex items-center px-1.5 py-0.5 text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 rounded">
-                                Иконка есть
+                                Проект есть
                               </span>
                             ) : (
                               <span className="ml-2 inline-flex items-center px-1.5 py-0.5 text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded">
-                                Иконки нет
+                                Проекта нет
                               </span>
                             )}
                           </div>
