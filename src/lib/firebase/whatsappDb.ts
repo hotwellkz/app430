@@ -20,6 +20,7 @@ import {
   type DocumentData
 } from 'firebase/firestore';
 import { db } from './config';
+import { readSnapshotCacheRich, writeSnapshotCacheRich } from './localSnapshotCache';
 import type {
   WhatsAppClient,
   WhatsAppConversation,
@@ -772,6 +773,21 @@ export function subscribeConversationsList(
   /** Первый onSnapshot ещё не пришёл — нельзя вызывать startAfter без курсора. */
   let firstSnapshotReady = false;
 
+  /* ─── instant hydrate из localStorage: при возврате на страницу UI не «мигает». ─── */
+  const cacheKey = `whatsapp:conv-list:${companyId}`;
+  const cached = readSnapshotCacheRich<ConversationListItem[]>(cacheKey);
+  if (cached && Array.isArray(cached) && cached.length > 0) {
+    // Кладём все кешированные элементы в extraItemsById, чтобы при первом
+    // mergeAndEmit они не потерялись. firstPage перетрёт верх — это ок.
+    for (const it of cached) {
+      if (it && typeof it === 'object' && typeof it.id === 'string') {
+        extraItemsById.set(it.id, it);
+      }
+    }
+    // Отдаём UI сразу — без ожидания Firestore.
+    callback(cached);
+  }
+
   async function loadClients(clientIds: string[]) {
     const missing = clientIds.filter((id) => !clientsById.has(id));
     if (missing.length === 0) return;
@@ -795,6 +811,9 @@ export function subscribeConversationsList(
     }
     sortConversationItems(merged);
     callback(merged);
+    // Сохраняем актуальный полный список в localStorage. При следующем mount
+    // компонент получит этот список мгновенно через readSnapshotCacheRich.
+    writeSnapshotCacheRich(cacheKey, merged);
   }
 
   /** Требуется индекс Firestore: companyId (==) + lastMessageAt (desc). Без него используется fallback (createdAt), тогда порядок по lastMessageAt — на клиенте. */

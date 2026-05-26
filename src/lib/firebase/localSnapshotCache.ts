@@ -91,3 +91,77 @@ export function clearAllSnapshotCache(): void {
     // ignore
   }
 }
+
+/* ───────────── Rich (Date/Timestamp-aware) ───────────── */
+
+const DATE_MARKER = '__cacheDate';
+
+interface DateLikeMarker {
+  [DATE_MARKER]: string;
+}
+
+function isFirestoreTimestamp(v: unknown): v is { seconds: number; nanoseconds: number; toMillis?: () => number } {
+  if (!v || typeof v !== 'object') return false;
+  const o = v as { seconds?: unknown; nanoseconds?: unknown };
+  return typeof o.seconds === 'number' && typeof o.nanoseconds === 'number';
+}
+
+/** Заменяет Date/Timestamp на маркер для JSON-сериализации. */
+function serializeRich(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (value instanceof Date) {
+    return { [DATE_MARKER]: value.toISOString() } as DateLikeMarker;
+  }
+  if (isFirestoreTimestamp(value)) {
+    const t = typeof value.toMillis === 'function'
+      ? value.toMillis()
+      : value.seconds * 1000 + Math.floor(value.nanoseconds / 1e6);
+    return { [DATE_MARKER]: new Date(t).toISOString() } as DateLikeMarker;
+  }
+  if (Array.isArray(value)) return value.map(serializeRich);
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = serializeRich(v);
+    }
+    return out;
+  }
+  return value;
+}
+
+/** Восстанавливает Date из маркеров. Timestamp восстановить нельзя — даём Date. */
+function reviveRich(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const o = value as Record<string, unknown>;
+    if (typeof o[DATE_MARKER] === 'string') {
+      return new Date(o[DATE_MARKER] as string);
+    }
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(o)) {
+      out[k] = reviveRich(v);
+    }
+    return out;
+  }
+  if (Array.isArray(value)) return value.map(reviveRich);
+  return value;
+}
+
+/**
+ * Запись/чтение с поддержкой Date и Firestore Timestamp. Timestamp при
+ * чтении вернётся как Date (так и нужно — UI обычно вызывает .getTime() или
+ * пользуется хелперами типа dateLike).
+ */
+export function writeSnapshotCacheRich<T>(key: string, value: T): void {
+  writeSnapshotCache(key, serializeRich(value));
+}
+
+export function readSnapshotCacheRich<T>(key: string): T | null {
+  const raw = readSnapshotCache<unknown>(key);
+  if (raw === null) return null;
+  try {
+    return reviveRich(raw) as T;
+  } catch {
+    return null;
+  }
+}
