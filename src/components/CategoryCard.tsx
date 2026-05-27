@@ -60,7 +60,14 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({ category }) => {
           aria-hidden
           className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-inset ring-white/25"
         />
-        <span className="relative z-10 flex items-center justify-center">
+        {/* drop-shadow «отрывает» иконку от фона — часть liquid-glass эффекта. */}
+        <span
+          className="relative z-10 flex items-center justify-center text-white"
+          style={{
+            filter:
+              'drop-shadow(0 1px 1.5px rgba(0,0,0,0.25)) drop-shadow(0 0 0.5px rgba(255,255,255,0.3))',
+          }}
+        >
           {renderIcon()}
         </span>
       </div>
