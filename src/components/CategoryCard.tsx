@@ -34,8 +34,35 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({ category }) => {
       {...listeners}
       className="flex flex-col items-center space-y-1 cursor-grab active:cursor-grabbing"
     >
-      <div className={`w-12 h-12 sm:w-14 sm:h-14 ${category.color || 'bg-emerald-500'} rounded-full flex items-center justify-center shadow-lg`}>
-        {renderIcon()}
+      <div
+        className={`relative w-12 h-12 sm:w-14 sm:h-14 ${category.color || 'bg-emerald-500'} rounded-full flex items-center justify-center shadow-md transition-transform duration-200 ease-out active:scale-95 hover:scale-105`}
+      >
+        {/* Liquid-glass orb: блик сверху-слева */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-full"
+          style={{
+            background:
+              'radial-gradient(circle at 30% 22%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.15) 35%, transparent 65%)',
+          }}
+        />
+        {/* Тень снизу-справа — глубина */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-full"
+          style={{
+            background:
+              'radial-gradient(circle at 72% 82%, rgba(0,0,0,0.20) 0%, transparent 55%)',
+          }}
+        />
+        {/* Стеклянный ободок */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-inset ring-white/25"
+        />
+        <span className="relative z-10 flex items-center justify-center">
+          {renderIcon()}
+        </span>
       </div>
       <div className="text-center">
         <div className="text-xs sm:text-sm font-medium text-gray-700 truncate max-w-[70px] sm:max-w-[80px]">
