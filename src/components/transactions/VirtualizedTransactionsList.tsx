@@ -12,7 +12,7 @@ import { TransactionCard, TransactionCardTransaction } from './TransactionCard';
 import type { TransactionCardContext } from './TransactionCard';
 
 const ESTIMATE_DATE = 52;
-const ESTIMATE_CARD = 140;
+const ESTIMATE_CARD = 200;
 const ESTIMATE_FOOTER = 56;
 const OVERSCAN = 5;
 const LOAD_MORE_THRESHOLD = 10;
@@ -298,7 +298,11 @@ function VirtualizedTransactionsListInner({
               top: 0,
               left: 0,
               width: '100%',
-              transform: `translateY(${virtualRow.start}px)`
+              transform: `translateY(${virtualRow.start}px)`,
+              // Плавный переезд при пересчёте позиций (после measureElement),
+              // чтобы карточки не «налезали» друг на друга при апруве/удалении.
+              transition: 'transform 200ms ease-out',
+              willChange: 'transform',
             }}
           >
             <TransactionRowContent
