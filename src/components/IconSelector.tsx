@@ -47,7 +47,7 @@ const icons: IconOption[] = [
   { name: 'User', component: User, categories: [1] },
   { name: 'CircleUser', component: CircleUser, categories: [1] },
   { name: 'Users', component: Users, categories: [1] },
-  { name: 'Car', component: Car, categories: [1] },
+  { name: 'Car', component: Car, categories: [1, 2, 3, 4] },
   { name: 'Briefcase', component: Briefcase, categories: [1] },
   { name: 'CreditCard', component: CreditCard, categories: [1] },
   { name: 'BadgeDollarSign', component: BadgeDollarSign, categories: [1] },
