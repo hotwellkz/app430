@@ -41,6 +41,16 @@ body.whatsapp-chat-mobile-open {
   height: 100%;
 }
 
+/* Убрать встроенный браузерный «крестик» для <input type="search"> —
+   у нас уже свой кастомный ✕ для очистки запроса, чтобы не было двух подряд. */
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-results-button,
+input[type="search"]::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 /* Во время полноэкранного preview вложения скрываем плавающее меню транзакций. */
 body.attachment-preview-open [data-testid="sticky-navigation-root"] {
   opacity: 0 !important;
