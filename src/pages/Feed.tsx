@@ -934,11 +934,13 @@ export const Feed: React.FC = () => {
       await approveTransaction(transaction.id);
       patchTransaction(transaction.id, { status: 'approved' });
       showSuccessNotification('Транзакция одобрена');
+      // НЕ сбрасываем approvingId здесь — это сделает useEffect ниже, когда
+      // state транзакции реально обновится (status !== 'pending'). Так кнопка
+      // остаётся в loading до подтверждения, и юзер не успевает дважды тапнуть.
     } catch (error) {
       console.error('Error approving transaction:', error);
       showErrorNotification(error instanceof Error ? error.message : 'Ошибка при одобрении транзакции');
-    } finally {
-      setApprovingId(null);
+      setApprovingId(null); // при ошибке — сразу разблокируем для повтора
     }
   };
 
@@ -948,13 +950,43 @@ export const Feed: React.FC = () => {
       await rejectTransaction(transaction.id);
       patchTransaction(transaction.id, { status: 'rejected' });
       showSuccessNotification('Транзакция отклонена');
+      // То же что и для approve — сбрасывается через useEffect ниже.
     } catch (error) {
       console.error('Error rejecting transaction:', error);
       showErrorNotification(error instanceof Error ? error.message : 'Ошибка при отклонении транзакции');
-    } finally {
       setRejectingId(null);
     }
   };
+
+  /**
+   * Сбрасываем approvingId/rejectingId только когда реальный state
+   * paginatedTransactions подтвердил изменение статуса транзакции.
+   * Безопасность: timeout 10с — если что-то пойдёт не так и state не
+   * обновится (потеря соединения после успешной записи и т.п.), кнопка
+   * всё равно разблокируется через 10 секунд, чтобы юзер не остался
+   * с вечно крутящимся спиннером.
+   */
+  useEffect(() => {
+    if (!approvingId) return;
+    const tx = paginatedTransactions.find((t) => t.id === approvingId);
+    if (!tx || tx.status !== 'pending') {
+      setApprovingId(null);
+      return;
+    }
+    const timer = setTimeout(() => setApprovingId(null), 10_000);
+    return () => clearTimeout(timer);
+  }, [paginatedTransactions, approvingId]);
+
+  useEffect(() => {
+    if (!rejectingId) return;
+    const tx = paginatedTransactions.find((t) => t.id === rejectingId);
+    if (!tx || tx.status !== 'pending') {
+      setRejectingId(null);
+      return;
+    }
+    const timer = setTimeout(() => setRejectingId(null), 10_000);
+    return () => clearTimeout(timer);
+  }, [paginatedTransactions, rejectingId]);
 
   return (
     <div className="flex flex-col h-dvh bg-gray-100 overflow-hidden feed-page">
