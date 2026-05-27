@@ -611,9 +611,23 @@ const WhatsAppChat: React.FC = () => {
               })()
             : '[медиа]'
           : (item.lastMessage?.text ?? '').slice(0, 200);
+      const displayTitle = (item.displayTitle ?? '').toLowerCase();
       const name = (item.client?.name ?? '').toLowerCase();
       const phone = (item.phone ?? item.client?.phone ?? '').toLowerCase();
-      const searchable = [name, phone, preview].join(' ').toLowerCase();
+      const dealStage = (item.dealStageName ?? '').toLowerCase();
+      const dealResp = (item.dealResponsibleName ?? '').toLowerCase();
+      const branch = (item.branchName ?? '').toLowerCase();
+      const city = (item.city ?? '').toLowerCase();
+      const searchable = [
+        displayTitle,
+        name,
+        phone,
+        preview,
+        dealStage,
+        dealResp,
+        branch,
+        city,
+      ].join(' ').toLowerCase();
       return searchable.includes(q);
     });
   }, []);
