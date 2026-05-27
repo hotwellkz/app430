@@ -706,7 +706,29 @@ const WhatsAppChat: React.FC = () => {
           throw new Error(data.error || res.statusText);
         }
         if (cancelled) return;
-        setSearchChats(parseChatsSearchApi(data.chats ?? []));
+        // API ищет по client.name+phone+preview в Firestore (см.
+        // netlify/functions/chats-search.ts). Но displayTitle конструируется
+        // на клиенте через crmNamesByPhone — карту phone→name всех клиентов
+        // компании. Если у conversation в Firestore не привязан clientId,
+        // API НЕ подгружает client и теряет чат. Поэтому объединяем результаты
+        // API + локальный поиск по displayTitle. Дубли по id.
+        const apiResults = parseChatsSearchApi(data.chats ?? []);
+        const localResults = localSearchChats(conversationsForSearchRef.current, q);
+        const seen = new Set<string>();
+        const merged: ConversationListItem[] = [];
+        for (const r of apiResults) {
+          if (!seen.has(r.id)) {
+            seen.add(r.id);
+            merged.push(r);
+          }
+        }
+        for (const r of localResults) {
+          if (!seen.has(r.id)) {
+            seen.add(r.id);
+            merged.push(r);
+          }
+        }
+        setSearchChats(merged);
       } catch (e) {
         if (!cancelled) {
           console.error('[WhatsApp] chats search', e);
