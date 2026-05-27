@@ -1397,14 +1397,34 @@ const ChatWindow: React.FC<ChatWindowProps> = (props) => {
             <span className="text-sm font-medium">Назад</span>
           </button>
         )}
-        <div className="chat-user flex flex-1 min-w-0 flex-col truncate">
-          <span className="chat-name font-medium text-gray-800 truncate text-sm md:text-base">
-            {title}
-          </span>
-          {displayTitle?.trim() && phone && (
-            <span className="chat-phone truncate text-xs text-gray-500">{phone}</span>
-          )}
-        </div>
+        {onOpenClientInfo ? (
+          <button
+            type="button"
+            onClick={onOpenClientInfo}
+            className="chat-user flex flex-1 min-w-0 flex-col truncate text-left bg-transparent border-0 cursor-pointer rounded-md px-1 -mx-1 py-0.5 -my-0.5 hover:bg-gray-100 active:bg-gray-200 transition-colors"
+            style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+            aria-label="Открыть карточку клиента"
+          >
+            <span className="chat-name font-medium text-gray-800 truncate text-sm md:text-base pointer-events-none">
+              {title}
+            </span>
+            {displayTitle?.trim() && phone && (
+              <span className="chat-phone truncate text-xs text-gray-500 pointer-events-none">{phone}</span>
+            )}
+          </button>
+        ) : (
+          <div
+            className="chat-user flex flex-1 min-w-0 flex-col truncate"
+            style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+          >
+            <span className="chat-name font-medium text-gray-800 truncate text-sm md:text-base">
+              {title}
+            </span>
+            {displayTitle?.trim() && phone && (
+              <span className="chat-phone truncate text-xs text-gray-500">{phone}</span>
+            )}
+          </div>
+        )}
         {hasAnyVoiceInChat && (
           <div className="flex flex-shrink-0 items-center gap-1">
             <button
