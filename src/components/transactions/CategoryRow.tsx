@@ -102,7 +102,7 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
       {!isCollapsed && (
         <div
           ref={scrollContainerRef}
-          className={isMobile ? 'grid grid-cols-4 gap-2' : 'flex flex-wrap gap-x-4 gap-y-4'}
+          className={isMobile ? 'grid grid-cols-5 gap-1' : 'flex flex-wrap gap-x-4 gap-y-4'}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
