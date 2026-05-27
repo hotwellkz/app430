@@ -7,7 +7,9 @@ import { PasswordPrompt } from '../PasswordPrompt';
 import { EditPasswordModal } from '../EditPasswordModal';
 import { EditCategoryModal } from '../EditCategoryModal';
 import { useNavigate } from 'react-router-dom';
-import { showErrorNotification } from '../../utils/notifications';
+import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { showErrorNotification, showSuccessNotification } from '../../utils/notifications';
 import { ClientTooltip } from './ClientTooltip';
 
 interface DroppableCategoryProps {
@@ -112,6 +114,29 @@ export const DroppableCategory: React.FC<DroppableCategoryProps> = ({
     setShowContextMenu(false);
   };
 
+  /**
+   * Toggle isVisible этой конкретной категории. После записи useCategories
+   * (real-time подписка) обновит state и карточка либо исчезнет, либо
+   * появится. То же поле используется на /clients (handleToggleVisibility),
+   * только здесь — точечно одна категория.
+   */
+  const handleToggleVisible = async () => {
+    setShowContextMenu(false);
+    if (!category.id) return;
+    const wasVisible = category.isVisible !== false;
+    const next = !wasVisible;
+    try {
+      await updateDoc(doc(db, 'categories', category.id), {
+        isVisible: next,
+        updatedAt: serverTimestamp(),
+      });
+      showSuccessNotification(next ? 'Иконка снова видна' : 'Иконка скрыта');
+    } catch (err) {
+      console.error('Error toggling category visibility:', err);
+      showErrorNotification('Не удалось изменить видимость иконки');
+    }
+  };
+
   return (
     <>
       <div
@@ -139,6 +164,8 @@ export const DroppableCategory: React.FC<DroppableCategoryProps> = ({
           onDelete={handleDelete}
           onViewHistory={handleViewHistory}
           onViewClientInfo={handleViewClientInfo}
+          onToggleVisible={handleToggleVisible}
+          isVisible={category.isVisible !== false}
           title={category.title}
           showClientInfo={category.title === "Projects"}
         />
