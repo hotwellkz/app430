@@ -37,6 +37,35 @@ function normalizeSearch(s: string): string {
     .trim();
 }
 
+/**
+ * Релевантность результата поиска (меньше = выше в выдаче):
+ *  0 — displayTitle полностью равно запросу
+ *  1 — displayTitle начинается с запроса («Марго HotWell» при запросе «марго»)
+ *  2 — запрос есть как отдельное слово в displayTitle («Игорь Коянкус _Марго»)
+ *  3 — просто подстрока в displayTitle («Маргарита», «Маргинальная»)
+ *  4 — совпадение по номеру телефона
+ *  5 — совпадение по dealStatusName
+ *  999 — нет совпадения (отфильтровывается)
+ */
+function relevanceScore(
+  title: string,
+  phone: string,
+  deal: string,
+  q: string,
+): number {
+  if (!q) return 999;
+  if (title === q) return 0;
+  if (title.startsWith(q)) return 1;
+  // Запрос как отдельное слово (после любого разделителя, не только пробела —
+  // имена часто разделяются «_», «-», «/», точкой).
+  const words = title.split(/[\s\-_/.]+/).filter(Boolean);
+  if (words.some((w) => w.startsWith(q))) return 2;
+  if (title.includes(q)) return 3;
+  if (phone.includes(q)) return 4;
+  if (deal.includes(q)) return 5;
+  return 999;
+}
+
 const ForwardDialog: React.FC<ForwardDialogProps> = ({
   open,
   targets,
@@ -52,17 +81,24 @@ const ForwardDialog: React.FC<ForwardDialogProps> = ({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const list = useMemo(() => {
-    let base = excludeConversationId
+    const base = excludeConversationId
       ? targets.filter((t) => t.id !== excludeConversationId)
       : [...targets];
     if (!searchQuery.trim()) return base;
     const q = normalizeSearch(searchQuery);
-    return base.filter((t) => {
-      const title = normalizeSearch(t.displayTitle ?? '');
-      const phone = normalizeSearch((t.phone ?? '').replace(/\D/g, ''));
-      const deal = normalizeSearch((t.dealStatusName ?? ''));
-      return title.includes(q) || phone.includes(q) || deal.includes(q);
-    });
+    // Считаем релевантность каждого target'а и сортируем — самые подходящие
+    // (точное совпадение / startsWith) идут наверх, частичные подстроки
+    // («Маргарита» при запросе «Марго») — вниз.
+    return base
+      .map((t) => {
+        const title = normalizeSearch(t.displayTitle ?? '');
+        const phone = normalizeSearch((t.phone ?? '').replace(/\D/g, ''));
+        const deal = normalizeSearch((t.dealStatusName ?? ''));
+        return { t, score: relevanceScore(title, phone, deal, q) };
+      })
+      .filter((x) => x.score < 999)
+      .sort((a, b) => a.score - b.score)
+      .map((x) => x.t);
   }, [targets, excludeConversationId, searchQuery]);
 
   const toggle = (id: string) => {
@@ -149,10 +185,10 @@ const ForwardDialog: React.FC<ForwardDialogProps> = ({
           </div>
         )}
 
-        {/* Список: Недавние чаты */}
+        {/* Список: «Недавние чаты» когда пусто, «Результаты поиска» при запросе */}
         <div className="flex-1 overflow-y-auto min-h-0">
           <p className="px-4 pt-2 pb-1 text-xs font-medium text-gray-500 uppercase tracking-wide">
-            Недавние чаты
+            {searchQuery.trim() ? `Результаты поиска (${list.length})` : 'Недавние чаты'}
           </p>
           {list.length === 0 ? (
             <p className="p-4 text-sm text-gray-500">
