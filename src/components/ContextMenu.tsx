@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useMemo } from 'react';
-import { Edit2, Trash2, History, Info } from 'lucide-react';
+import { Edit2, Trash2, History, Info, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useCurrentCompanyUser } from '../hooks/useCurrentCompanyUser';
 import { showErrorNotification } from '../utils/notifications';
@@ -11,6 +11,10 @@ interface ContextMenuProps {
   onDelete: () => void;
   onViewHistory: () => void;
   onViewClientInfo?: () => void;
+  /** Toggle isVisible иконки (см. /clients → eye/eyeOff). */
+  onToggleVisible?: () => void;
+  /** Текущее состояние видимости — определяет надпись и иконку пункта. */
+  isVisible?: boolean;
   title: string;
   editLabel?: string;
   hideDelete?: boolean;
@@ -24,6 +28,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   onDelete,
   onViewHistory,
   onViewClientInfo,
+  onToggleVisible,
+  isVisible = true,
   title,
   editLabel = "Редактировать",
   hideDelete = false,
@@ -146,6 +152,16 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         >
           <History className="w-4 h-4" />
           История транзакций
+        </button>
+      )}
+
+      {onToggleVisible && (
+        <button
+          onClick={(e) => handleClick(e, onToggleVisible)}
+          className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+        >
+          {isVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          {isVisible ? 'Скрыть иконку' : 'Показать иконку'}
         </button>
       )}
 
