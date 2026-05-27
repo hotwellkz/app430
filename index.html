@@ -45,7 +45,36 @@
   </head>
   <body>
     <noscript><div><img src="https://mc.yandex.ru/watch/107725035" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+    <style>
+      /* Inline-preloader — виден ~0.3-1.5 сек между загрузкой HTML и моунтом React.
+         Автоматически исчезает, когда React рендерит контент в #root (правило ниже).
+         Только CSS, без JS, без картинок, без шрифтов — никакой нагрузки. */
+      #app-preloader{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#ecfdf5 0%,#fff 50%,#ecfdf5 100%);z-index:9999}
+      #app-preloader .rings{position:relative;width:80px;height:80px}
+      #app-preloader .ring{position:absolute;border-radius:50%;border:4px solid transparent}
+      #app-preloader .ring.bg{inset:0;border-color:#d1fae5}
+      #app-preloader .ring.outer{inset:0;border-top-color:#10b981;border-right-color:#10b981;animation:appload-spin 1.2s linear infinite}
+      #app-preloader .ring.inner{inset:8px;border-bottom-color:#34d399;border-left-color:#34d399;animation:appload-spin 0.9s linear infinite reverse}
+      #app-preloader .brand{margin-top:24px;display:flex;flex-direction:column;align-items:center;gap:4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+      #app-preloader .brand-name{font-size:24px;font-weight:700;letter-spacing:-0.02em;background:linear-gradient(90deg,#059669,#34d399);-webkit-background-clip:text;background-clip:text;color:transparent;animation:appload-pulse 1.8s ease-in-out infinite}
+      #app-preloader .brand-sub{font-size:11px;color:#9ca3af;letter-spacing:0.2em;text-transform:uppercase}
+      @keyframes appload-spin{to{transform:rotate(360deg)}}
+      @keyframes appload-pulse{0%,100%{opacity:.6}50%{opacity:1}}
+      /* Когда React монтирует контент — у #root появляются дочерние узлы и preloader скрывается */
+      #root:not(:empty)+#app-preloader{opacity:0;pointer-events:none;transition:opacity .3s ease-out}
+    </style>
     <div id="root"></div>
+    <div id="app-preloader" aria-label="Загрузка приложения">
+      <div class="rings">
+        <div class="ring bg"></div>
+        <div class="ring outer"></div>
+        <div class="ring inner"></div>
+      </div>
+      <div class="brand">
+        <span class="brand-name">2wix</span>
+        <span class="brand-sub">Загрузка</span>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
