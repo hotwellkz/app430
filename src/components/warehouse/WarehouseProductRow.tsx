@@ -18,6 +18,16 @@ function formatDisplayPrice(product: Product): string {
   return price ? `${Math.floor(price).toLocaleString()} ₸` : '—';
 }
 
+/**
+ * Цена за единицу с указанием unit'а: «1 500 ₸/шт», «320 ₸/м».
+ * Возвращает null, если цены нет (тогда не показываем вообще).
+ */
+function formatUnitPrice(product: Product): string | null {
+  const price = product.displayPrice ?? getProductEffectivePrice(product);
+  if (!price || price <= 0) return null;
+  return `${Math.floor(price).toLocaleString('ru-RU')} ₸/${product.unit}`;
+}
+
 export const WarehouseProductRow: React.FC<WarehouseProductRowProps> = ({
   product,
   onContextMenu,
@@ -48,11 +58,18 @@ export const WarehouseProductRow: React.FC<WarehouseProductRowProps> = ({
                 <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-red-500" />
               )}
             </div>
-            <div className="flex items-center gap-2 mt-0">
-              <span className="text-xs text-gray-500">{product.category || '—'}</span>
-              <span className="text-xs font-medium text-emerald-600">
+            <div className="flex items-center gap-2 mt-0 min-w-0">
+              {/* Категория — сжимается первой, если не хватает места */}
+              <span className="text-xs text-gray-500 truncate min-w-0">{product.category || '—'}</span>
+              {/* Количество и цена — не переносятся, остаются в одной строке */}
+              <span className="text-xs font-medium text-emerald-600 whitespace-nowrap flex-shrink-0">
                 {product.quantity} {product.unit}
               </span>
+              {formatUnitPrice(product) && (
+                <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">
+                  · {formatUnitPrice(product)}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -98,7 +115,7 @@ export const WarehouseProductRow: React.FC<WarehouseProductRowProps> = ({
 
       {/* Десктопная версия — компактно (py-1) */}
       <div className="hidden sm:flex items-center px-4 py-1">
-        <div className="flex-1 grid grid-cols-[1fr,120px,100px] gap-4 items-center min-w-0">
+        <div className="flex-1 grid grid-cols-[1fr,120px,160px] gap-4 items-center min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             <span className="font-medium text-sm text-gray-900 truncate">{product.name}</span>
             {product.quantity <= (product.minQuantity || 5) && (
@@ -109,7 +126,9 @@ export const WarehouseProductRow: React.FC<WarehouseProductRowProps> = ({
           <div className="text-sm text-gray-900">
             {product.quantity} {product.unit}
           </div>
-          <div className="text-sm text-gray-500">{formatDisplayPrice(product)}</div>
+          <div className="text-sm text-gray-500 truncate">
+            {formatUnitPrice(product) ?? '—'}
+          </div>
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
