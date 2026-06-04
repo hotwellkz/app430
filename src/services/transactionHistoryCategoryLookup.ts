@@ -24,6 +24,72 @@ function logDev(message: string, payload: Record<string, unknown>) {
   }
 }
 
+/* ────── localStorage-кеш categoryId для быстрой навигации ──────
+ * Lookup categoryId через 2-4 sequential getDocs к Firestore медленно даже
+ * с persistentLocalCache (PR #15) — первый раз навигация подвисает на 1-3 сек.
+ * Кешируем результат в localStorage. Категории ID стабильны (не меняются),
+ * поэтому хранить можно без TTL. Ключ версионирован — при изменении схемы
+ * бампнем v1, старые кеши автоматически невалидны.
+ */
+const TX_HISTORY_CACHE_PREFIX = 'tx-history-cat:v1';
+
+function txHistoryCacheKey(
+  companyId: string,
+  clientId: string,
+  scope: TransactionHistoryScope,
+): string {
+  return `${TX_HISTORY_CACHE_PREFIX}:${companyId}:${clientId}:${scope}`;
+}
+
+export function readCachedTxHistoryCategoryId(
+  companyId: string,
+  clientId: string,
+  scope: TransactionHistoryScope,
+): string | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    return localStorage.getItem(txHistoryCacheKey(companyId, clientId, scope));
+  } catch {
+    return null;
+  }
+}
+
+export function writeCachedTxHistoryCategoryId(
+  companyId: string,
+  clientId: string,
+  scope: TransactionHistoryScope,
+  categoryId: string,
+): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(txHistoryCacheKey(companyId, clientId, scope), categoryId);
+  } catch {
+    // QuotaExceeded или приватный режим — игнорируем
+  }
+}
+
+/**
+ * Очистка кеша. Можно вызвать со страницы /transactions/history/:id, если
+ * категория не найдена (т.е. кеш «протух» — например, категория удалена).
+ */
+export function clearCachedTxHistoryCategoryId(
+  companyId: string,
+  clientId: string,
+  scope?: TransactionHistoryScope,
+): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    if (scope) {
+      localStorage.removeItem(txHistoryCacheKey(companyId, clientId, scope));
+    } else {
+      localStorage.removeItem(txHistoryCacheKey(companyId, clientId, 'client'));
+      localStorage.removeItem(txHistoryCacheKey(companyId, clientId, 'project'));
+    }
+  } catch {
+    // ignore
+  }
+}
+
 function matchesTransactionToClient(
   transaction: Transaction,
   client: Client
@@ -148,6 +214,20 @@ export async function getTransactionHistoryCategoryId(
 ): Promise<string | null> {
   const { scope, companyId, client } = input;
 
+  // Шаг 0: localStorage-кеш для мгновенного ответа. Раньше при каждом
+  // переходе делалось 2-4 sequential getDocs к Firestore — даже с
+  // persistentLocalCache (PR #15) первые запросы ждали серверного
+  // подтверждения, навигация подвисала на 1-3 секунды.
+  const cached = readCachedTxHistoryCategoryId(companyId, client.id, scope);
+  if (cached) {
+    logDev('resolved via localStorage cache', {
+      scope,
+      clientDocId: client.id,
+      categoryId: cached,
+    });
+    return cached;
+  }
+
   if (scope === 'client') {
     const aggregates = await getClientAggregates(client.id);
     if (aggregates?.categoryId) {
@@ -156,6 +236,7 @@ export async function getTransactionHistoryCategoryId(
         clientDocId: client.id,
         categoryId: aggregates.categoryId
       });
+      writeCachedTxHistoryCategoryId(companyId, client.id, scope, aggregates.categoryId);
       return aggregates.categoryId;
     }
   }
@@ -172,6 +253,9 @@ export async function getTransactionHistoryCategoryId(
     categoryId
   });
 
+  if (categoryId) {
+    writeCachedTxHistoryCategoryId(companyId, client.id, scope, categoryId);
+  }
   return categoryId;
 }
 
