@@ -1,12 +1,9 @@
 import {
   collection,
   getDocs,
-  getDocsFromCache,
   limit,
   query,
-  where,
-  type Query,
-  type QuerySnapshot
+  where
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { Client } from '../types/client';
@@ -107,42 +104,6 @@ function matchesTransactionToClient(
 }
 
 /**
- * Быстрый getDocs: сначала пытается прочитать из локального IndexedDB кеша
- * (persistentLocalCache, PR #15). Если в кеше ничего нет — идёт на сервер
- * с таймаутом 4 секунды. Если сервер не отвечает за это время — возвращаем
- * пустой snapshot, чтобы lookup не подвисал на минуты на плохой сети.
- *
- * Категории не меняются часто, и они уже подтянуты в кеш на других страницах
- * (Transactions, Clients), поэтому кеш почти всегда отдаёт результат.
- */
-async function fastGetDocs(q: Query): Promise<QuerySnapshot> {
-  try {
-    const cached = await getDocsFromCache(q);
-    if (!cached.empty) return cached;
-  } catch {
-    // кеш недоступен (приватный режим / новый клиент) — идём на сервер
-  }
-  try {
-    return await Promise.race([
-      getDocs(q),
-      new Promise<QuerySnapshot>((_, reject) =>
-        setTimeout(() => reject(new Error('fastGetDocs server timeout 4s')), 4000),
-      ),
-    ]);
-  } catch {
-    // Сервер тормозит — возвращаем пустой результат через попытку кеша ещё раз.
-    // Если и кеш пуст — bubble up через возврат пустого snapshot.
-    try {
-      return await getDocsFromCache(q);
-    } catch {
-      // Создаём фейковый пустой snapshot невозможно — даём оригинальный кеш-промис
-      // (может реджектнуться, но это поймает caller).
-      return getDocsFromCache(q);
-    }
-  }
-}
-
-/**
  * Находит документ категории (счёт клиента row=1 или проекта row=3) по objectName / ФИО,
  * с разруливанием дубликатов по одной транзакции.
  */
@@ -160,7 +121,7 @@ async function resolveCategoryIdByTitles(
       where('title', '==', client.objectName),
       where('row', '==', row)
     );
-    const objectNameSnapshot = await fastGetDocs(objectNameQuery);
+    const objectNameSnapshot = await getDocs(objectNameQuery);
 
     if (objectNameSnapshot.docs.length === 1) {
       categoryId = objectNameSnapshot.docs[0].id;
@@ -172,7 +133,7 @@ async function resolveCategoryIdByTitles(
           where('categoryId', '==', categoryDoc.id),
           limit(1)
         );
-        const transactionsSnapshot = await fastGetDocs(transactionsQuery);
+        const transactionsSnapshot = await getDocs(transactionsQuery);
 
         if (!transactionsSnapshot.empty) {
           const transaction = transactionsSnapshot.docs[0].data() as Transaction;
@@ -198,7 +159,7 @@ async function resolveCategoryIdByTitles(
         where('title', '==', clientName),
         where('row', '==', row)
       );
-      const nameSnapshot = await fastGetDocs(nameQuery);
+      const nameSnapshot = await getDocs(nameQuery);
 
       if (nameSnapshot.docs.length === 1) {
         categoryId = nameSnapshot.docs[0].id;
@@ -210,7 +171,7 @@ async function resolveCategoryIdByTitles(
             where('categoryId', '==', categoryDoc.id),
             limit(1)
           );
-          const transactionsSnapshot = await fastGetDocs(transactionsQuery);
+          const transactionsSnapshot = await getDocs(transactionsQuery);
 
           if (!transactionsSnapshot.empty) {
             const transaction = transactionsSnapshot.docs[0].data() as Transaction;
