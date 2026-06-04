@@ -28,8 +28,9 @@ export const ClientCompactRow: React.FC<ClientCompactRowProps> = ({
     .filter(Boolean)
     .join(' ') || client.name || '—';
 
-  // Номер: либо явный clientNumber, либо порядковый
-  const numberLabel = client.clientNumber?.trim() || (rowNumber ? String(rowNumber).padStart(3, '0') : '');
+  // Номер — порядковый rowNumber (001, 002, 003 — как в карточках),
+  // а не clientNumber из БД (формата «2026-040»).
+  const numberLabel = rowNumber ? String(rowNumber).padStart(3, '0') : '';
 
   const isVisible = client.isIconsVisible !== false;
 
