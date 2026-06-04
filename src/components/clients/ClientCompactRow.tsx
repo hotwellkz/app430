@@ -5,10 +5,19 @@ import { Client } from '../../types/client';
 interface ClientCompactRowProps {
   client: Client;
   rowNumber?: number;
+  /** Тип секции — определяет цвет левой полоски. */
+  type?: 'building' | 'deposit' | 'built';
   onClientClick: (client: Client) => void;
   onContextMenu: (e: React.MouseEvent, client: Client) => void;
   onToggleVisibility: (client: Client) => Promise<void>;
 }
+
+/** Цвет border-left по типу секции (как в ClientCard: эмеральд / амбер / синий). */
+const BORDER_BY_TYPE: Record<NonNullable<ClientCompactRowProps['type']>, string> = {
+  building: 'border-l-emerald-500',
+  deposit: 'border-l-amber-500',
+  built: 'border-l-blue-500',
+};
 
 /**
  * Компактный вид клиента — одна строка: №, имя+фамилия (без отчества),
@@ -18,10 +27,12 @@ interface ClientCompactRowProps {
 export const ClientCompactRow: React.FC<ClientCompactRowProps> = ({
   client,
   rowNumber,
+  type = 'building',
   onClientClick,
   onContextMenu,
   onToggleVisibility,
 }) => {
+  const borderClass = BORDER_BY_TYPE[type];
   // ФИ без отчества
   const nameShort = [client.lastName, client.firstName]
     .map((s) => (s ?? '').trim())
@@ -44,7 +55,7 @@ export const ClientCompactRow: React.FC<ClientCompactRowProps> = ({
     <div
       onClick={() => onClientClick(client)}
       onContextMenu={(e) => onContextMenu(e, client)}
-      className="flex items-center gap-2 px-3 py-1.5 bg-white border-l-4 border-l-emerald-500 rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
+      className={`flex items-center gap-2 px-3 py-1.5 bg-white border-l-4 ${borderClass} rounded-md hover:bg-gray-50 cursor-pointer transition-colors`}
     >
       {/* Номер */}
       {numberLabel && (

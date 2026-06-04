@@ -226,6 +226,7 @@ export const ClientSection: React.FC<ClientSectionProps> = ({
                   key={client.id}
                   client={client}
                   rowNumber={client.rowNumber}
+                  type={type}
                   onClientClick={onClientClick}
                   onContextMenu={onContextMenu}
                   onToggleVisibility={onToggleVisibility}
