@@ -47,6 +47,12 @@ interface ClientActionsProps {
   className?: string;
   stopPropagation?: boolean;
   allowWrap?: boolean;
+  /**
+   * Если true — скрываем тяжёлые действия (Экспорт смет, Скачать отчёт) на
+   * мобильных экранах (<md). На md+ они видны. Используется в компактных
+   * строках (ClientCompactRow), где мало места.
+   */
+  compactOnMobile?: boolean;
 }
 
 const iconSizes = {
@@ -65,7 +71,8 @@ export const ClientActions: React.FC<ClientActionsProps> = ({
   size = 'md',
   className,
   stopPropagation = false,
-  allowWrap = false
+  allowWrap = false,
+  compactOnMobile = false,
 }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -368,51 +375,55 @@ export const ClientActions: React.FC<ClientActionsProps> = ({
           </button>
         </IconTooltipWrap>
 
-        <IconTooltipWrap label="Экспорт смет в Excel">
-          <button
-            onClick={(event) => {
-              if (loadingAction) return;
-              handleEvent(event);
-              handleExportEstimateClick();
-            }}
-            disabled={loadingAction === 'export-estimate'}
-            className={clsx(
-              'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
-              sizing.button
-            )}
-            title="Экспорт смет в Excel"
-          >
-            {loadingAction === 'export-estimate' ? (
-              <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
-            ) : (
-              <Download className={sizing.icon} />
-            )}
-          </button>
-        </IconTooltipWrap>
+        <span className={compactOnMobile ? 'hidden md:inline-block' : 'inline-block'}>
+          <IconTooltipWrap label="Экспорт смет в Excel">
+            <button
+              onClick={(event) => {
+                if (loadingAction) return;
+                handleEvent(event);
+                handleExportEstimateClick();
+              }}
+              disabled={loadingAction === 'export-estimate'}
+              className={clsx(
+                'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
+                sizing.button
+              )}
+              title="Экспорт смет в Excel"
+            >
+              {loadingAction === 'export-estimate' ? (
+                <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
+              ) : (
+                <Download className={sizing.icon} />
+              )}
+            </button>
+          </IconTooltipWrap>
+        </span>
 
-        <IconTooltipWrap label="Скачать отчёт по транзакциям">
-          <button
-            onClick={(event) => {
-              if (loadingAction) return;
-              handleEvent(event);
-              handleDownloadReport();
-            }}
-            onMouseEnter={() => prefetch('client')}
-            onTouchStart={() => prefetch('client')}
-            disabled={loadingAction === 'download-report'}
-            className={clsx(
-              'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
-              sizing.button
-            )}
-            title="Скачать отчёт по транзакциям"
-          >
-            {loadingAction === 'download-report' ? (
-              <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
-            ) : (
-              <BarChart2 className={sizing.icon} />
-            )}
-          </button>
-        </IconTooltipWrap>
+        <span className={compactOnMobile ? 'hidden md:inline-block' : 'inline-block'}>
+          <IconTooltipWrap label="Скачать отчёт по транзакциям">
+            <button
+              onClick={(event) => {
+                if (loadingAction) return;
+                handleEvent(event);
+                handleDownloadReport();
+              }}
+              onMouseEnter={() => prefetch('client')}
+              onTouchStart={() => prefetch('client')}
+              disabled={loadingAction === 'download-report'}
+              className={clsx(
+                'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
+                sizing.button
+              )}
+              title="Скачать отчёт по транзакциям"
+            >
+              {loadingAction === 'download-report' ? (
+                <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
+              ) : (
+                <BarChart2 className={sizing.icon} />
+              )}
+            </button>
+          </IconTooltipWrap>
+        </span>
       </div>
 
       {showCommentModal && (
