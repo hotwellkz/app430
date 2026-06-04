@@ -1,6 +1,7 @@
 import React from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Phone, MapPin, CalendarDays } from 'lucide-react';
 import { Client } from '../../types/client';
+import { ClientActions } from './ClientActions';
 
 interface ClientCompactRowProps {
   client: Client;
@@ -19,10 +20,18 @@ const BORDER_BY_TYPE: Record<NonNullable<ClientCompactRowProps['type']>, string>
   built: 'border-l-blue-500',
 };
 
+function formatStartDate(startDate?: string): string | null {
+  if (!startDate) return null;
+  // Ожидаем формат YYYY-MM-DD; обрезаем до DD.MM.YY
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(startDate);
+  if (!m) return startDate;
+  return `${m[3]}.${m[2]}.${m[1].slice(2)}`;
+}
+
 /**
- * Компактный вид клиента — одна строка: №, имя+фамилия (без отчества),
- * название объекта, иконка-глаз (видимость). Используется в режиме «список»
- * (переключатель Cards / List на странице /clients).
+ * Компактный вид клиента — одна строка. На ПК показывает максимум информации:
+ * № • ФИ • телефон • адрес стройки (truncate) • дата старта • объект • иконки действий • глаз.
+ * На мобиле скрываются дополнительные колонки через `hidden md:inline` и т.п.
  */
 export const ClientCompactRow: React.FC<ClientCompactRowProps> = ({
   client,
@@ -33,17 +42,21 @@ export const ClientCompactRow: React.FC<ClientCompactRowProps> = ({
   onToggleVisibility,
 }) => {
   const borderClass = BORDER_BY_TYPE[type];
-  // ФИ без отчества
-  const nameShort = [client.lastName, client.firstName]
-    .map((s) => (s ?? '').trim())
-    .filter(Boolean)
-    .join(' ') || client.name || '—';
 
-  // Номер — порядковый rowNumber (001, 002, 003 — как в карточках),
-  // а не clientNumber из БД (формата «2026-040»).
+  // ФИ без отчества
+  const nameShort =
+    [client.lastName, client.firstName]
+      .map((s) => (s ?? '').trim())
+      .filter(Boolean)
+      .join(' ') || client.name || '—';
+
+  // Порядковый номер 001 (как в карточках)
   const numberLabel = rowNumber ? String(rowNumber).padStart(3, '0') : '';
 
   const isVisible = client.isIconsVisible !== false;
+  const phone = client.phone?.trim();
+  const address = client.constructionAddress?.trim() || client.address?.trim();
+  const startDate = formatStartDate(client.startDate);
 
   const handleVisibilityClick = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -59,20 +72,56 @@ export const ClientCompactRow: React.FC<ClientCompactRowProps> = ({
     >
       {/* Номер */}
       {numberLabel && (
-        <span className="flex-shrink-0 font-mono text-[11px] text-gray-400 w-9">{numberLabel}</span>
+        <span className="flex-shrink-0 font-mono text-[11px] text-gray-400 w-9">
+          {numberLabel}
+        </span>
       )}
 
-      {/* Имя + фамилия */}
-      <span className="font-medium text-sm text-gray-900 truncate min-w-0 flex-shrink-0 max-w-[40%]">
+      {/* Имя + Фамилия */}
+      <span className="font-medium text-sm text-gray-900 truncate flex-shrink-0 max-w-[28%]">
         {nameShort}
       </span>
 
-      {/* Объект — растягивается */}
+      {/* Телефон — md+ */}
+      {phone && (
+        <span className="hidden md:inline-flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap flex-shrink-0">
+          <Phone className="w-3 h-3" aria-hidden />
+          {phone}
+        </span>
+      )}
+
+      {/* Адрес стройки — lg+, truncate */}
+      {address && (
+        <span className="hidden lg:inline-flex items-center gap-1 text-xs text-gray-500 truncate min-w-0 max-w-[18%]">
+          <MapPin className="w-3 h-3 flex-shrink-0" aria-hidden />
+          <span className="truncate">{address}</span>
+        </span>
+      )}
+
+      {/* Дата старта — xl+ */}
+      {startDate && (
+        <span className="hidden xl:inline-flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap flex-shrink-0">
+          <CalendarDays className="w-3 h-3" aria-hidden />
+          {startDate}
+        </span>
+      )}
+
+      {/* Объект — растягивается, truncate */}
       <span className="flex-1 min-w-0 text-sm text-gray-500 truncate">
         {client.objectName || '—'}
       </span>
 
-      {/* Глаз */}
+      {/* Иконки действий: комментарии, история проекта/клиента, экспорт, отчёт */}
+      <div className="flex-shrink-0">
+        <ClientActions
+          client={client}
+          size="sm"
+          stopPropagation
+          allowWrap={false}
+        />
+      </div>
+
+      {/* Глаз — справа */}
       <button
         type="button"
         onClick={handleVisibilityClick}
