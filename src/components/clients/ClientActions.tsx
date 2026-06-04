@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Building2, History, Download, MessageSquare, BarChart2 } from 'lucide-react';
+import React, { useCallback, useRef, useState } from 'react';
+import { Building2, History, Download, MessageSquare, BarChart2, Loader2 } from 'lucide-react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Client } from '../../types/client';
 import { CommentTooltip } from '../comments/CommentTooltip';
@@ -74,6 +74,41 @@ export const ClientActions: React.FC<ClientActionsProps> = ({
   const { comments, loading: commentsLoading } = useClientComments(client.id);
   const [showCommentModal, setShowCommentModal] = useState(false);
   const sizing = iconSizes[size];
+
+  /**
+   * Какое из тяжёлых действий сейчас выполняется. Кнопка в этом состоянии
+   * показывает спиннер вместо иконки и отключена — юзер сразу понимает,
+   * что клик зарегистрирован, и не тапает по второму разу.
+   */
+  type LoadingAction =
+    | 'project-history'
+    | 'client-history'
+    | 'export-estimate'
+    | 'download-report'
+    | null;
+  const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
+
+  /**
+   * Pre-fetch: пока юзер ведёт курсор/палец к кнопке, в фоне запускаем
+   * lookup categoryId. К моменту клика результат уже в localStorage-кеше
+   * (см. PR #39), и navigate срабатывает мгновенно.
+   * Защита от повторных запусков — Set по «scope».
+   */
+  const prefetchedScopesRef = useRef<Set<string>>(new Set());
+  const prefetch = useCallback(
+    (scope: 'client' | 'project') => {
+      if (!client?.id || !companyId || companyLoading) return;
+      const key = `${scope}:${client.id}`;
+      if (prefetchedScopesRef.current.has(key)) return;
+      prefetchedScopesRef.current.add(key);
+      // Fire-and-forget — результат сохранится в localStorage внутри lookup.
+      getTransactionHistory({ scope, companyId, client }).catch(() => {
+        // Тихо — если упало, при настоящем клике увидим ошибку.
+        prefetchedScopesRef.current.delete(key);
+      });
+    },
+    [client, companyId, companyLoading],
+  );
 
   const handleEvent = (event: React.MouseEvent) => {
     if (stopPropagation) {
@@ -152,14 +187,25 @@ export const ClientActions: React.FC<ClientActionsProps> = ({
   };
 
   const handleProjectHistoryClick = async () => {
-    await openTransactionHistory('project');
+    setLoadingAction('project-history');
+    try {
+      await openTransactionHistory('project');
+    } finally {
+      setLoadingAction(null);
+    }
   };
 
   const handleClientHistoryClick = async () => {
-    await openTransactionHistory('client');
+    setLoadingAction('client-history');
+    try {
+      await openTransactionHistory('client');
+    } finally {
+      setLoadingAction(null);
+    }
   };
 
   const handleExportEstimateClick = async () => {
+    setLoadingAction('export-estimate');
     try {
       const [
         foundationDoc,
@@ -188,10 +234,13 @@ export const ClientActions: React.FC<ClientActionsProps> = ({
     } catch (error) {
       console.error('Error exporting estimate:', error);
       showErrorNotification('Не удалось экспортировать смету');
+    } finally {
+      setLoadingAction(null);
     }
   };
 
   const handleDownloadReport = async () => {
+    setLoadingAction('download-report');
     try {
       if (companyLoading || !companyId) {
         showErrorNotification('Компания не загружена. Обновите страницу.');
@@ -215,6 +264,8 @@ export const ClientActions: React.FC<ClientActionsProps> = ({
     } catch (error) {
       console.error('Error downloading report:', error);
       showErrorNotification('Не удалось скачать отчёт');
+    } finally {
+      setLoadingAction(null);
     }
   };
 
@@ -250,58 +301,88 @@ export const ClientActions: React.FC<ClientActionsProps> = ({
 
         <button
           onClick={(event) => {
+            if (loadingAction) return;
             handleEvent(event);
             handleProjectHistoryClick();
           }}
+          onMouseEnter={() => prefetch('project')}
+          onTouchStart={() => prefetch('project')}
+          disabled={loadingAction === 'project-history'}
           className={clsx(
-            'text-gray-400 hover:text-gray-600 rounded transition-colors',
+            'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
             sizing.button
           )}
           title="История транзакций проекта"
         >
-          <Building2 className={sizing.icon} />
+          {loadingAction === 'project-history' ? (
+            <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
+          ) : (
+            <Building2 className={sizing.icon} />
+          )}
         </button>
 
         <button
           onClick={(event) => {
+            if (loadingAction) return;
             handleEvent(event);
             handleClientHistoryClick();
           }}
+          onMouseEnter={() => prefetch('client')}
+          onTouchStart={() => prefetch('client')}
+          disabled={loadingAction === 'client-history'}
           className={clsx(
-            'text-gray-400 hover:text-gray-600 rounded transition-colors',
+            'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
             sizing.button
           )}
           title="История транзакций клиента"
         >
-          <History className={sizing.icon} />
+          {loadingAction === 'client-history' ? (
+            <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
+          ) : (
+            <History className={sizing.icon} />
+          )}
         </button>
 
         <button
           onClick={(event) => {
+            if (loadingAction) return;
             handleEvent(event);
             handleExportEstimateClick();
           }}
+          disabled={loadingAction === 'export-estimate'}
           className={clsx(
-            'text-gray-400 hover:text-gray-600 rounded transition-colors',
+            'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
             sizing.button
           )}
           title="Экспорт смет в Excel"
         >
-          <Download className={sizing.icon} />
+          {loadingAction === 'export-estimate' ? (
+            <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
+          ) : (
+            <Download className={sizing.icon} />
+          )}
         </button>
 
         <button
           onClick={(event) => {
+            if (loadingAction) return;
             handleEvent(event);
             handleDownloadReport();
           }}
+          onMouseEnter={() => prefetch('client')}
+          onTouchStart={() => prefetch('client')}
+          disabled={loadingAction === 'download-report'}
           className={clsx(
-            'text-gray-400 hover:text-gray-600 rounded transition-colors',
+            'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
             sizing.button
           )}
           title="Скачать отчёт по транзакциям"
         >
-          <BarChart2 className={sizing.icon} />
+          {loadingAction === 'download-report' ? (
+            <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
+          ) : (
+            <BarChart2 className={sizing.icon} />
+          )}
         </button>
       </div>
 
