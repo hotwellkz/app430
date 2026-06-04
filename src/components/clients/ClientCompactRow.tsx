@@ -118,6 +118,7 @@ export const ClientCompactRow: React.FC<ClientCompactRowProps> = ({
           size="sm"
           stopPropagation
           allowWrap={false}
+          compactOnMobile
         />
       </div>
 
