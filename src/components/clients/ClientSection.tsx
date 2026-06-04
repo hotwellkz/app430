@@ -5,6 +5,7 @@ import { ClientCard } from './ClientCard';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, TouchSensor, MouseSensor } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SortableClientCard } from './SortableClientCard';
+import { ClientCompactRow } from './ClientCompactRow';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 
 // Ключ для localStorage
@@ -18,6 +19,7 @@ interface ClientSectionProps {
   onClientClick: (client: Client) => void;
   onToggleVisibility: (client: Client) => Promise<void>;
   type: 'building' | 'deposit' | 'built';
+  viewMode?: 'cards' | 'list';
   onReorder?: (clients: Client[]) => void;
 }
 
@@ -29,7 +31,8 @@ export const ClientSection: React.FC<ClientSectionProps> = ({
   onClientClick,
   onToggleVisibility,
   type,
-  onReorder
+  onReorder,
+  viewMode = 'cards',
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [items, setItems] = useState<Client[]>(clients);
@@ -216,7 +219,20 @@ export const ClientSection: React.FC<ClientSectionProps> = ({
             </div>
           )}
           
-          {dragEnabled ? (
+          {viewMode === 'list' ? (
+            <div className="space-y-1">
+              {clientsWithRowNumbers.map((client) => (
+                <ClientCompactRow
+                  key={client.id}
+                  client={client}
+                  rowNumber={client.rowNumber}
+                  onClientClick={onClientClick}
+                  onContextMenu={onContextMenu}
+                  onToggleVisibility={onToggleVisibility}
+                />
+              ))}
+            </div>
+          ) : dragEnabled ? (
             <DndContext 
               sensors={sensors}
               collisionDetection={closestCenter}
