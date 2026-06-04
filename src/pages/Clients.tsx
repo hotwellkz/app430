@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Filter, Calendar, ChevronDown, ChevronUp, Construction, Wallet, Home, ListFilter, Menu, Search } from 'lucide-react';
+import { ArrowLeft, Plus, Filter, Calendar, ChevronDown, ChevronUp, Construction, Wallet, Home, ListFilter, Menu, Search, LayoutGrid, List } from 'lucide-react';
 import { doc, updateDoc, writeBatch, getDocs, query, where, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { ClientContextMenu } from '../components/ClientContextMenu';
@@ -69,6 +69,27 @@ export const Clients: React.FC = () => {
   const [editingClient, setEditingClient] = useState<NewClient>(initialClientState);
   const [showClientPage, setShowClientPage] = useState(false);
   const [status, setStatus] = useState<'building' | 'deposit' | 'built' | 'all'>(cachedFilters?.status ?? 'all');
+
+  // Режим отображения списка клиентов: карточки (по умолчанию) или строки.
+  // Сохраняем в localStorage, чтобы выбор пользователя был стабильным.
+  const VIEW_MODE_KEY = 'clientsViewMode';
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>(() => {
+    if (typeof localStorage === 'undefined') return 'cards';
+    try {
+      const cached = localStorage.getItem(VIEW_MODE_KEY);
+      return cached === 'list' ? 'list' : 'cards';
+    } catch {
+      return 'cards';
+    }
+  });
+  useEffect(() => {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, viewMode);
+    } catch {
+      // ignore
+    }
+  }, [viewMode]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -580,6 +601,40 @@ export const Clients: React.FC = () => {
                     <span className="hidden sm:inline">Построен</span>
                     <Home className="w-5 h-5 sm:hidden" />
                   </button>
+
+                  {/* Переключатель вида: карточки / строки. Сохраняется в localStorage. */}
+                  <div className="ml-auto flex items-center bg-gray-100 rounded-lg p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('cards')}
+                      className={clsx(
+                        'p-1.5 rounded-md transition-colors',
+                        viewMode === 'cards'
+                          ? 'bg-white text-emerald-600 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700',
+                      )}
+                      title="Карточки"
+                      aria-label="Карточки"
+                      aria-pressed={viewMode === 'cards'}
+                    >
+                      <LayoutGrid className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('list')}
+                      className={clsx(
+                        'p-1.5 rounded-md transition-colors',
+                        viewMode === 'list'
+                          ? 'bg-white text-emerald-600 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700',
+                      )}
+                      title="Строки"
+                      aria-label="Строки"
+                      aria-pressed={viewMode === 'list'}
+                    >
+                      <List className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -647,6 +702,7 @@ export const Clients: React.FC = () => {
                 status={status}
                 loading={loading}
                 onReorder={handleReorderClients}
+                viewMode={viewMode}
               />
             </div>
           </>

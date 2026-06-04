@@ -11,6 +11,7 @@ interface ClientListProps {
   status: 'building' | 'deposit' | 'built' | 'all';
   loading: boolean;
   onReorder?: (clients: Client[]) => Promise<void>;
+  viewMode?: 'cards' | 'list';
 }
 
 export const ClientList: React.FC<ClientListProps> = ({
@@ -20,7 +21,8 @@ export const ClientList: React.FC<ClientListProps> = ({
   onToggleVisibility,
   status,
   loading,
-  onReorder
+  onReorder,
+  viewMode = 'cards',
 }) => {
   // Сортируем клиентов по полю order
   const sortByOrder = (clientsToSort: Client[]) => {
@@ -106,6 +108,7 @@ export const ClientList: React.FC<ClientListProps> = ({
           onToggleVisibility={onToggleVisibility}
           type="building"
           onReorder={handleReorder}
+          viewMode={viewMode}
         />
       )}
 
@@ -119,6 +122,7 @@ export const ClientList: React.FC<ClientListProps> = ({
           onToggleVisibility={onToggleVisibility}
           type="deposit"
           onReorder={handleReorder}
+          viewMode={viewMode}
         />
       )}
 
@@ -135,6 +139,7 @@ export const ClientList: React.FC<ClientListProps> = ({
               onToggleVisibility={onToggleVisibility}
               type="built"
               onReorder={handleReorder}
+              viewMode={viewMode}
             />
           ))}
         </div>
