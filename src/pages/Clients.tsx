@@ -9,7 +9,7 @@ import { ClientModal } from '../components/clients/ClientModal';
 import { ClientPage } from './ClientPage';
 import { DeleteClientModal } from '../components/modals/DeleteClientModal';
 import { subscribeToClients } from '../services/clientService';
-import { showErrorNotification } from '../utils/notifications';
+import { showErrorNotification, showSuccessNotification } from '../utils/notifications';
 import { PageContainer } from '../components/layout/PageContainer';
 import { ClientSearchBar } from '../components/clients/ClientSearchBar';
 import { CategoryCardType } from '../types';
@@ -661,26 +661,57 @@ export const Clients: React.FC = () => {
           onEdit={handleEdit}
           onDelete={handleDelete}
           onStatusChange={(newStatus) => {
-            if (selectedClient) {
-              const clientRef = doc(db, 'clients', selectedClient.id);
-              const updateData: any = {
-                status: newStatus,
-                updatedAt: serverTimestamp()
-              };
-              
-              // Если переводим в "Строим" и startDate не установлена - устанавливаем текущую дату
-              if (newStatus === 'building' && !selectedClient.startDate) {
-                updateData.startDate = new Date().toISOString().split('T')[0]; // Формат YYYY-MM-DD
-              }
-              
-              updateDoc(clientRef, updateData).then(() => {
-                setShowContextMenu(false);
-                showErrorNotification('Статус клиента обновлен');
-              }).catch((error) => {
+            if (!selectedClient) return;
+            const prevStatus = selectedClient.status;
+            // Если уже в нужном статусе — ничего не делаем.
+            if (prevStatus === newStatus) {
+              setShowContextMenu(false);
+              return;
+            }
+
+            const clientRef = doc(db, 'clients', selectedClient.id);
+            const updateData: Record<string, unknown> = {
+              status: newStatus,
+              updatedAt: serverTimestamp(),
+            };
+
+            // Если переводим в "Строим" и startDate не установлена — ставим сегодняшнюю.
+            const willSetStartDate =
+              newStatus === 'building' && !selectedClient.startDate;
+            if (willSetStartDate) {
+              updateData.startDate = new Date().toISOString().split('T')[0];
+            }
+
+            // Оптимистично обновляем локальный state — UI реагирует мгновенно,
+            // карточка сразу переезжает в нужную колонку. До этого писали только
+            // в Firestore и ждали ручной перезагрузки страницы.
+            setClients((prev) =>
+              prev.map((c) =>
+                c.id === selectedClient.id
+                  ? {
+                      ...c,
+                      status: newStatus,
+                      ...(willSetStartDate ? { startDate: updateData.startDate as string } : {}),
+                    }
+                  : c,
+              ),
+            );
+            setShowContextMenu(false);
+
+            updateDoc(clientRef, updateData)
+              .then(() => {
+                showSuccessNotification('Статус клиента обновлён');
+              })
+              .catch((error) => {
                 console.error('Error updating client status:', error);
+                // Откат локального state на исходный статус.
+                setClients((prev) =>
+                  prev.map((c) =>
+                    c.id === selectedClient.id ? { ...c, status: prevStatus } : c,
+                  ),
+                );
                 showErrorNotification('Ошибка при обновлении статуса');
               });
-            }
           }}
           clientName={`${selectedClient.lastName} ${selectedClient.firstName}`}
           currentStatus={selectedClient.status}
