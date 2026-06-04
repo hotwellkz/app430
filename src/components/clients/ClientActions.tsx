@@ -269,6 +269,27 @@ export const ClientActions: React.FC<ClientActionsProps> = ({
     }
   };
 
+  /**
+   * Обёртка для иконки-кнопки: показывает кастомный tooltip над кнопкой при
+   * hover (мышь, S-Pen) и focus-within (клавиатура / стилус с фокусом).
+   * Touch (обычный палец) НЕ триггерит — :hover не срабатывает на тач,
+   * поэтому тап работает как обычно.
+   */
+  const IconTooltipWrap: React.FC<{ label: string; children: React.ReactNode }> = ({
+    label,
+    children,
+  }) => (
+    <span className="relative inline-block group">
+      {children}
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 whitespace-nowrap rounded-md bg-gray-900/95 px-2 py-1 text-[11px] font-medium text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 shadow-lg"
+      >
+        {label}
+      </span>
+    </span>
+  );
+
   return (
     <>
       <div
@@ -299,91 +320,99 @@ export const ClientActions: React.FC<ClientActionsProps> = ({
           </button>
         </CommentTooltip>
 
-        <button
-          onClick={(event) => {
-            if (loadingAction) return;
-            handleEvent(event);
-            handleProjectHistoryClick();
-          }}
-          onMouseEnter={() => prefetch('project')}
-          onTouchStart={() => prefetch('project')}
-          disabled={loadingAction === 'project-history'}
-          className={clsx(
-            'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
-            sizing.button
-          )}
-          title="История транзакций проекта"
-        >
-          {loadingAction === 'project-history' ? (
-            <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
-          ) : (
-            <Building2 className={sizing.icon} />
-          )}
-        </button>
+        <IconTooltipWrap label="История транзакций проекта">
+          <button
+            onClick={(event) => {
+              if (loadingAction) return;
+              handleEvent(event);
+              handleProjectHistoryClick();
+            }}
+            onMouseEnter={() => prefetch('project')}
+            onTouchStart={() => prefetch('project')}
+            disabled={loadingAction === 'project-history'}
+            className={clsx(
+              'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
+              sizing.button
+            )}
+            title="История транзакций проекта"
+          >
+            {loadingAction === 'project-history' ? (
+              <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
+            ) : (
+              <Building2 className={sizing.icon} />
+            )}
+          </button>
+        </IconTooltipWrap>
 
-        <button
-          onClick={(event) => {
-            if (loadingAction) return;
-            handleEvent(event);
-            handleClientHistoryClick();
-          }}
-          onMouseEnter={() => prefetch('client')}
-          onTouchStart={() => prefetch('client')}
-          disabled={loadingAction === 'client-history'}
-          className={clsx(
-            'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
-            sizing.button
-          )}
-          title="История транзакций клиента"
-        >
-          {loadingAction === 'client-history' ? (
-            <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
-          ) : (
-            <History className={sizing.icon} />
-          )}
-        </button>
+        <IconTooltipWrap label="История транзакций клиента">
+          <button
+            onClick={(event) => {
+              if (loadingAction) return;
+              handleEvent(event);
+              handleClientHistoryClick();
+            }}
+            onMouseEnter={() => prefetch('client')}
+            onTouchStart={() => prefetch('client')}
+            disabled={loadingAction === 'client-history'}
+            className={clsx(
+              'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
+              sizing.button
+            )}
+            title="История транзакций клиента"
+          >
+            {loadingAction === 'client-history' ? (
+              <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
+            ) : (
+              <History className={sizing.icon} />
+            )}
+          </button>
+        </IconTooltipWrap>
 
-        <button
-          onClick={(event) => {
-            if (loadingAction) return;
-            handleEvent(event);
-            handleExportEstimateClick();
-          }}
-          disabled={loadingAction === 'export-estimate'}
-          className={clsx(
-            'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
-            sizing.button
-          )}
-          title="Экспорт смет в Excel"
-        >
-          {loadingAction === 'export-estimate' ? (
-            <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
-          ) : (
-            <Download className={sizing.icon} />
-          )}
-        </button>
+        <IconTooltipWrap label="Экспорт смет в Excel">
+          <button
+            onClick={(event) => {
+              if (loadingAction) return;
+              handleEvent(event);
+              handleExportEstimateClick();
+            }}
+            disabled={loadingAction === 'export-estimate'}
+            className={clsx(
+              'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
+              sizing.button
+            )}
+            title="Экспорт смет в Excel"
+          >
+            {loadingAction === 'export-estimate' ? (
+              <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
+            ) : (
+              <Download className={sizing.icon} />
+            )}
+          </button>
+        </IconTooltipWrap>
 
-        <button
-          onClick={(event) => {
-            if (loadingAction) return;
-            handleEvent(event);
-            handleDownloadReport();
-          }}
-          onMouseEnter={() => prefetch('client')}
-          onTouchStart={() => prefetch('client')}
-          disabled={loadingAction === 'download-report'}
-          className={clsx(
-            'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
-            sizing.button
-          )}
-          title="Скачать отчёт по транзакциям"
-        >
-          {loadingAction === 'download-report' ? (
-            <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
-          ) : (
-            <BarChart2 className={sizing.icon} />
-          )}
-        </button>
+        <IconTooltipWrap label="Скачать отчёт по транзакциям">
+          <button
+            onClick={(event) => {
+              if (loadingAction) return;
+              handleEvent(event);
+              handleDownloadReport();
+            }}
+            onMouseEnter={() => prefetch('client')}
+            onTouchStart={() => prefetch('client')}
+            disabled={loadingAction === 'download-report'}
+            className={clsx(
+              'text-gray-400 hover:text-gray-600 rounded transition-colors disabled:opacity-60',
+              sizing.button
+            )}
+            title="Скачать отчёт по транзакциям"
+          >
+            {loadingAction === 'download-report' ? (
+              <Loader2 className={clsx(sizing.icon, 'animate-spin text-emerald-600')} />
+            ) : (
+              <BarChart2 className={sizing.icon} />
+            )}
+          </button>
+        </IconTooltipWrap>
       </div>
 
       {showCommentModal && (
