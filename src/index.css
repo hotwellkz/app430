@@ -1339,7 +1339,13 @@ html.dark .from-sf-background { --tw-gradient-from: #09090b var(--tw-gradient-fr
    бейджах, hero-blob. */
 html.dark [class*="bg-sf-surface/"] { background-color: rgba(24, 24, 27, 0.78) !important; }
 html.dark [class*="bg-sf-background/"] { background-color: rgba(9, 9, 11, 0.78) !important; }
+html.dark [class*="bg-sf-backgroundSection/"] { background-color: rgba(14, 14, 16, 0.92) !important; }
+html.dark [class*="bg-sf-backgroundPage/"] { background-color: rgba(9, 9, 11, 0.92) !important; }
 html.dark [class*="bg-sf-primaryLight/"] { background-color: rgba(16, 185, 129, 0.12) !important; }
 html.dark [class*="bg-sf-accentLight/"] { background-color: rgba(76, 175, 120, 0.16) !important; }
+html.dark [class*="hover\\:bg-sf-primaryLight/"]:hover { background-color: rgba(16, 185, 129, 0.20) !important; }
+html.dark [class*="hover\\:bg-sf-backgroundSection/"]:hover { background-color: rgba(14, 14, 16, 0.96) !important; }
+html.dark .hover\:bg-sf-backgroundSection:hover { background-color: rgba(14, 14, 16, 0.96) !important; }
+html.dark .hover\:bg-sf-primaryLight:hover { background-color: rgba(16, 185, 129, 0.18) !important; }
 
 
