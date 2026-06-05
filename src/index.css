@@ -1296,4 +1296,42 @@ html.dark .from-white { --tw-gradient-from: #18181b var(--tw-gradient-from-posit
 html.dark .via-white { --tw-gradient-via: #111114 var(--tw-gradient-via-position) !important; --tw-gradient-to: rgba(17, 17, 20, 0) var(--tw-gradient-via-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to) !important; }
 html.dark .to-white { --tw-gradient-to: #0a0a0b var(--tw-gradient-to-position) !important; }
 
+/* =============================================================================
+   PUBLIC SITE (2wix.ru / лендинги) — кастомные sf-* цвета из
+   salesforce-design-tokens-green.json. Эти классы не покрываются нашими
+   общими dark-override'ами для стандартных tailwind-цветов. Делаем явные
+   правила, чтобы публичный сайт тоже подчинялся пользовательской теме.
+   Акцентные цвета (sf-primary, sf-accent) оставляем — они хорошо контрастят
+   на тёмном.
+   ============================================================================= */
+html.dark .bg-sf-background,
+html.dark .bg-sf-surface { background-color: rgba(24, 24, 27, 0.78) !important; }
+html.dark .bg-sf-backgroundPage { background-color: #09090b !important; }
+html.dark .bg-sf-backgroundSection { background-color: #0e0e10 !important; }
+html.dark .bg-sf-surfaceElevated { background-color: rgba(255, 255, 255, 0.05) !important; }
+html.dark .bg-sf-primaryLight { background-color: rgba(16, 185, 129, 0.12) !important; }
+html.dark .bg-sf-accentLight { background-color: rgba(76, 175, 120, 0.18) !important; }
+
+html.dark .text-sf-text-primary { color: #f4f4f5 !important; }
+html.dark .text-sf-text-secondary { color: #d4d4d8 !important; }
+html.dark .text-sf-text-muted { color: #a1a1aa !important; }
+html.dark .text-sf-text-link { color: #6ee7b7 !important; }
+html.dark .text-sf-text-link:hover,
+html.dark .hover\:text-sf-text-linkHover:hover { color: #34d399 !important; }
+html.dark .text-sf-text-accent { color: #6ee7b7 !important; }
+html.dark .text-sf-primary { color: #34d399 !important; }
+html.dark .text-sf-accent { color: #6ee7b7 !important; }
+
+html.dark .border-sf-border { border-color: rgba(255, 255, 255, 0.12) !important; }
+html.dark .border-sf-borderLight { border-color: rgba(255, 255, 255, 0.08) !important; }
+html.dark .border-sf-borderFocus { border-color: rgba(16, 185, 129, 0.5) !important; }
+html.dark .border-sf-cardBorder { border-color: rgba(255, 255, 255, 0.08) !important; }
+html.dark .border-sf-primary { border-color: rgba(16, 185, 129, 0.6) !important; }
+
+/* Hero-градиент публичной страницы: from-sf-backgroundSection via-sf-background to-sf-background */
+html.dark .from-sf-backgroundSection { --tw-gradient-from: #0e0e10 var(--tw-gradient-from-position) !important; --tw-gradient-to: rgba(14, 14, 16, 0) var(--tw-gradient-from-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important; }
+html.dark .via-sf-background { --tw-gradient-via: #09090b var(--tw-gradient-via-position) !important; --tw-gradient-to: rgba(9, 9, 11, 0) var(--tw-gradient-via-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to) !important; }
+html.dark .to-sf-background { --tw-gradient-to: #09090b var(--tw-gradient-to-position) !important; }
+html.dark .from-sf-background { --tw-gradient-from: #09090b var(--tw-gradient-from-position) !important; --tw-gradient-to: rgba(9, 9, 11, 0) var(--tw-gradient-from-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important; }
+
 
