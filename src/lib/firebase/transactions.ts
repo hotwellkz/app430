@@ -619,14 +619,38 @@ export const editFeedTransaction = async (params: {
     throw new Error('Необходимо указать комментарий к переводу');
   }
 
+  // Каждая транзакция в системе — это пара документов (expense+income), связанных
+  // через relatedTransactionId. Каноничная сторона для правки — расходная.
+  // Если пользователь открыл правку «со стороны получателя» (income), например
+  // глядя на историю счёта-получателя, переключаемся на парный расход.
+  const passedSnapEarly = await getDoc(doc(db, 'transactions', originalTransactionId));
+  if (!passedSnapEarly.exists()) {
+    throw new Error('Исходная транзакция не найдена');
+  }
+  const passedEarly = passedSnapEarly.data() as {
+    type?: 'expense' | 'income';
+    relatedTransactionId?: string;
+    companyId?: string;
+  };
+  let canonicalOriginalId = originalTransactionId;
+  if (passedEarly.type === 'income') {
+    if (!passedEarly.relatedTransactionId) {
+      throw new Error('У этой транзакции нет связанной расходной операции — править нельзя');
+    }
+    canonicalOriginalId = passedEarly.relatedTransactionId;
+  }
+
   let enrichedFuelData: FuelData | undefined = newFuelData;
   if (newFuelData) {
     try {
-      const originalForFuelSnap = await getDoc(doc(db, 'transactions', originalTransactionId));
-      const companyIdForFuel = (originalForFuelSnap.data() as { companyId?: string } | undefined)?.companyId;
+      const companyIdForFuel = passedEarly.companyId;
       if (companyIdForFuel) {
+        // Исключаем обе стороны пары — их обе пометим cancelled, и они не должны учитываться в текущей выборке.
+        const excludeIds = canonicalOriginalId === originalTransactionId
+          ? [originalTransactionId]
+          : [originalTransactionId, canonicalOriginalId];
         const derived = await computeDerivedFuelStats(companyIdForFuel, newFuelData, {
-          excludeTransactionIds: [originalTransactionId]
+          excludeTransactionIds: excludeIds
         });
         enrichedFuelData = { ...newFuelData, derivedFuelStats: derived };
       }
@@ -646,7 +670,7 @@ export const editFeedTransaction = async (params: {
     // 1. READ PHASE
     // ====================
 
-    const originalRef = doc(db, 'transactions', originalTransactionId);
+    const originalRef = doc(db, 'transactions', canonicalOriginalId);
     const originalSnap = await tx.get(originalRef);
     if (!originalSnap.exists()) {
       throw new Error('Исходная транзакция не найдена');
@@ -654,6 +678,8 @@ export const editFeedTransaction = async (params: {
 
     const original = originalSnap.data() as Transaction & { relatedTransactionId?: string; categoryId: string };
     if (original.type !== 'expense') {
+      // Сюда попадём только если ранний свитч на parental expense не сработал
+      // (например, у пары статус «оба income» — порча данных). Сообщение остаётся информативным.
       throw new Error('Редактировать можно только расходные транзакции');
     }
     if (!original.relatedTransactionId) {
@@ -728,7 +754,7 @@ export const editFeedTransaction = async (params: {
       description: `Отмена транзакции: ${original.description}`,
       date: timestamp,
       editType: 'reversal',
-      reversalOf: originalTransactionId,
+      reversalOf: canonicalOriginalId,
       companyId
     };
 
@@ -762,7 +788,7 @@ export const editFeedTransaction = async (params: {
       date: timestamp,
       feedSortDate: original.date,
       editType: 'correction',
-      correctedFrom: originalTransactionId,
+      correctedFrom: canonicalOriginalId,
       isSalary: newIsSalary ?? original.isSalary ?? false,
       isCashless: newIsCashless ?? original.isCashless ?? false,
       needsReview: newNeedsReview ?? original.needsReview ?? false,
