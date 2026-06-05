@@ -9,7 +9,7 @@ import { MenuAccessGuard } from './components/auth/MenuAccessGuard';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { LoadingSpinner } from './components/LoadingSpinner';
-import { Toaster } from 'react-hot-toast';
+import { AppToaster } from './components/AppToaster';
 import './styles/animations.css';
 import { MenuVisibilityProvider } from './contexts/MenuVisibilityContext';
 import { MobileSidebarProvider } from './contexts/MobileSidebarContext';
@@ -410,44 +410,7 @@ const App = () => {
         <AuthGuard>
           <ChatProvider>
           <CompanyBlockedGuard>
-          <Toaster 
-            position="top-right"
-            toastOptions={{
-              duration: 3000,
-              style: {
-                background: '#ffffff',
-                color: '#1f2937',
-                border: '1px solid #e5e7eb',
-                borderRadius: '0.5rem',
-                padding: '0.75rem 1rem',
-                boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
-                fontSize: '0.875rem',
-              },
-              success: {
-                style: {
-                  background: '#f0fdf4',
-                  border: '1px solid #dcfce7',
-                  color: '#166534',
-                },
-                iconTheme: {
-                  primary: '#22c55e',
-                  secondary: '#ffffff',
-                },
-              },
-              error: {
-                style: {
-                  background: '#fef2f2',
-                  border: '1px solid #fee2e2',
-                  color: '#991b1b',
-                },
-                iconTheme: {
-                  primary: '#ef4444',
-                  secondary: '#ffffff',
-                },
-                duration: 4000,
-              },
-            }}
-          />
+          <AppToaster />
           <MenuVisibilityProvider>
             <AppContent />
           </MenuVisibilityProvider>
