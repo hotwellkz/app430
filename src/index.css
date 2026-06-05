@@ -1190,3 +1190,14 @@ html.dark .focus\:ring-emerald-500:focus { --tw-ring-color: rgba(16, 185, 129, 0
 
 /* «Жёсткие» заливки тёмной плашкой в светлых местах оставляем как есть —
    они специально яркие (например, изумрудный CTA). */
+
+/* Произвольные tailwind-классы с hex-цветом (border-[#e5e7eb] и т.п.) тоже
+   подтягиваем под тёмное стекло — встречается часто в шапках и боковых
+   панелях. */
+html.dark .border-\[\#e5e7eb\] { border-color: rgba(255, 255, 255, 0.08) !important; }
+html.dark .border-\[\#E5E7EB\] { border-color: rgba(255, 255, 255, 0.08) !important; }
+html.dark .bg-\[\#f3f4f6\],
+html.dark .bg-\[\#F3F4F6\],
+html.dark .bg-\[\#f9fafb\],
+html.dark .bg-\[\#F9FAFB\] { background-color: rgba(255, 255, 255, 0.03) !important; }
+
