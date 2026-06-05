@@ -865,6 +865,30 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
                   {({ focus }) => (
                     <button
                       type="button"
+                      onClick={() => {
+                        if (editMode) disableEditMode();
+                        else openEditModeOrPrompt();
+                      }}
+                      className={clsx(
+                        'flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left text-sm',
+                        focus ? 'bg-gray-50' : '',
+                        editMode ? 'text-red-600' : 'text-gray-800'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        {editMode ? <Unlock className="w-4 h-4 shrink-0" aria-hidden /> : <Lock className="w-4 h-4 shrink-0" aria-hidden />}
+                        <span>Режим редактирования</span>
+                      </span>
+                      {editMode && (
+                        <span className="pl-6 text-xs font-medium text-emerald-600">Включён</span>
+                      )}
+                    </button>
+                  )}
+                </MenuItem>
+                <MenuItem>
+                  {({ focus }) => (
+                    <button
+                      type="button"
                       onClick={() => setShowStats(!showStats)}
                       className={clsx(
                         'flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-gray-800',
