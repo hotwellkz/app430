@@ -39,6 +39,7 @@ import { useMobileWhatsAppChat } from '../contexts/MobileWhatsAppChatContext';
 import { useCurrentCompanyUser } from '../hooks/useCurrentCompanyUser';
 import type { MenuSectionId } from '../types/menuAccess';
 import { isTransactionsFloatingBurgerRoute } from './navigation/crmRouteMatchers';
+import { ThemeToggle } from './ThemeToggle';
 
 interface MenuItem {
   icon: React.ReactNode;
@@ -336,7 +337,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onPageChange, currentPage }) =
                   <User className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
                   <span>Сменить пароль</span>
                 </button>
-                
+
+                <ThemeToggle compact />
+
                 <button
                   onClick={() => {
                     auth.signOut();
@@ -503,7 +506,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ onPageChange, currentPage }) =
                 )}
               </button>
             </div>
-            
+
+            <div className="relative">
+              <ThemeToggle iconOnly={!desktopExpanded} />
+            </div>
+
             <div className="relative">
               <button
                 onClick={() => auth.signOut()}
