@@ -25,6 +25,93 @@ export interface EditTransactionModalProps {
 
 const EXPENSE_ACCOUNT_TITLES = ['Общ Расх', 'Расходы', 'Прочие расходы'];
 
+/**
+ * Категории в системе живут в трёх «рядах» (row): 1 — клиенты, 2 — сотрудники,
+ * 3 — объекты/проекты. Очень часто у клиента и его объекта одно и то же название
+ * (например, «BB200Астан»), и в плоском <select> пользователь путается, какую
+ * из двух «BB200Астан» он выбрал. Группируем по row через <optgroup>, а у
+ * названий, встречающихся в нескольких группах, дописываем хвост ` · Клиент`
+ * / ` · Объект` — чтобы и свёрнутый селект показывал, какая именно строка.
+ */
+const ROW_GROUP_LABEL: Record<number, string> = {
+  3: 'Объекты (расход на объект)',
+  1: 'Клиенты (приход от клиента)',
+  2: 'Сотрудники'
+};
+const ROW_SHORT_LABEL: Record<number, string> = {
+  3: 'Объект',
+  1: 'Клиент',
+  2: 'Сотрудник'
+};
+const ROW_ORDER = [3, 1, 2];
+
+interface AccountGroup {
+  row: number;
+  label: string;
+  items: CategoryCardType[];
+}
+
+function groupAccountsByRow(accounts: CategoryCardType[]): AccountGroup[] {
+  const byRow = new Map<number, CategoryCardType[]>();
+  for (const c of accounts) {
+    const r = typeof c.row === 'number' ? c.row : 0;
+    if (!byRow.has(r)) byRow.set(r, []);
+    byRow.get(r)!.push(c);
+  }
+  const groups: AccountGroup[] = [];
+  for (const r of ROW_ORDER) {
+    const items = byRow.get(r);
+    if (items && items.length > 0) {
+      groups.push({ row: r, label: ROW_GROUP_LABEL[r], items });
+      byRow.delete(r);
+    }
+  }
+  const rest: CategoryCardType[] = [];
+  for (const items of byRow.values()) rest.push(...items);
+  if (rest.length > 0) groups.push({ row: 0, label: 'Прочее', items: rest });
+  return groups;
+}
+
+/** Названия, встречающиеся более чем в одной группе — для них дописываем суффикс. */
+function buildAmbiguousTitleSet(groups: AccountGroup[]): Set<string> {
+  const titleToRows = new Map<string, Set<number>>();
+  for (const g of groups) {
+    for (const item of g.items) {
+      const key = item.title.trim().toLowerCase();
+      if (!titleToRows.has(key)) titleToRows.set(key, new Set());
+      titleToRows.get(key)!.add(g.row);
+    }
+  }
+  const ambiguous = new Set<string>();
+  for (const [title, rows] of titleToRows.entries()) {
+    if (rows.size > 1) ambiguous.add(title);
+  }
+  return ambiguous;
+}
+
+interface GroupedSelectOptionsProps {
+  groups: AccountGroup[];
+  ambiguousTitles: Set<string>;
+}
+
+const GroupedSelectOptions: React.FC<GroupedSelectOptionsProps> = ({ groups, ambiguousTitles }) => (
+  <>
+    {groups.map((g) => (
+      <optgroup key={g.row} label={g.label}>
+        {g.items.map((c) => {
+          const isAmbiguous = ambiguousTitles.has(c.title.trim().toLowerCase());
+          const suffix = isAmbiguous && ROW_SHORT_LABEL[g.row] ? ` · ${ROW_SHORT_LABEL[g.row]}` : '';
+          return (
+            <option key={c.id} value={c.id}>
+              {c.title}{suffix}
+            </option>
+          );
+        })}
+      </optgroup>
+    ))}
+  </>
+);
+
 export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   transaction,
   peopleAccounts,
@@ -60,7 +147,19 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
     return objectAccounts.filter((c) => c.title.toLowerCase().includes(q));
   }, [objectAccounts, toAccountSearch]);
 
+  const toAccountGroups = useMemo(() => groupAccountsByRow(filteredObjectAccounts), [filteredObjectAccounts]);
+  const toAccountAmbiguous = useMemo(() => buildAmbiguousTitleSet(toAccountGroups), [toAccountGroups]);
+  const fromAccountGroups = useMemo(() => groupAccountsByRow(peopleAccounts), [peopleAccounts]);
+  const fromAccountAmbiguous = useMemo(() => buildAmbiguousTitleSet(fromAccountGroups), [fromAccountGroups]);
+
   const selectedToCategory = objectAccounts.find((c) => c.id === toCategoryId);
+  const selectedToCategoryRow = typeof selectedToCategory?.row === 'number' ? selectedToCategory.row : 0;
+  const selectedToShortLabel = ROW_SHORT_LABEL[selectedToCategoryRow];
+  const TO_BADGE_BY_ROW: Record<number, string> = {
+    1: 'bg-amber-50 text-amber-700 border-amber-200',
+    2: 'bg-gray-50 text-gray-700 border-gray-200',
+    3: 'bg-blue-50 text-blue-700 border-blue-200'
+  };
   const isToExpenseAccount =
     selectedToCategory &&
     (selectedToCategory.type === 'general_expense' || EXPENSE_ACCOUNT_TITLES.includes(selectedToCategory.title));
@@ -135,11 +234,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               >
                 <option value="">Выберите счёт</option>
-                {peopleAccounts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
-                  </option>
-                ))}
+                <GroupedSelectOptions groups={fromAccountGroups} ambiguousTitles={fromAccountAmbiguous} />
               </select>
             </div>
 
@@ -160,12 +255,20 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               >
                 <option value="">Выберите счёт</option>
-                {filteredObjectAccounts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
-                  </option>
-                ))}
+                <GroupedSelectOptions groups={toAccountGroups} ambiguousTitles={toAccountAmbiguous} />
               </select>
+              {selectedToCategory && selectedToShortLabel && (
+                <div className="mt-1.5 flex items-center gap-1.5 text-xs">
+                  <span className="text-gray-500">Это:</span>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full border font-medium ${
+                      TO_BADGE_BY_ROW[selectedToCategoryRow] ?? 'bg-gray-50 text-gray-700 border-gray-200'
+                    }`}
+                  >
+                    {selectedToShortLabel}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -208,11 +311,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               >
                 <option value="">Выберите человека</option>
-                {peopleAccounts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
-                  </option>
-                ))}
+                <GroupedSelectOptions groups={fromAccountGroups} ambiguousTitles={fromAccountAmbiguous} />
               </select>
             </div>
           </div>
