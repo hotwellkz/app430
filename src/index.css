@@ -1173,13 +1173,23 @@ html.dark .border-yellow-200 { border-color: rgba(234, 179, 8, 0.32); }
 html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.06); }
 html.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.08); }
 
-/* Поля ввода: нативные input/select/textarea */
+/* Поля ввода: нативные input/select/textarea — в тёмной теме делаем
+   их «провалом» (темнее окружающего стекла), чтобы они визуально
+   отделялись на любом фоне. Чёткая граница + emerald focus-ring
+   делают input явно интерактивным. */
 html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
 html.dark select,
 html.dark textarea {
-  background-color: rgba(255, 255, 255, 0.04);
-  color: #e4e4e7;
-  border-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(0, 0, 0, 0.35);
+  color: #f4f4f5;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: rgba(16, 185, 129, 0.6);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.20);
 }
 html.dark input::placeholder,
 html.dark textarea::placeholder {
