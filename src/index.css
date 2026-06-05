@@ -1334,4 +1334,12 @@ html.dark .via-sf-background { --tw-gradient-via: #09090b var(--tw-gradient-via-
 html.dark .to-sf-background { --tw-gradient-to: #09090b var(--tw-gradient-to-position) !important; }
 html.dark .from-sf-background { --tw-gradient-from: #09090b var(--tw-gradient-from-position) !important; --tw-gradient-to: rgba(9, 9, 11, 0) var(--tw-gradient-from-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important; }
 
+/* Полу-прозрачные варианты sf-* цветов (bg-sf-surface/90, /95;
+   bg-sf-primaryLight/50; bg-sf-accentLight/40) — встречаются в шапке,
+   бейджах, hero-blob. */
+html.dark [class*="bg-sf-surface/"] { background-color: rgba(24, 24, 27, 0.78) !important; }
+html.dark [class*="bg-sf-background/"] { background-color: rgba(9, 9, 11, 0.78) !important; }
+html.dark [class*="bg-sf-primaryLight/"] { background-color: rgba(16, 185, 129, 0.12) !important; }
+html.dark [class*="bg-sf-accentLight/"] { background-color: rgba(76, 175, 120, 0.16) !important; }
+
 

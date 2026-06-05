@@ -1,7 +1,24 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Moon, Sun, Monitor } from 'lucide-react';
 import { publicTokens } from '../theme';
+import { useTheme, type ThemeMode } from '../../hooks/useTheme';
+
+const THEME_ICON: Record<ThemeMode, React.ReactNode> = {
+  light: <Sun className="w-4 h-4" aria-hidden />,
+  dark: <Moon className="w-4 h-4" aria-hidden />,
+  system: <Monitor className="w-4 h-4" aria-hidden />
+};
+const THEME_LABEL: Record<ThemeMode, string> = {
+  light: 'Светлая',
+  dark: 'Тёмная',
+  system: 'Системная'
+};
+const NEXT_THEME: Record<ThemeMode, ThemeMode> = {
+  light: 'dark',
+  dark: 'system',
+  system: 'light'
+};
 
 const NAV_LINKS = [
   { label: 'Возможности', to: '/vozmozhnosti' },
@@ -14,6 +31,9 @@ export const PublicHeader: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { mode: themeMode, setMode: setThemeMode } = useTheme();
+
+  const cycleTheme = () => setThemeMode(NEXT_THEME[themeMode]);
 
   const handleLogin = () => {
     setMobileOpen(false);
@@ -44,6 +64,15 @@ export const PublicHeader: React.FC = () => {
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
+            <button
+              type="button"
+              onClick={cycleTheme}
+              className="p-2 text-sf-text-secondary hover:text-sf-text-primary rounded-sfButton transition-colors"
+              title={`Тема: ${THEME_LABEL[themeMode]} — клик переключает`}
+              aria-label={`Тема: ${THEME_LABEL[themeMode]}`}
+            >
+              {THEME_ICON[themeMode]}
+            </button>
             <button type="button" onClick={handleLogin} className="text-sm font-medium text-sf-text-secondary hover:text-sf-text-primary px-4 py-2 transition-colors">
               Войти
             </button>
@@ -52,9 +81,20 @@ export const PublicHeader: React.FC = () => {
             </button>
           </div>
 
-          <button type="button" onClick={() => setMobileOpen((o) => !o)} className="md:hidden p-2 text-sf-text-secondary hover:text-sf-text-primary rounded-sfButton" aria-label="Меню">
-            {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
+          <div className="md:hidden flex items-center gap-1">
+            <button
+              type="button"
+              onClick={cycleTheme}
+              className="p-2 text-sf-text-secondary hover:text-sf-text-primary rounded-sfButton"
+              title={`Тема: ${THEME_LABEL[themeMode]}`}
+              aria-label={`Тема: ${THEME_LABEL[themeMode]}`}
+            >
+              {THEME_ICON[themeMode]}
+            </button>
+            <button type="button" onClick={() => setMobileOpen((o) => !o)} className="p-2 text-sf-text-secondary hover:text-sf-text-primary rounded-sfButton" aria-label="Меню">
+              {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
         </div>
       </div>
 
