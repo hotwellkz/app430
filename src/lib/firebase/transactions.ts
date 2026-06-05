@@ -71,10 +71,28 @@ export const getTransactionStatusForCompany = async (transactionCompanyId: strin
   return 'pending';
 };
 
-/** Может ли текущий пользователь одобрять/отклонять транзакции: global_admin, owner своей компании или право approveTransactions. */
+/**
+ * Список email-адресов глобальных админов из VITE_APPROVED_EMAILS — резервная
+ * проверка на случай, если users/{uid}.role в Firestore по какой-то причине
+ * не равен 'global_admin' (например, документ создавался до того, как email
+ * добавили в env-список, или role затёрся миграцией).
+ */
+const isCurrentUserGlobalAdminByEmail = (): boolean => {
+  const email = (auth.currentUser?.email || '').trim().toLowerCase();
+  if (!email) return false;
+  const list = (import.meta.env.VITE_APPROVED_EMAILS || '')
+    .split(',')
+    .map((e: string) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return list.includes(email);
+};
+
+/** Может ли текущий пользователь одобрять/отклонять транзакции: global_admin (по Firestore-роли или по env-списку email), owner своей компании или право approveTransactions. */
 const canApproveRejectTransactions = async (transactionCompanyId?: string): Promise<boolean> => {
   const globalRole = await getCurrentUserRole();
   if (globalRole === 'global_admin') return true;
+  // Fallback: если Firestore-роль не совпала, но email пользователя в env-списке VITE_APPROVED_EMAILS — тоже global admin.
+  if (isCurrentUserGlobalAdminByEmail()) return true;
 
   if (!transactionCompanyId) return false;
   const uid = auth.currentUser?.uid;
