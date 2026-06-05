@@ -1348,4 +1348,19 @@ html.dark [class*="hover\\:bg-sf-backgroundSection/"]:hover { background-color: 
 html.dark .hover\:bg-sf-backgroundSection:hover { background-color: rgba(14, 14, 16, 0.96) !important; }
 html.dark .hover\:bg-sf-primaryLight:hover { background-color: rgba(16, 185, 129, 0.18) !important; }
 
+/* Public footer (PublicFooter) — в светлой теме ярко-изумрудный CTA-фон
+   (bg-sf-primary). В тёмной теме это «кричит» на тёмной странице, поэтому
+   делаем тёмную панель с лёгким эмеральд-свечением сверху — бренд
+   сохраняется, но не давит на глаза. Иерархия text-white/95/90/70 на
+   тёмном фоне читается отлично. Квадратик-логотип «2» (bg-white/20)
+   становится эмеральдным акцентом. */
+html.dark footer[data-public-site] {
+  background-color: #0a0a0b !important;
+  background-image:
+    radial-gradient(600px 280px at 50% 0%, rgba(16, 185, 129, 0.10), transparent 70%),
+    linear-gradient(180deg, #0e0e10 0%, #09090b 100%) !important;
+}
+html.dark footer[data-public-site] .border-white\/30 { border-color: rgba(255, 255, 255, 0.10) !important; }
+html.dark footer[data-public-site] .bg-white\/20 { background-color: rgba(16, 185, 129, 0.9) !important; }
+
 
