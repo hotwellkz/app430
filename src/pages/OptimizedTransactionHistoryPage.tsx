@@ -786,8 +786,26 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Мобильный (&lt; md): только фильтр, поиск и overflow */}
+          {/* Мобильный (&lt; md): замок, фильтр, поиск и overflow */}
           <div className="flex md:hidden items-center flex-shrink-0 gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                if (editMode) disableEditMode();
+                else openEditModeOrPrompt();
+              }}
+              className={clsx(
+                'flex items-center justify-center h-10 w-10 min-h-10 min-w-10 rounded-full border transition-colors',
+                editMode
+                  ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'
+                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100 text-gray-700'
+              )}
+              title={editMode ? 'Выключить режим редактирования' : 'Включить режим редактирования'}
+              aria-label={editMode ? 'Выключить режим редактирования' : 'Включить режим редактирования'}
+              aria-pressed={editMode}
+            >
+              {editMode ? <Unlock className="w-5 h-5 shrink-0" aria-hidden /> : <Lock className="w-5 h-5 shrink-0" aria-hidden />}
+            </button>
             <button
               type="button"
               onClick={() => setShowAllFilters(!showAllFilters)}
@@ -841,30 +859,6 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
                     >
                       <Download className="w-4 h-4 shrink-0" aria-hidden />
                       <span>Скачать отчёт</span>
-                    </button>
-                  )}
-                </MenuItem>
-                <MenuItem>
-                  {({ focus }) => (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (editMode) disableEditMode();
-                        else openEditModeOrPrompt();
-                      }}
-                      className={clsx(
-                        'flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left text-sm',
-                        focus ? 'bg-gray-50' : '',
-                        editMode ? 'text-red-600' : 'text-gray-800'
-                      )}
-                    >
-                      <span className="flex items-center gap-2">
-                        {editMode ? <Unlock className="w-4 h-4 shrink-0" aria-hidden /> : <Lock className="w-4 h-4 shrink-0" aria-hidden />}
-                        <span>Режим редактирования</span>
-                      </span>
-                      {editMode && (
-                        <span className="pl-6 text-xs font-medium text-emerald-600">Включён</span>
-                      )}
                     </button>
                   )}
                 </MenuItem>
