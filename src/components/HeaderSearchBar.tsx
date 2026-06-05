@@ -49,13 +49,9 @@ export const HeaderSearchBar: React.FC<HeaderSearchBarProps> = ({
 
   return (
     <div
-      className={`transition-all duration-200 ease-out ${
-        isOpen ? 'max-h-16' : 'max-h-0 overflow-hidden'
+      className={`transition-all duration-200 ease-out bg-white ${
+        isOpen ? 'max-h-16 border-b border-[#e5e7eb]' : 'max-h-0 overflow-hidden'
       } ${mobileOnly ? 'md:hidden' : ''}`}
-      style={{
-        background: '#ffffff',
-        borderBottom: isOpen ? '1px solid #e5e7eb' : 'none',
-      }}
     >
       <div className="flex items-center gap-2 px-3 py-2 md:px-4">
         {leadingClose && (

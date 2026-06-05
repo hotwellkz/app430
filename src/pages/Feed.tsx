@@ -960,7 +960,6 @@ export const Feed: React.FC = () => {
     <div className="flex flex-col h-dvh bg-gray-100 overflow-hidden feed-page">
       <div
         className="flex-shrink-0 fixed top-0 left-0 sm:left-64 right-0 bg-white z-50 transition-all duration-300 border-b border-[#e5e7eb]"
-        style={{ background: '#ffffff' }}
       >
         <HeaderSearchBar
           value={searchQuery}
@@ -984,16 +983,14 @@ export const Feed: React.FC = () => {
             <button
               type="button"
               onClick={toggleMobileSidebar}
-              className="md:hidden flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
-              style={{ color: '#374151' }}
+              className="md:hidden flex items-center justify-center w-10 h-10 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0"
               aria-label="Меню"
             >
               <Menu className="w-6 h-6" style={{ width: 24, height: 24 }} />
             </button>
             <button
               onClick={() => window.history.back()}
-              className="flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:min-w-0 p-2 md:-ml-0 md:mr-4 flex-shrink-0"
-              style={{ color: '#374151' }}
+              className="flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:min-w-0 p-2 md:-ml-0 md:mr-4 flex-shrink-0 text-gray-700"
               aria-label="Назад"
             >
               <ArrowLeft className="w-6 h-6" style={{ width: 24, height: 24 }} />
@@ -1001,7 +998,7 @@ export const Feed: React.FC = () => {
             {/* На desktop — заголовок и бейдж слева */}
             <h1
               className="hidden md:block text-xl font-semibold text-gray-900"
-              style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '20px', fontWeight: 600, color: '#111827' }}
+              style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '20px', fontWeight: 600 }}
             >
               Лента
             </h1>
@@ -1010,7 +1007,7 @@ export const Feed: React.FC = () => {
                 🔓 Режим редактирования
               </span>
             )}
-            <div className="hidden md:flex items-center gap-2 text-sm font-medium" style={{ color: '#FAAD14' }}>
+            <div className="hidden md:flex items-center gap-2 text-sm font-medium text-amber-500">
               <span>⚠</span>
               <span>
                 Требуют уточнения:{' '}
@@ -1022,12 +1019,11 @@ export const Feed: React.FC = () => {
           {/* CENTER: на mobile заголовок по центру оставшегося места */}
           <div className="flex-1 flex items-center justify-center min-w-0 md:hidden">
             <h1
-              className="text-center truncate"
+              className="text-center truncate text-gray-900"
               style={{
                 fontFamily: 'Inter, system-ui, sans-serif',
                 fontSize: '18px',
-                fontWeight: 600,
-                color: '#111827'
+                fontWeight: 600
               }}
             >
               Лента
@@ -1069,30 +1065,27 @@ export const Feed: React.FC = () => {
               className={`flex items-center justify-center rounded-full border p-2 md:px-3 md:py-2 md:gap-1 text-sm ${
                 editMode
                   ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'
-                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100 text-gray-700'
               }`}
-              style={!editMode ? { color: '#374151' } : undefined}
               title={editMode ? 'Выключить режим редактирования' : 'Включить режим редактирования'}
             >
               {editMode ? (
                 <Unlock style={{ width: 24, height: 24 }} className="md:w-4 md:h-4 text-red-600" />
               ) : (
-                <Lock style={{ width: 24, height: 24, color: '#374151' }} className="md:w-4 md:h-4 md:text-gray-600" />
+                <Lock style={{ width: 24, height: 24 }} className="md:w-4 md:h-4 text-gray-700 md:text-gray-600" />
               )}
               <span className="hidden md:inline">Режим редактирования</span>
             </button>
             <button
               onClick={() => setShowSearch(!showSearch)}
-              className="p-2 hover:bg-gray-100 rounded-full flex items-center justify-center"
-              style={{ color: '#374151' }}
+              className="p-2 hover:bg-gray-100 rounded-full flex items-center justify-center text-gray-700"
               aria-label="Поиск"
             >
               <Search style={{ width: 24, height: 24 }} className="md:w-5 md:h-5 md:text-gray-500" />
             </button>
             <button
               onClick={() => setShowFiltersDrawer(true)}
-              className="lg:hidden p-2 hover:bg-gray-100 rounded-full flex items-center justify-center"
-              style={{ color: '#374151' }}
+              className="lg:hidden p-2 hover:bg-gray-100 rounded-full flex items-center justify-center text-gray-700"
               aria-label="Фильтры"
             >
               <Filter className="w-5 h-5 md:w-5 md:h-5 text-gray-500" />

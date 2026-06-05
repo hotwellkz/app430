@@ -673,8 +673,7 @@ export const OptimizedTransactionHistoryPage: React.FC = () => {
     <div className="flex flex-col h-dvh bg-gray-100">
       {/* Header: mobile — бургер, назад, заголовок, фильтр, поиск, «Ещё»; desktop — полная панель */}
       <div
-        className="flex-shrink-0 sticky top-0 z-[100] bg-white border-b"
-        style={{ background: '#ffffff', borderBottom: '1px solid #e5e7eb' }}
+        className="flex-shrink-0 sticky top-0 z-[100] bg-white border-b border-[#e5e7eb]"
       >
         <HeaderSearchBar
           value={searchQuery}
