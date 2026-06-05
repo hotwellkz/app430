@@ -1201,3 +1201,91 @@ html.dark .bg-\[\#F3F4F6\],
 html.dark .bg-\[\#f9fafb\],
 html.dark .bg-\[\#F9FAFB\] { background-color: rgba(255, 255, 255, 0.03) !important; }
 
+/* Inline `style={{ background: '#ffffff' }}` встречается в ~10 шапках страниц
+   (Feed, Warehouse, Clients, Employees, Products, Profile, Calculator, ...).
+   Перебивать каждый файл — слишком много правок; CSS !important побьёт
+   inline-объявление без !important, поэтому ловим через attribute-selector. */
+html.dark [style*="background: #ffffff"],
+html.dark [style*="background:#ffffff"],
+html.dark [style*="background: #fff;"],
+html.dark [style*="background:#fff;"],
+html.dark [style*="background: #fff\""],
+html.dark [style*="background: rgb(255, 255, 255)"],
+html.dark [style*="background:rgb(255, 255, 255)"],
+html.dark [style*="background: rgb(255,255,255)"],
+html.dark [style*="background:rgb(255,255,255)"],
+html.dark [style*="background-color: #ffffff"],
+html.dark [style*="background-color:#ffffff"],
+html.dark [style*="background-color: #fff;"],
+html.dark [style*="background-color:#fff;"],
+html.dark [style*="background-color: rgb(255, 255, 255)"],
+html.dark [style*="background-color: rgb(255,255,255)"] {
+  background-color: rgba(24, 24, 27, 0.78) !important;
+  background-image: none !important;
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  backdrop-filter: blur(14px) saturate(130%);
+}
+
+/* Inline borderBottom вида '1px solid #e5e7eb' — тоже встречается в шапках. */
+html.dark [style*="border-bottom: 1px solid #e5e7eb"],
+html.dark [style*="border-bottom:1px solid #e5e7eb"],
+html.dark [style*="borderBottom: 1px solid #e5e7eb"] {
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Inline color: '#374151' / '#111827' / '#6b7280' (text-gray-700/900/500)
+   на иконках и заголовках шапок — на тёмном фоне их надо высветлить. */
+html.dark [style*="color: #374151"],
+html.dark [style*="color:#374151"],
+html.dark [style*="color: rgb(55, 65, 81)"] {
+  color: #d4d4d8 !important;
+}
+html.dark [style*="color: #111827"],
+html.dark [style*="color:#111827"],
+html.dark [style*="color: rgb(17, 24, 39)"] {
+  color: #f4f4f5 !important;
+}
+html.dark [style*="color: #6b7280"],
+html.dark [style*="color:#6b7280"],
+html.dark [style*="color: rgb(107, 114, 128)"] {
+  color: #a1a1aa !important;
+}
+
+/* Полупрозрачные tailwind-классы вроде bg-gray-100/80 не покрываются нашими
+   правилами выше (имя класса генерируется как .bg-gray-100\/80). Ловим
+   популярные альфа-варианты явно. */
+html.dark [class*="bg-gray-50/"] { background-color: rgba(255, 255, 255, 0.03) !important; }
+html.dark [class*="bg-gray-100/"] { background-color: rgba(255, 255, 255, 0.05) !important; }
+html.dark [class*="bg-gray-200/"] { background-color: rgba(255, 255, 255, 0.08) !important; }
+html.dark [class*="bg-white/"] { background-color: rgba(255, 255, 255, 0.06) !important; }
+
+/* Градиенты страниц-обёрток: `bg-gradient-to-br from-gray-50 to-gray-100`
+   (Calculator) и подобные — в тёмной теме переопределяем CSS-переменные
+   градиента, чтобы получился тёмный градиент в стиле общей темы. */
+html.dark .from-gray-50,
+html.dark .from-gray-100 { --tw-gradient-from: #09090b var(--tw-gradient-from-position) !important; --tw-gradient-to: rgba(9, 9, 11, 0) var(--tw-gradient-from-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important; }
+html.dark .to-gray-50,
+html.dark .to-gray-100 { --tw-gradient-to: #111114 var(--tw-gradient-to-position) !important; }
+html.dark .via-gray-50,
+html.dark .via-gray-100 { --tw-gradient-via: #0e0e10 var(--tw-gradient-via-position) !important; --tw-gradient-to: rgba(14, 14, 16, 0) var(--tw-gradient-via-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to) !important; }
+
+/* Цветные «пастельные» градиенты (emerald-50, green-50, amber-50, blue-50,
+   yellow-50) в тёмной теме — низкоальфовые акценты вместо ярких пастелей. */
+html.dark .from-emerald-50,
+html.dark .from-green-50 { --tw-gradient-from: rgba(16, 185, 129, 0.10) var(--tw-gradient-from-position) !important; }
+html.dark .to-emerald-50,
+html.dark .to-green-50 { --tw-gradient-to: rgba(16, 185, 129, 0.04) var(--tw-gradient-to-position) !important; }
+html.dark .from-amber-50,
+html.dark .from-yellow-50,
+html.dark .from-orange-50 { --tw-gradient-from: rgba(245, 158, 11, 0.10) var(--tw-gradient-from-position) !important; }
+html.dark .to-amber-50,
+html.dark .to-yellow-50,
+html.dark .to-orange-50 { --tw-gradient-to: rgba(245, 158, 11, 0.04) var(--tw-gradient-to-position) !important; }
+html.dark .from-blue-50,
+html.dark .from-sky-50,
+html.dark .from-cyan-50 { --tw-gradient-from: rgba(56, 189, 248, 0.10) var(--tw-gradient-from-position) !important; }
+html.dark .to-blue-50,
+html.dark .to-sky-50,
+html.dark .to-cyan-50 { --tw-gradient-to: rgba(56, 189, 248, 0.04) var(--tw-gradient-to-position) !important; }
+
+
