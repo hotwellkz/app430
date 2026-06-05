@@ -1283,6 +1283,26 @@ html.dark [style*="color: rgb(107, 114, 128)"] {
   color: #a1a1aa !important;
 }
 
+/* Модалки — для тёмной темы нужен плотный «панельный» фон, иначе сквозь
+   стеклянный bg-white просвечивает контент страницы и сцены «переливаются»
+   (фоновые цветные кружки на /transactions, например). Конвенция в проекте:
+   модалки рендерятся через `<div className="fixed inset-0 ...">` с полу-чёрной
+   подложкой, внутри лежит контейнер с `bg-white`. Эти `bg-white` (и подобные
+   тёмно-серые подложки) делаем почти-непрозрачным тёмным; общие карточки на
+   странице остаются стеклянными. */
+html.dark .fixed.inset-0 .bg-white,
+html.dark .fixed.inset-0 .bg-gray-50,
+html.dark .fixed.inset-0 .bg-gray-100 {
+  background-color: rgba(15, 15, 17, 0.97) !important;
+  backdrop-filter: blur(20px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+}
+
+/* Затемнение overlay'ев — bg-black/50 с альфой выглядит слишком прозрачным
+   в тёмной теме, не «прижимает» фон. */
+html.dark .fixed.inset-0[class*="bg-black/"] { background-color: rgba(0, 0, 0, 0.75) !important; }
+html.dark .fixed.inset-0.bg-opacity-50 { background-color: rgba(0, 0, 0, 0.75) !important; }
+
 /* Полупрозрачные tailwind-классы вроде bg-gray-100/80 не покрываются нашими
    правилами выше (имя класса генерируется как .bg-gray-100\/80). Ловим
    популярные альфа-варианты явно. */
