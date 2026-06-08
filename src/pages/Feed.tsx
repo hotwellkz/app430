@@ -208,14 +208,18 @@ export const Feed: React.FC = () => {
 
   /** Синхронная проверка для отображения кнопки удаления в списке (без запроса в БД). */
   const canShowDeleteForTransaction = useCallback(
-    (t: { companyId?: string }) =>
-      !!(
+    (t: { companyId?: string }) => {
+      const email = (user?.email || '').toLowerCase();
+      const byEmail = !!email && approvedEmails.includes(email);
+      return !!(
         user?.role === 'global_admin' ||
         user?.role === 'superAdmin' ||
         user?.role === 'admin' ||
+        byEmail ||
         (companyUser?.role === 'owner' && t.companyId === companyUser?.companyId)
-      ),
-    [user?.role, companyUser?.role, companyUser?.companyId]
+      );
+    },
+    [user?.role, user?.email, approvedEmails, companyUser?.role, companyUser?.companyId]
   );
 
   const { toggle: toggleMobileSidebar } = useMobileSidebar();
