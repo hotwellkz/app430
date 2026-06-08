@@ -1182,6 +1182,11 @@ export const canDeleteTransaction = async (
   if (globalRole === 'global_admin' || globalRole === 'superAdmin' || globalRole === 'admin') {
     return { allowed: true, requiresPassword: true };
   }
+  // Email-fallback: если Firestore-роль не подошла, но email в VITE_APPROVED_EMAILS —
+  // тоже global admin. Пароль требуем, как и для Firestore-роли.
+  if (isCurrentUserGlobalAdminByEmail()) {
+    return { allowed: true, requiresPassword: true };
+  }
 
   if (!transactionCompanyId) return { allowed: false, requiresPassword: false };
   try {
@@ -1228,6 +1233,9 @@ export const deleteTransaction = async (transactionId: string, userId: string): 
 
     let mayDelete = false;
     if (globalRole === 'global_admin' || globalRole === 'superAdmin' || globalRole === 'admin') {
+      mayDelete = true;
+    } else if (isCurrentUserGlobalAdminByEmail()) {
+      // Email-fallback: global admin по email (см. PR #61, #68) — тоже разрешаем.
       mayDelete = true;
     } else if (transactionCompanyId) {
       try {
