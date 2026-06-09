@@ -59,6 +59,9 @@ const getCurrentUserRole = async (): Promise<string | undefined> => {
 export const getTransactionStatusForCompany = async (transactionCompanyId: string): Promise<TransactionStatus> => {
   const globalRole = await getCurrentUserRole();
   if (globalRole === 'global_admin') return 'approved';
+  // Email-fallback: если Firestore-роль не подошла, но email в VITE_APPROVED_EMAILS —
+  // тоже global admin, его транзакции сразу approved (см. PR #61, #68, #69).
+  if (isCurrentUserGlobalAdminByEmail()) return 'approved';
 
   const uid = auth.currentUser?.uid;
   if (!uid) return 'pending';
