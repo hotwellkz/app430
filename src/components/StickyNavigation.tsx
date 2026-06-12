@@ -113,7 +113,15 @@ export const StickyNavigation: React.FC<StickyNavigationProps> = ({ onNavigate }
   const showUnreadBadge = waState.unreadChatsCount > 0;
   const showAwaitingGlow = waState.hasAwaitingReply;
 
-  const showAsCollapsed = !isMobile && !desktopExpanded && canAccessWhatsApp;
+  /**
+   * На desktop панель раскрывается по hover, добавляя навигационные кнопки
+   * (feed / clients / warehouse / transactions) сверху. Поиск и WhatsApp
+   * остаются всегда видны на одной и той же позиции — это важно, потому что
+   * на /transactions пользователь подводит мышь именно к поиску, и при
+   * перемонтировании DOM (как было раньше с двумя альтернативными блоками)
+   * кнопка «прыгала», и тап промахивался.
+   */
+  const showNavButtons = isMobile || desktopExpanded;
 
   if (isAttachmentPreviewOpen) {
     return null;
@@ -141,119 +149,81 @@ export const StickyNavigation: React.FC<StickyNavigationProps> = ({ onNavigate }
         onMouseEnter={handlePanelMouseEnter}
         onMouseLeave={handlePanelMouseLeave}
       >
-        {/* Свёрнутый режим (desktop): только триггер с бейджем */}
-        {showAsCollapsed && (
-          <div className="flex flex-col items-center gap-2 rounded-2xl bg-white/95 backdrop-blur border border-gray-200/80 shadow-lg p-1.5">
-            {showClientSearchButton && (
-              <button
-                type="button"
-                onClick={transactionsSearch.open}
-                className="w-11 h-11 flex items-center justify-center rounded-full bg-emerald-500 hover:bg-emerald-600 text-white shadow transition-colors duration-200"
-                title="Поиск клиента"
-                aria-label="Поиск клиента"
-              >
-                <Search className="w-5 h-5" />
-              </button>
-            )}
-            {canAccessWhatsApp && (
-              <button
-                onClick={() => navigate('/whatsapp')}
-                className={[
-                  whatsappBtnClass,
-                  'relative',
-                  showAwaitingGlow ? 'ring-2 ring-amber-400/50 shadow-[0_0_0_3px_rgba(251,191,36,0.12)]' : '',
-                ].join(' ')}
-                title="Чаты"
-              >
-                <FaWhatsapp className="w-5 h-5" />
-                {showUnreadBadge && (
-                  <span
-                    className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-semibold ring-2 ring-white"
-                    aria-label={`Непрочитанные: ${waState.unreadChatsCount}`}
-                  >
-                    {unreadBadgeText}
-                  </span>
-                )}
-              </button>
-            )}
-          </div>
-        )}
+        <div
+          className={[
+            'flex flex-col items-center',
+            !isMobile ? 'rounded-2xl bg-white/95 backdrop-blur border border-gray-200/80 shadow-lg p-1.5 gap-2' : 'gap-1.5',
+          ].join(' ')}
+        >
+          {/* Навигационные кнопки сверху — появляются только при hover (desktop)
+              или всегда (mobile). На desktop поиск/WhatsApp ниже не сдвигаются. */}
+          {showNavButtons && (
+            <>
+              {canAccessFeed && (
+                <button onClick={() => onNavigate('feed')} className={isMobile ? `${btnClass} bg-white` : btnClass} title="Список">
+                  <List className={isMobile ? 'w-3.5 h-3.5 text-gray-700' : 'w-4 h-4'} />
+                </button>
+              )}
+              {canAccessClients && (
+                <button onClick={() => onNavigate('clients')} className={isMobile ? `${btnClass} bg-white` : btnClass} title="Клиенты">
+                  <UserCircle className={isMobile ? 'w-3.5 h-3.5 text-gray-700' : 'w-4 h-4'} />
+                </button>
+              )}
+              {canAccessWarehouse && (
+                <button onClick={() => onNavigate('warehouse')} className={isMobile ? `${btnClass} bg-white` : btnClass} title="Склад">
+                  <Warehouse className={isMobile ? 'w-3.5 h-3.5 text-gray-700' : 'w-4 h-4'} />
+                </button>
+              )}
+              {canAccessTransactions && (
+                <button onClick={() => onNavigate('transactions')} className={isMobile ? `${btnClass} bg-white` : btnClass} title="Транзакции">
+                  <ArrowLeftRight className={isMobile ? 'w-3.5 h-3.5 text-gray-700' : 'w-4 h-4'} />
+                </button>
+              )}
+            </>
+          )}
 
-        {/* Полная панель: mobile всегда, desktop — когда раскрыта */}
-        {(!showAsCollapsed || isMobile) && (
-          <div
-            className={[
-              'flex flex-col items-center',
-              !isMobile ? 'rounded-2xl bg-white/95 backdrop-blur border border-gray-200/80 shadow-lg p-2 gap-2' : 'gap-1.5',
-            ].join(' ')}
-          >
-            {showClientSearchButton && (
-              <button
-                type="button"
-                onClick={transactionsSearch.open}
-                className={[
-                  btnClass,
-                  isMobile
-                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                    : 'bg-emerald-500 hover:bg-emerald-600 text-white',
-                ].join(' ')}
-                title="Поиск клиента"
-                aria-label="Поиск клиента"
-              >
-                <Search className={isMobile ? 'w-4 h-4' : 'w-5 h-5'} />
-              </button>
-            )}
+          {/* Поиск + WhatsApp — всегда видны на одной позиции (внизу панели).
+              При раскрытии панели они НЕ перемонтируются → курсор не теряет цель. */}
+          {showClientSearchButton && (
+            <button
+              type="button"
+              onClick={transactionsSearch.open}
+              className={[
+                btnClass,
+                'bg-emerald-500 hover:bg-emerald-600 text-white',
+              ].join(' ')}
+              title="Поиск клиента"
+              aria-label="Поиск клиента"
+            >
+              <Search className={isMobile ? 'w-4 h-4' : 'w-5 h-5'} />
+            </button>
+          )}
 
-            {canAccessWhatsApp && (
-              <button
-                onClick={() => navigate('/whatsapp')}
-                className={[
-                  whatsappBtnClass,
-                  'relative',
-                  showAwaitingGlow ? 'ring-2 ring-amber-400/50 shadow-[0_0_0_3px_rgba(251,191,36,0.12)] motion-reduce:animate-none' : '',
-                ].join(' ')}
-                title="Чаты"
-              >
-                <FaWhatsapp className={isMobile ? 'w-4 h-4' : 'w-5 h-5'} />
-                {showUnreadBadge && (
-                  <span
-                    className={[
-                      'absolute bg-red-500 text-white font-semibold text-center shadow rounded-full ring-2 ring-white',
-                      isMobile ? 'min-w-[18px] h-[18px] px-1 text-[10px] leading-[18px] -top-1 -right-1' : 'min-w-[18px] h-[18px] px-1 text-[10px] -top-0.5 -right-0.5',
-                    ].join(' ')}
-                    aria-label={`Непрочитанные чаты: ${waState.unreadChatsCount}`}
-                  >
-                    {unreadBadgeText}
-                  </span>
-                )}
-              </button>
-            )}
-
-            {canAccessFeed && (
-              <button onClick={() => onNavigate('feed')} className={isMobile ? `${btnClass} bg-white` : btnClass} title="Список">
-                <List className={isMobile ? 'w-3.5 h-3.5 text-gray-700' : 'w-4 h-4'} />
-              </button>
-            )}
-
-            {canAccessClients && (
-              <button onClick={() => onNavigate('clients')} className={isMobile ? `${btnClass} bg-white` : btnClass} title="Клиенты">
-                <UserCircle className={isMobile ? 'w-3.5 h-3.5 text-gray-700' : 'w-4 h-4'} />
-              </button>
-            )}
-
-            {canAccessWarehouse && (
-              <button onClick={() => onNavigate('warehouse')} className={isMobile ? `${btnClass} bg-white` : btnClass} title="Склад">
-                <Warehouse className={isMobile ? 'w-3.5 h-3.5 text-gray-700' : 'w-4 h-4'} />
-              </button>
-            )}
-
-            {canAccessTransactions && (
-              <button onClick={() => onNavigate('transactions')} className={isMobile ? `${btnClass} bg-white` : btnClass} title="Транзакции">
-                <ArrowLeftRight className={isMobile ? 'w-3.5 h-3.5 text-gray-700' : 'w-4 h-4'} />
-              </button>
-            )}
-          </div>
-        )}
+          {canAccessWhatsApp && (
+            <button
+              onClick={() => navigate('/whatsapp')}
+              className={[
+                whatsappBtnClass,
+                'relative',
+                showAwaitingGlow ? 'ring-2 ring-amber-400/50 shadow-[0_0_0_3px_rgba(251,191,36,0.12)] motion-reduce:animate-none' : '',
+              ].join(' ')}
+              title="Чаты"
+            >
+              <FaWhatsapp className={isMobile ? 'w-4 h-4' : 'w-5 h-5'} />
+              {showUnreadBadge && (
+                <span
+                  className={[
+                    'absolute bg-red-500 text-white font-semibold text-center shadow rounded-full ring-2 ring-white',
+                    isMobile ? 'min-w-[18px] h-[18px] px-1 text-[10px] leading-[18px] -top-1 -right-1' : 'min-w-[18px] h-[18px] px-1 text-[10px] -top-0.5 -right-0.5',
+                  ].join(' ')}
+                  aria-label={`Непрочитанные чаты: ${waState.unreadChatsCount}`}
+                >
+                  {unreadBadgeText}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </>
   );
