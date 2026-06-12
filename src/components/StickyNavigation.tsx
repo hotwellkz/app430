@@ -188,10 +188,11 @@ export const StickyNavigation: React.FC<StickyNavigationProps> = ({ onNavigate }
             <button
               type="button"
               onClick={transactionsSearch.open}
-              className={[
-                btnClass,
-                'bg-emerald-500 hover:bg-emerald-600 text-white',
-              ].join(' ')}
+              className={
+                isMobile
+                  ? 'w-8 h-8 flex items-center justify-center rounded-full bg-emerald-500 hover:bg-emerald-600 text-white shadow transition-colors duration-200'
+                  : 'w-11 h-11 flex items-center justify-center rounded-full bg-emerald-500 hover:bg-emerald-600 text-white shadow transition-colors duration-200'
+              }
               title="Поиск клиента"
               aria-label="Поиск клиента"
             >
